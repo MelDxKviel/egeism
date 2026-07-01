@@ -1,0 +1,533 @@
+openapi: 3.0.3
+info:
+  title: ЕГЭ-платформа API
+  version: 0.1.0
+  description: >
+    Единый backend для веба и Telegram-бота. Вся бизнес-логика (проверка
+    ответов, статистика, прогноз балла) — здесь. Контракт заморожен в Phase 0.
+
+servers:
+  - url: http://localhost:8080
+    description: local dev
+
+# Auth: JWT session tokens. Web users register/login with username+password; the
+# bot obtains a token via /api/auth/telegram. Send it as: Authorization: Bearer <token>.
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Error:
+      type: object
+      properties:
+        error: { type: string }
+    Subject:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string, enum: [rus, math, inf, soc] }
+        title: { type: string }
+    AnswerSchema:
+      type: object
+      description: How to compare an answer (§7). Discriminated by `type`.
+      required: [type, correct]
+      properties:
+        type: { type: string, enum: [number, string, set, sequence] }
+        correct:
+          type: array
+          items: { type: string }
+        tolerance: { type: number, description: "number: absolute tolerance" }
+        ci: { type: boolean, description: "string: case-insensitive" }
+        yo_fold: { type: boolean, description: "string: fold ё→е" }
+        token: { type: string, enum: [char, split], description: "set/sequence tokenization" }
+    Media:
+      type: object
+      properties:
+        key: { type: string }
+        kind: { type: string, enum: [image, table, file] }
+        alt: { type: string }
+    TaskView:
+      type: object
+      description: Student-facing task. Never includes the correct answer.
+      properties:
+        id: { type: string, format: uuid }
+        subject_id: { type: string, format: uuid }
+        number: { type: integer }
+        statement: { type: string }
+        media: { type: array, items: { $ref: '#/components/schemas/Media' } }
+        status: { type: string, enum: [draft, active, rejected] }
+        answer_kind: { type: string, enum: [number, string, set, sequence] }
+        bot_solvable: { type: boolean }
+    Attempt:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        assignment_id: { type: string, format: uuid, nullable: true }
+        test_id: { type: string, format: uuid }
+        student_id: { type: string, format: uuid }
+        started_at: { type: string, format: date-time }
+        finished_at: { type: string, format: date-time, nullable: true }
+    SubmitAnswerRequest:
+      type: object
+      required: [task_id, raw_answer]
+      properties:
+        task_id: { type: string, format: uuid }
+        raw_answer: { type: string }
+        time_spent_ms: { type: integer, format: int64 }
+    SubmitAnswerResponse:
+      type: object
+      properties:
+        is_correct: { type: boolean }
+        answer_id: { type: string, format: uuid }
+        solution:
+          type: array
+          items: { type: string }
+          description: Revealed only when the answer is wrong (§3.4).
+    HeatmapCell:
+      type: object
+      properties:
+        day: { type: string, format: date-time }
+        total: { type: integer, format: int64 }
+        correct: { type: integer, format: int64 }
+    NumberMastery:
+      type: object
+      properties:
+        number: { type: integer }
+        total: { type: integer, format: int64 }
+        correct: { type: integer, format: int64 }
+        avg_time_ms: { type: integer, format: int64 }
+    WeakSpot:
+      type: object
+      properties:
+        number: { type: integer }
+        total: { type: integer, format: int64 }
+        correct: { type: integer, format: int64 }
+        avg_time_ms: { type: integer, format: int64 }
+        accuracy: { type: number }
+    Forecast:
+      type: object
+      properties:
+        subject: { type: string }
+        accuracy: { type: number }
+        primary_estimate: { type: integer }
+        primary_max: { type: integer }
+        test_score: { type: integer }
+        note: { type: string }
+
+security:
+  - BearerAuth: []
+
+paths:
+  /health:
+    get:
+      summary: Liveness + DB readiness
+      security: []
+      responses:
+        '200': { description: ok }
+        '503': { description: database unavailable }
+
+  /api/auth/telegram:
+    post:
+      summary: Resolve a Telegram id to a student and return a session token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [telegram_id]
+              properties:
+                telegram_id: { type: integer, format: int64 }
+                name: { type: string }
+      responses:
+        '200': { description: "{ token, user }" }
+
+  /api/auth/register:
+    post:
+      summary: Register a student or teacher (username + password) → session token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role, username, password]
+              properties:
+                role: { type: string, enum: [student, teacher] }
+                username: { type: string }
+                password: { type: string }
+                name: { type: string }
+      responses:
+        '201': { description: "{ token, user }" }
+        '409': { description: username already taken }
+
+  /api/auth/login:
+    post:
+      summary: Log in with username + password → session token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username: { type: string }
+                password: { type: string }
+      responses:
+        '200': { description: "{ token, user }" }
+        '401': { description: invalid credentials }
+
+  /api/auth/me:
+    get:
+      summary: The currently authenticated user
+      responses:
+        '200': { description: user }
+        '401': { description: not authenticated }
+
+  /api/students:
+    get:
+      summary: Students the teacher oversees (teacher only)
+      responses:
+        '200': { description: users }
+
+  /api/subjects:
+    get:
+      summary: List subjects
+      security: []
+      responses:
+        '200':
+          description: subjects
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/Subject' } }
+
+  /api/tasks:
+    get:
+      summary: List tasks (student view)
+      security: []
+      parameters:
+        - { name: subject, in: query, schema: { type: string } }
+        - { name: number, in: query, schema: { type: integer } }
+        - { name: status, in: query, schema: { type: string, enum: [draft, active, rejected] } }
+        - { name: limit, in: query, schema: { type: integer } }
+        - { name: offset, in: query, schema: { type: integer } }
+      responses:
+        '200':
+          description: tasks
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/TaskView' } }
+
+  /api/tasks/{taskID}:
+    get:
+      summary: Get one task (student view)
+      security: []
+      parameters:
+        - { name: taskID, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: task
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TaskView' }
+        '404': { description: not found }
+
+  /api/practice:
+    post:
+      summary: Start an ad-hoc free-solve session for a subject
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [subject]
+              properties:
+                subject: { type: string }
+      responses:
+        '201':
+          description: session
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  test_id: { type: string, format: uuid }
+                  attempt_id: { type: string, format: uuid }
+
+  /api/attempts:
+    post:
+      summary: Start an attempt of a test
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [test_id]
+              properties:
+                test_id: { type: string, format: uuid }
+                assignment_id: { type: string, format: uuid, nullable: true }
+      responses:
+        '201':
+          description: attempt
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Attempt' }
+
+  /api/attempts/{attemptID}/answers:
+    post:
+      summary: Submit an answer (checker runs server-side)
+      parameters:
+        - { name: attemptID, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SubmitAnswerRequest' }
+      responses:
+        '201':
+          description: verdict
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SubmitAnswerResponse' }
+    get:
+      summary: List answers of an attempt
+      parameters:
+        - { name: attemptID, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: answers }
+
+  /api/attempts/{attemptID}/finish:
+    post:
+      summary: Finish an attempt
+      parameters:
+        - { name: attemptID, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: attempt
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Attempt' }
+
+  /api/students/{studentID}/stats/heatmap:
+    get:
+      summary: Activity heatmap (per day)
+      parameters:
+        - { name: studentID, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: since, in: query, schema: { type: string, description: "YYYY-MM-DD" } }
+      responses:
+        '200':
+          description: cells
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/HeatmapCell' } }
+
+  /api/students/{studentID}/stats/mastery:
+    get:
+      summary: Per-task-number mastery for a subject
+      parameters:
+        - { name: studentID, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: subject, in: query, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: mastery
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/NumberMastery' } }
+
+  /api/students/{studentID}/stats/mastery-series:
+    get:
+      summary: Weekly per-number success points (mastery line chart)
+      parameters:
+        - { name: studentID, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: subject, in: query, required: true, schema: { type: string } }
+      responses:
+        '200': { description: points }
+
+  /api/students/{studentID}/assignments:
+    get:
+      summary: Assignments for a student (with test info + task count)
+      parameters:
+        - { name: studentID, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: assignment cards }
+
+  /api/students/{studentID}/attempts:
+    get:
+      summary: Recent attempts feed with per-attempt score
+      parameters:
+        - { name: studentID, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: limit, in: query, schema: { type: integer, default: 20 } }
+      responses:
+        '200': { description: attempt summaries }
+
+  /api/students/{studentID}/stats/weak-spots:
+    get:
+      summary: Worst task numbers by success rate
+      parameters:
+        - { name: studentID, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: subject, in: query, required: true, schema: { type: string } }
+        - { name: min, in: query, schema: { type: integer, default: 3 } }
+        - { name: limit, in: query, schema: { type: integer, default: 5 } }
+      responses:
+        '200':
+          description: weak spots
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/WeakSpot' } }
+
+  /api/students/{studentID}/stats/forecast:
+    get:
+      summary: Score forecast for a subject
+      parameters:
+        - { name: studentID, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: subject, in: query, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: forecast
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Forecast' }
+
+  /api/students/{studentID}/stats/day:
+    get:
+      summary: Heatmap drill-down for a single day
+      parameters:
+        - { name: studentID, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: date, in: query, required: true, schema: { type: string, description: "YYYY-MM-DD" } }
+      responses:
+        '200': { description: answers that day }
+
+  /api/admin/tasks:
+    get:
+      summary: List full tasks incl. answer_schema (bank curation)
+      parameters:
+        - { name: subject, in: query, schema: { type: string } }
+        - { name: number, in: query, schema: { type: integer } }
+        - { name: status, in: query, schema: { type: string, enum: [draft, active, rejected] } }
+      responses:
+        '200': { description: tasks }
+    post:
+      summary: Create a task (teacher)
+      responses:
+        '201': { description: created }
+
+  /api/admin/tasks/fetch:
+    post:
+      summary: Pull tasks from the source into the bank (teacher, button-driven)
+      description: >
+        Calls the fetcher service (РЕШУ/sdamgia; mock by default) and runs the
+        result through ingest — media to MinIO, dedup, draft for curation unless
+        `active` is set. This is what the bank's "Подтянуть задания" button hits.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [subject]
+              properties:
+                subject: { type: string, enum: [rus, math, inf, soc] }
+                limit: { type: integer, default: 30 }
+                active: { type: boolean, default: false }
+      responses:
+        '200': { description: "{ fetched, inserted, skipped, invalid, source }; source is 'real' (РЕШУ) or 'mock' (demo fallback)" }
+        '502': { description: source unavailable }
+
+  /api/admin/tasks/import:
+    post:
+      summary: Bulk-import tasks from a JSON array or JSONL (teacher, fallback)
+      description: >
+        multipart/form-data with a `file` field (plus optional `provider`,
+        `status=active`), or a raw JSON/JSONL body. Runs the ingest pipeline:
+        media downloaded to MinIO, duplicates skipped, new tasks land as draft.
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file: { type: string, format: binary }
+                provider: { type: string }
+                status: { type: string, enum: [draft, active] }
+          application/json:
+            schema: { type: array, items: { type: object } }
+      responses:
+        '200': { description: "{ fetched, inserted, skipped, invalid }" }
+
+  /api/admin/tasks/{taskID}/answer:
+    patch:
+      summary: Edit a task's answer schema (curation)
+      parameters:
+        - { name: taskID, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: updated }
+
+  /api/admin/tasks/{taskID}/status:
+    patch:
+      summary: Set task status active/rejected/draft (curation)
+      parameters:
+        - { name: taskID, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: updated }
+
+  /api/admin/tests:
+    get:
+      summary: List tests (optionally by subject)
+      parameters:
+        - { name: subject, in: query, schema: { type: string } }
+      responses:
+        '200': { description: tests }
+    post:
+      summary: Create a test (classic|drill)
+      responses:
+        '201': { description: created }
+
+  /api/admin/tests/{testID}:
+    get:
+      summary: Test detail with ordered tasks (builder preview / PDF)
+      parameters:
+        - { name: testID, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: test + tasks }
+
+  /api/admin/tests/generate:
+    post:
+      summary: Auto-build a random variant from the active bank (classic|drill)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [subject, kind]
+              properties:
+                subject: { type: string }
+                kind: { type: string, enum: [classic, drill] }
+                title: { type: string }
+                number: { type: integer, description: "drill only" }
+                count: { type: integer, description: "drill only" }
+      responses:
+        '201': { description: generated test + task_count }
+        '422': { description: no active tasks match }
+
+  /api/admin/tests/{testID}/items:
+    post:
+      summary: Add a task to a test at a position
+      parameters:
+        - { name: testID, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '201': { description: created }
+
+  /api/admin/assignments:
+    post:
+      summary: Assign a test to a student at a time (enqueues TG notification)
+      responses:
+        '201': { description: created }

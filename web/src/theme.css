@@ -1,0 +1,62 @@
+/* Design tokens from the handoff (light/dark). Applied via data-theme on .app. */
+* { box-sizing: border-box; }
+html, body, #root { margin: 0; padding: 0; height: 100%; }
+button { font-family: inherit; color: inherit; cursor: pointer; }
+input, select, textarea { font-family: inherit; }
+::selection { background: var(--accent-soft); }
+
+.app {
+  --bg: #F6F4F0; --bg-2: #EFEBE4; --surface: #FFFFFF; --surface-2: #FBFAF7;
+  --border: #E8E3DB; --border-2: #D8D2C7;
+  --text: #23221E; --text-2: #5F5B53; --text-3: #948F85;
+  --accent: #3E9284; --accent-2: #31735F; --accent-soft: #E4EFEC; --on-accent: #FFFFFF;
+  --bad: #C6563E; --bad-soft: #F4E3DD; --warn: #B8842F; --warn-soft: #F3E9D6;
+  --hm0: #ECE8E1; --hm1: #CFE7E0; --hm2: #9AD3C5; --hm3: #61B6A5; --hm4: #3E9284;
+  --shadow: 0 1px 2px rgba(30,28,24,.04), 0 12px 30px -16px rgba(30,28,24,.14);
+  --shadow-lg: 0 1px 2px rgba(30,28,24,.05), 0 24px 60px -24px rgba(30,28,24,.22);
+  --gap: 20px; --main-pad: 32px;
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: Onest, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: 'ss01','cv01';
+}
+.app[data-theme="dark"] {
+  --bg: #121417; --bg-2: #0C0E11; --surface: #191C20; --surface-2: #20242A;
+  --border: #292D33; --border-2: #3A3F47;
+  --text: #EAECEE; --text-2: #A6ACB3; --text-3: #767C84;
+  --accent: #55B7A5; --accent-2: #6BC7B6; --accent-soft: #16302B; --on-accent: #06201B;
+  --bad: #E1745C; --bad-soft: #33201C; --warn: #D3A24E; --warn-soft: #2E2718;
+  --hm0: #20242A; --hm1: #274A43; --hm2: #356D61; --hm3: #449484; --hm4: #55B7A5;
+  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 14px 34px -18px rgba(0,0,0,.7);
+  --shadow-lg: 0 1px 2px rgba(0,0,0,.4), 0 30px 70px -28px rgba(0,0,0,.8);
+}
+.mono { font-family: 'JetBrains Mono', monospace; }
+
+@keyframes fade { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes pop  { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: none; } }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes shim { 0% { background-position: -420px 0; } 100% { background-position: 420px 0; } }
+.fade { animation: fade .3s ease both; }
+.skel {
+  background: linear-gradient(90deg, var(--bg-2) 25%, var(--surface-2) 37%, var(--bg-2) 63%);
+  background-size: 420px 100%; animation: shim 1.3s linear infinite; border-radius: 8px;
+}
+.scroll::-webkit-scrollbar { height: 8px; width: 8px; }
+.scroll::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 8px; }
+
+a { color: var(--accent-2); }
+input, textarea, select {
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: 10px; color: var(--text); padding: 10px 12px; font-size: 14px; outline: none;
+}
+input:focus, textarea:focus, select:focus { border-color: var(--accent); }
+
+/* Statement tables (truth tables, DB headers) rendered by StatementView. */
+.stmt-table { border-collapse: collapse; font-size: 0.92em; font-variant-numeric: tabular-nums; }
+.stmt-table th, .stmt-table td {
+  border: 1px solid var(--border-2); padding: 5px 11px; text-align: center; white-space: nowrap;
+}
+.stmt-table th { background: var(--surface-2); color: var(--text-2); font-weight: 600; }
+.stmt-table td { color: var(--text); }

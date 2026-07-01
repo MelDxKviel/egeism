@@ -1,0 +1,172 @@
+package domain
+
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
+
+// Role is a user role. Roles are split now even though the first stage has one
+// student and one teacher; the data model is multi-user from day one.
+type Role string
+
+const (
+	RoleStudent Role = "student"
+	RoleTeacher Role = "teacher"
+)
+
+// SubjectCode identifies one of the four supported subjects.
+type SubjectCode string
+
+const (
+	SubjectRus  SubjectCode = "rus"  // русский
+	SubjectMath SubjectCode = "math" // математика
+	SubjectInf  SubjectCode = "inf"  // информатика
+	SubjectSoc  SubjectCode = "soc"  // обществознание
+)
+
+// TaskStatus is the curation state of an auto-ingested task. Only active tasks
+// go into tests; draft/rejected are held back for review.
+type TaskStatus string
+
+const (
+	TaskDraft    TaskStatus = "draft"
+	TaskActive   TaskStatus = "active"
+	TaskRejected TaskStatus = "rejected"
+)
+
+// TestKind distinguishes an exam-like test from a single-number drill.
+type TestKind string
+
+const (
+	TestClassic TestKind = "classic" // как на ЕГЭ
+	TestDrill   TestKind = "drill"   // N задач одного номера
+)
+
+// AssignmentStatus tracks a teacher-scheduled test through its lifecycle.
+type AssignmentStatus string
+
+const (
+	AssignmentScheduled AssignmentStatus = "scheduled"
+	AssignmentDone      AssignmentStatus = "done"
+	AssignmentMissed    AssignmentStatus = "missed"
+)
+
+// User is a person in the system. Web users log in with username+password; the
+// bot authenticates by telegram_id. The password hash is never part of this
+// type, so it can't leak through the API.
+type User struct {
+	ID         uuid.UUID `json:"id"`
+	Role       Role      `json:"role"`
+	TelegramID *int64    `json:"telegram_id,omitempty"`
+	Username   *string   `json:"username,omitempty"`
+	Name       string    `json:"name"`
+	CreatedAt  time.Time `json:"created_at"`
+}
+
+// Enrollment links a teacher to a student (m2m, one row for now).
+type Enrollment struct {
+	ID        uuid.UUID `json:"id"`
+	TeacherID uuid.UUID `json:"teacher_id"`
+	StudentID uuid.UUID `json:"student_id"`
+}
+
+// Subject is one exam subject.
+type Subject struct {
+	ID    uuid.UUID   `json:"id"`
+	Code  SubjectCode `json:"code"`
+	Title string      `json:"title"`
+}
+
+// Media is a reference to an object stored in MinIO (image/table/file).
+type Media struct {
+	Key  string `json:"key"`            // object key in the bucket
+	Kind string `json:"kind"`           // "image" | "table" | "file"
+	Alt  string `json:"alt,omitempty"`  // accessibility / fallback text
+}
+
+// Source records where a task came from, for ingest dedup and provenance.
+type Source struct {
+	Provider string `json:"provider"`         // e.g. "fipi", "sdamgia", "dataset"
+	ExternID string `json:"extern_id"`        // stable id at the provider
+	URL      string `json:"url,omitempty"`
+}
+
+// Task is a single part-1 exercise.
+type Task struct {
+	ID           uuid.UUID    `json:"id"`
+	SubjectID    uuid.UUID    `json:"subject_id"`
+	Number       int          `json:"number"` // номер задания в ЕГЭ
+	Statement    string       `json:"statement"`
+	Media        []Media      `json:"media,omitempty"`
+	AnswerSchema AnswerSchema `json:"answer_schema"`
+	Source       *Source      `json:"source,omitempty"`
+	Status       TaskStatus   `json:"status"`
+	CreatedAt    time.Time    `json:"created_at"`
+}
+
+// BotSolvable reports whether the task can be solved inside a chat: short
+// answers with no attached media (§8). Everything else is web-only.
+func (t Task) BotSolvable() bool {
+	if len(t.Media) > 0 {
+		return false
+	}
+	switch t.AnswerSchema.Type {
+	case AnswerNumber, AnswerString, AnswerSet, AnswerSequence:
+		return true
+	default:
+		return false
+	}
+}
+
+// Test is a named collection of tasks (classic exam layout or a drill).
+type Test struct {
+	ID        uuid.UUID `json:"id"`
+	SubjectID uuid.UUID `json:"subject_id"`
+	Kind      TestKind  `json:"kind"`
+	Title     string    `json:"title"`
+	CreatedBy uuid.UUID `json:"created_by"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// TestItem places a task at a position within a test.
+type TestItem struct {
+	ID       uuid.UUID `json:"id"`
+	TestID   uuid.UUID `json:"test_id"`
+	TaskID   uuid.UUID `json:"task_id"`
+	Position int       `json:"position"`
+}
+
+// Assignment is a teacher scheduling a test for a student at a time.
+type Assignment struct {
+	ID          uuid.UUID        `json:"id"`
+	TestID      uuid.UUID        `json:"test_id"`
+	StudentID   uuid.UUID        `json:"student_id"`
+	AssignedBy  uuid.UUID        `json:"assigned_by"`
+	ScheduledAt time.Time        `json:"scheduled_at"`
+	NotifiedAt  *time.Time       `json:"notified_at,omitempty"`
+	Status      AssignmentStatus `json:"status"`
+}
+
+// Attempt is a student working through a test. AssignmentID is nullable so a
+// student can practice on their own with no assignment.
+type Attempt struct {
+	ID           uuid.UUID  `json:"id"`
+	AssignmentID *uuid.UUID `json:"assignment_id,omitempty"`
+	TestID       uuid.UUID  `json:"test_id"`
+	StudentID    uuid.UUID  `json:"student_id"`
+	StartedAt    time.Time  `json:"started_at"`
+	FinishedAt   *time.Time `json:"finished_at,omitempty"`
+}
+
+// Answer is one submitted response, already checked. is_correct plus
+// time_spent_ms feeds heatmap, weak-spots and per-task timing.
+type Answer struct {
+	ID          uuid.UUID `json:"id"`
+	AttemptID   uuid.UUID `json:"attempt_id"`
+	TaskID      uuid.UUID `json:"task_id"`
+	RawAnswer   string    `json:"raw_answer"`
+	IsCorrect   bool      `json:"is_correct"`
+	TimeSpentMS int64     `json:"time_spent_ms"`
+	AnsweredAt  time.Time `json:"answered_at"`
+}

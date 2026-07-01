@@ -1,0 +1,44 @@
+[
+  {
+    "subject": "math",
+    "number": 1,
+    "statement": "Найдите значение выражения 7 · 0,5.",
+    "answer_schema": { "type": "number", "correct": ["3,5"], "tolerance": 0 },
+    "source": { "provider": "dataset-demo", "extern_id": "math-1-a" }
+  },
+  {
+    "subject": "math",
+    "number": 6,
+    "statement": "Найдите корень уравнения 2x − 8 = 0.",
+    "answer_schema": { "type": "number", "correct": ["4"], "tolerance": 0 },
+    "source": { "provider": "dataset-demo", "extern_id": "math-6-a" }
+  },
+  {
+    "subject": "rus",
+    "number": 4,
+    "statement": "Запишите слово, в котором пропущена буква: пр..зидент.",
+    "answer_schema": { "type": "string", "correct": ["президент"], "ci": true, "yo_fold": true },
+    "source": { "provider": "dataset-demo", "extern_id": "rus-4-a" }
+  },
+  {
+    "subject": "rus",
+    "number": 8,
+    "statement": "Укажите номера предложений, в которых допущена грамматическая ошибка (в любом порядке).",
+    "answer_schema": { "type": "set", "correct": ["2", "4", "5"], "token": "char" },
+    "source": { "provider": "dataset-demo", "extern_id": "rus-8-a" }
+  },
+  {
+    "subject": "inf",
+    "number": 1,
+    "statement": "Сколько единиц в двоичной записи числа 42?",
+    "answer_schema": { "type": "number", "correct": ["3"], "tolerance": 0 },
+    "source": { "provider": "dataset-demo", "extern_id": "inf-1-a" }
+  },
+  {
+    "subject": "soc",
+    "number": 2,
+    "statement": "Установите соответствие и запишите последовательность цифр (порядок важен).",
+    "answer_schema": { "type": "sequence", "correct": ["3", "1", "2"], "token": "char" },
+    "source": { "provider": "dataset-demo", "extern_id": "soc-2-a" }
+  }
+]

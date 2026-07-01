@@ -1,0 +1,10 @@
+# Hybrid content fetcher deps.
+#
+# fetch.py targets the SYNC sdamgia API (`from sdamgia import SdamGIA` with
+# get_catalog / get_category_by_id / get_problem_by_id) — the anijackich fork,
+# installed from git below. NOTE the PyPI package named `sdamgia` is a DIFFERENT
+# (async) library and will NOT match fetch.py. If real fetching falls back to
+# demo, check `docker compose logs fetcher` and adjust fetch.py to your lib.
+git+https://github.com/anijackich/sdamgia-api.git
+requests
+beautifulsoup4

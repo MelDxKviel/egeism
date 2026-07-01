@@ -1,0 +1,167 @@
+# Full-stack local/prod compose (§6 WS-F). `docker compose -f deploy/docker-compose.yml up`
+# brings up postgres, redis, minio, runs migrations + bucket init, then fetcher,
+# api, web, worker.
+# Set secrets in deploy/.env (see deploy/.env.example) — compose auto-loads it.
+# JWT_SECRET and TELEGRAM_TOKEN come from there; everything else has defaults below.
+name: egeism
+
+x-app-env: &app-env
+  DATABASE_URL: postgres://egeism:egeism@postgres:5432/egeism?sslmode=disable
+  REDIS_ADDR: redis:6379
+  MINIO_ENDPOINT: minio:9000
+  MINIO_ACCESS_KEY: minioadmin
+  MINIO_SECRET_KEY: minioadmin
+  MINIO_BUCKET: egeism-media
+  TELEGRAM_TOKEN: ${TELEGRAM_TOKEN:-}
+  JWT_SECRET: ${JWT_SECRET:-dev-insecure-change-me}
+  FETCHER_URL: http://fetcher:8090
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: egeism
+      POSTGRES_PASSWORD: egeism
+      POSTGRES_DB: egeism
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U egeism"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    ports: ["5432:5432"]
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    ports: ["6379:6379"]
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    ports: ["9000:9000", "9001:9001"]
+
+  # One-shot: create the media bucket, then exit.
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 minioadmin minioadmin &&
+      mc mb --ignore-existing local/egeism-media &&
+      mc anonymous set download local/egeism-media || true"
+
+  # One-shot: apply DB migrations, then exit. Everything else waits on it.
+  migrate:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args: { BIN: migrate }
+    environment: *app-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # One-shot demo seed. Behind the `demo` profile so a normal `up` leaves the
+  # bank EMPTY (pull real tasks via the button). Load demo explicitly with:
+  #   docker compose -f deploy/docker-compose.yml --profile demo up seed
+  seed:
+    profiles: ["demo"]
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args: { BIN: ingest }
+    environment: *app-env
+    command: ["-source", "dataset", "-provider", "dataset-demo", "-path", "/seed/tasks.dataset.jsonl", "-status", "active"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: "no"
+
+  # Python content-fetcher — REAL sources only (openfipi for информатика, РЕШУ/
+  # sdamgia for the rest). No demo/mock: if a source is unreachable the button
+  # returns a clear "источник не вернул заданий" and the teacher retries.
+  fetcher:
+    build:
+      context: ..
+      dockerfile: deploy/fetcher.Dockerfile
+    environment:
+      # openfipi round-robins across all 27 задания for even coverage, so an
+      # all-numbers pull makes many requests — give it headroom (the API's
+      # call timeout is 90s) and keep the per-request delay gentle but brisk.
+      FETCH_DEADLINE: ${FETCH_DEADLINE:-80}
+      FETCH_DELAY: ${FETCH_DELAY:-0.25}
+
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args: { BIN: api }
+    environment:
+      <<: *app-env
+      HTTP_ADDR: ":8080"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      fetcher:
+        condition: service_started
+    ports: ["8080:8080"]
+
+  worker:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args: { BIN: worker }
+    environment: *app-env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  bot:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args: { BIN: bot }
+    environment:
+      <<: *app-env
+      API_BASE_URL: http://api:8080
+    depends_on:
+      api:
+        condition: service_started
+    # Bot only runs when a token is provided.
+    profiles: ["bot"]
+
+  # Web (React SPA) built and served by nginx, proxying /api to the API.
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/web.Dockerfile
+    depends_on:
+      api:
+        condition: service_started
+    ports: ["3000:80"]
+
+volumes:
+  pgdata:
+  miniodata:
