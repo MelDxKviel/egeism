@@ -120,6 +120,41 @@ def _is_formula(img) -> bool:
     return "tex" in (img.get("class") or [])
 
 
+def _visible(node) -> bool:
+    """False if an ancestor is display:none. РЕШУ hides its collapsible
+    «Что проверяется…» theory/справка cards that way (shown in a popup on click),
+    so a hidden pbody is NOT part of the condition."""
+    for p in node.parents:
+        if "display:none" in (p.get("style") or "").replace(" ", "").lower():
+            return False
+    return True
+
+
+def _condition_pbodies(block):
+    """The pbody blocks that make up the actual task condition.
+
+    One РЕШУ prob_maindiv carries much more than the condition: a collapsible
+    «Что проверяется и что нужно знать?» theory card (hidden via display:none),
+    the condition itself, and a «Пояснение/Решение». The load-bearing tell is
+    that РЕШУ wraps the CONDITION — the statement plus its «самостоятельно
+    подберите…» instruction — in a `div.nobreak` keep-together block, while the
+    solution is a bare pbody OUTSIDE nobreak and the theory cards are display:none
+    (verified across rus/math/soc). So: visible pbodies under a nobreak wrapper.
+
+    The old code took `pbodies[0]` blindly, which for русский (задания with big
+    справки) grabbed the theory card and dumped the whole methodology — codifier
+    notes, downloadable files, a worked example, the ALGORITHM — into the
+    statement instead of the question."""
+    cond = [pb for pb in block.find_all("div", {"class": "pbody"})
+            if _visible(pb) and any("nobreak" in (p.get("class") or []) for p in pb.parents)]
+    if cond:
+        return cond
+    # РЕШУ markup changed: degrade to the first VISIBLE pbody (still skips the
+    # hidden theory card) rather than emit an empty statement.
+    visible = [pb for pb in block.find_all("div", {"class": "pbody"}) if _visible(pb)]
+    return visible[:1]
+
+
 def _serialize(node, base, media, out):
     """Walk the condition DOM in reading order, appending text to `out`.
 
@@ -179,11 +214,12 @@ def _parse_problem(content: bytes, base: str):
     # exactly as the library derives it, so номер задания is unchanged.
     nums = block.find("span", {"class": "prob_nums"})
     topic = " ".join(nums.get_text().split()[1:][:-2]) if nums else ""
-    pbodies = block.find_all("div", {"class": "pbody"})
-    if not pbodies:
+    cond = _condition_pbodies(block)
+    if not cond:
         return None
     media, out = [], []
-    _serialize(pbodies[0], base, media, out)  # [0] = condition ([1] = solution)
+    for pb in cond:  # statement + instruction, minus theory cards / solution
+        _serialize(pb, base, media, out)
     statement = _clean("".join(out))
     ans = block.find("div", {"class": "answer"})
     answer = ans.get_text().replace("Ответ: ", "").strip() if ans else ""

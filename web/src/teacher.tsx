@@ -355,7 +355,7 @@ function SourcePanel({ subject, onDone }: { subject: SubjectCode; onDone: () => 
   const inputRef = useRef<HTMLInputElement>(null);
   const [count, setCount] = useState(30);
   const [active, setActive] = useState(false);
-  const [busy, setBusy] = useState<"fetch" | "upload" | null>(null);
+  const [busy, setBusy] = useState<"fetch" | "upload" | "refresh" | null>(null);
 
   const summary = (r: { inserted: number; skipped: number; invalid: number }) => {
     if (r.inserted > 0) return `Добавлено ${r.inserted} заданий${r.skipped ? ` (${r.skipped} уже были в банке)` : ""}`;
@@ -374,6 +374,21 @@ function SourcePanel({ subject, onDone }: { subject: SubjectCode; onDone: () => 
       onDone();
     } catch (err) {
       showToast("Не удалось подтянуть: " + String((err as Error).message));
+    } finally { setBusy(null); }
+  };
+
+  // Re-reads the condition of already-imported РЕШУ tasks whose text is broken —
+  // theory dumped instead of the question, or formulas shown as detached blocks —
+  // and rewrites it in place. Answers/статус сохраняются, дубли не плодятся.
+  const refreshStale = async () => {
+    setBusy("refresh");
+    try {
+      const r = await api.refetchFormulas();
+      if (r.updated > 0) showToast(`Обновлено условий: ${r.updated} (проверено ${r.scanned})`);
+      else showToast(r.scanned > 0 ? "Все условия уже в порядке" : "Нет РЕШУ-заданий для проверки");
+      onDone();
+    } catch (err) {
+      showToast("Не удалось обновить: " + String((err as Error).message));
     } finally { setBusy(null); }
   };
 
@@ -412,6 +427,14 @@ function SourcePanel({ subject, onDone }: { subject: SubjectCode; onDone: () => 
           </label>
           <Button onClick={fetchNow} disabled={busy !== null}>{busy === "fetch" ? "Подтягиваю…" : "Подтянуть задания"}</Button>
         </div>
+      </div>
+      <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <span title="Перечитывает условия у РЕШУ-заданий с битым текстом (теория/справка вместо задания) или формулами-блоками. Ответы и статус сохранятся.">
+          <Button variant="soft" onClick={refreshStale} disabled={busy !== null} style={{ padding: "8px 14px", fontSize: 13 }}>
+            {busy === "refresh" ? "Обновляю…" : "Обновить условия у старых заданий"}
+          </Button>
+        </span>
+        <span style={{ fontSize: 12, color: "var(--text-3)" }}>чинит задания, где вместо условия попала теория</span>
       </div>
       <div style={{ marginTop: 12, borderTop: "1px solid var(--border)", paddingTop: 10, display: "flex", alignItems: "center", gap: 10 }}>
         <span style={{ fontSize: 13, color: "var(--text-3)" }}>или загрузить файлом</span>

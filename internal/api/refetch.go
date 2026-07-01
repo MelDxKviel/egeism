@@ -18,6 +18,26 @@ import (
 // re-fetches it and rewrites statement + media in place.
 const formulaPlaceholder = "⟦img:"
 
+// theoryBloatMarkers are section headings from РЕШУ's collapsible «Что
+// проверяется…» theory/справка card. They never appear in a real task condition,
+// so a statement containing one was scraped by the OLD fetcher (which grabbed the
+// hidden theory card instead of the condition — see tools/fetch/fetch.py) and
+// must be re-fetched. Distinctive on purpose to avoid false positives.
+var theoryBloatMarkers = []string{
+	"Что проверяется", "Файлы для скачивания", "Необходимые материалы к заданию",
+}
+
+// isTheoryBloat reports whether a statement is a РЕШУ theory card dumped in as
+// the condition (the русский-задания bug), so the refetch upgrade re-pulls it.
+func isTheoryBloat(statement string) bool {
+	for _, m := range theoryBloatMarkers {
+		if strings.Contains(statement, m) {
+			return true
+		}
+	}
+	return false
+}
+
 // refetchResp reports how many tasks were refreshed per subject.
 type refetchResp struct {
 	Updated   int            `json:"updated"`
@@ -25,12 +45,15 @@ type refetchResp struct {
 	BySubject map[string]int `json:"by_subject"`
 }
 
-// handleRefetchFormulas upgrades РЕШУ/sdamgia tasks that predate inline-formula
-// support: it re-fetches each by its stored extern_id and rewrites the statement
-// (now with ⟦img:N⟧ placeholders) and media (formulas flagged inline) in place,
-// keeping the curated answer and status. Non-destructive — no task is deleted,
-// so tasks already placed in tests keep working. информатика (openfipi) is
-// skipped: its images are genuine diagrams, correctly rendered as blocks.
+// handleRefetchFormulas refreshes РЕШУ/sdamgia tasks with a stale/broken
+// statement — either theory-card bloat (the русский pbodies[0] bug) or formulas
+// dumped as detached blocks (ingested before inline-formula support). It
+// re-fetches each by its stored extern_id and rewrites the statement (now the
+// real condition, with ⟦img:N⟧ placeholders) and media in place, keeping the
+// curated answer and status. Non-destructive — no task is deleted, so tasks
+// already placed in tests keep working. информатика (openfipi) is skipped: its
+// images are genuine diagrams, correctly rendered as blocks, and it has no
+// by-id re-fetch.
 func (s *Server) handleRefetchFormulas(w http.ResponseWriter, r *http.Request) {
 	if _, ok := s.requireTeacher(w, r); !ok {
 		return
@@ -84,8 +107,8 @@ func (s *Server) handleRefetchFormulas(w http.ResponseWriter, r *http.Request) {
 }
 
 // sdamgiaTasksNeedingUpgrade returns extern_id → task id for sdamgia tasks of a
-// subject that still lack inline-formula placeholders but carry media (i.e. the
-// formulas that were dumped as blocks). Pure-text tasks have nothing to fix.
+// subject whose statement is stale: theory-card bloat, or (media without an
+// inline-formula placeholder) formulas dumped as blocks. Clean tasks are skipped.
 func (s *Server) sdamgiaTasksNeedingUpgrade(ctx context.Context, subj domain.SubjectCode) (map[string]uuid.UUID, error) {
 	sub, err := s.store.GetSubjectByCode(ctx, subj)
 	if err != nil {
@@ -100,7 +123,13 @@ func (s *Server) sdamgiaTasksNeedingUpgrade(ctx context.Context, subj domain.Sub
 		if t.Source == nil || t.Source.Provider != "sdamgia" || t.Source.ExternID == "" {
 			continue
 		}
-		if len(t.Media) == 0 || strings.Contains(t.Statement, formulaPlaceholder) {
+		// Re-fetch a task if EITHER its statement is bloated with a РЕШУ theory
+		// card (the русский pbodies[0] bug — pure text, so no media), OR it
+		// predates inline-formula support (has media but no ⟦img:N⟧ placeholder,
+		// i.e. formulas dumped as detached blocks). Clean tasks with neither are
+		// left untouched.
+		staleFormulas := len(t.Media) > 0 && !strings.Contains(t.Statement, formulaPlaceholder)
+		if !isTheoryBloat(t.Statement) && !staleFormulas {
 			continue
 		}
 		out[t.Source.ExternID] = t.ID
