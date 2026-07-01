@@ -80,9 +80,14 @@ type Subject struct {
 
 // Media is a reference to an object stored in MinIO (image/table/file).
 type Media struct {
-	Key  string `json:"key"`            // object key in the bucket
-	Kind string `json:"kind"`           // "image" | "table" | "file"
-	Alt  string `json:"alt,omitempty"`  // accessibility / fallback text
+	Key  string `json:"key"`           // object key in the bucket
+	Kind string `json:"kind"`          // "image" | "table" | "file"
+	Alt  string `json:"alt,omitempty"` // accessibility / fallback text
+	// Inline marks a formula/symbol rendered mid-sentence (РЕШУ's <img class=tex>).
+	// The statement carries a ⟦img:N⟧ placeholder at its spot; the web swaps it
+	// for a small baseline-aligned image. Block figures (Inline=false) render
+	// under the statement as usual.
+	Inline bool `json:"inline,omitempty"`
 }
 
 // Source records where a task came from, for ingest dedup and provenance.

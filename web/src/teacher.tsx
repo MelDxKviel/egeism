@@ -226,7 +226,7 @@ export function TestDetailPage() {
                     <Pill tone="neutral">№{t.number}</Pill>
                     <Pill>{t.answer_schema.type}</Pill>
                   </div>
-                  <StatementView text={t.statement} style={{ fontSize: 15, lineHeight: 1.45, marginBottom: 8 }} />
+                  <StatementView text={t.statement} media={t.media} style={{ fontSize: 15, lineHeight: 1.45, marginBottom: 8 }} />
                   <MediaBlock media={t.media} />
                   <div className="mono" style={{ fontSize: 14, background: "var(--surface-2)", borderRadius: 8, padding: "8px 12px", display: "inline-block" }}>
                     <span style={{ color: "var(--text-3)" }}>ответ: </span>
@@ -423,7 +423,7 @@ function BankCard({ task, onStatus, onEditAnswer }: { task: Task; onStatus: (id:
           {(task.media?.length ?? 0) > 0 && <span title="есть медиа" style={{ display: "inline-flex", color: "var(--text-3)" }}><Icon name="image" size={16} /></span>}
         </div>
       </div>
-      <StatementView text={task.statement} style={{ fontSize: 15, lineHeight: 1.45, marginBottom: 12 }} />
+      <StatementView text={task.statement} media={task.media} style={{ fontSize: 15, lineHeight: 1.45, marginBottom: 12 }} />
       <MediaBlock media={task.media} />
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
         <Label>Ответ</Label>

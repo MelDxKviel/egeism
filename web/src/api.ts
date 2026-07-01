@@ -10,7 +10,7 @@ export type TestKind = "classic" | "drill";
 
 export interface User { id: string; role: Role; name: string; telegram_id?: number; }
 export interface Subject { id: string; code: SubjectCode; title: string; }
-export interface Media { key: string; kind: "image" | "table" | "file"; alt?: string; }
+export interface Media { key: string; kind: "image" | "table" | "file"; alt?: string; inline?: boolean; }
 export interface AnswerSchema {
   type: AnswerKind; correct: string[]; tolerance?: number;
   ci?: boolean; yo_fold?: boolean; token?: "char" | "split";

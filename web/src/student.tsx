@@ -225,7 +225,7 @@ export function Solve() {
           <Pill tone="neutral">№{task.number}</Pill>
           <Pill>{task.answer_kind}</Pill>
         </div>
-        <StatementView text={task.statement} style={{ fontSize: 17, lineHeight: 1.5, marginBottom: 18 }} />
+        <StatementView text={task.statement} media={task.media} style={{ fontSize: 17, lineHeight: 1.5, marginBottom: 18 }} />
         <MediaBlock media={task.media} />
         {!submitted && <AnswerInput kind={task.answer_kind} value={draft} onChange={setDraft} />}
         {submitted && (

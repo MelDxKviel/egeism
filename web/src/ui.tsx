@@ -2,13 +2,15 @@ import { CSSProperties, ReactNode } from "react";
 import { Media, mediaUrl } from "./api";
 import { Icon } from "./icons";
 
-// MediaBlock renders a task's images inline and attached files as download
-// links (§8: file/image tasks are web-only).
+// MediaBlock renders a task's block figures and attached files (§8: file/image
+// tasks are web-only). Inline formulas (m.inline) are skipped here — they are
+// drawn mid-sentence by StatementView via their ⟦img:N⟧ placeholders.
 export function MediaBlock({ media }: { media?: Media[] }) {
-  if (!media || media.length === 0) return null;
+  const blocks = (media || []).filter((m) => !m.inline);
+  if (blocks.length === 0) return null;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10, margin: "6px 0 16px" }}>
-      {media.map((m, i) => m.kind === "file" ? (
+      {blocks.map((m, i) => m.kind === "file" ? (
         <a key={i} href={mediaUrl(m.key)} target="_blank" rel="noreferrer" className="mono" style={{
           display: "inline-flex", alignItems: "center", gap: 8, alignSelf: "flex-start",
           background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 10,
@@ -23,10 +25,31 @@ export function MediaBlock({ media }: { media?: Media[] }) {
   );
 }
 
+// renderInline swaps a statement's ⟦img:N⟧ formula placeholders (emitted by the
+// РЕШУ fetcher for <img class=tex> chunks) for the matching inline media image,
+// so formulas sit mid-sentence at text size instead of as detached blocks.
+function renderInline(text: string, media?: Media[]): ReactNode[] {
+  if (!media || media.length === 0 || !text.includes("⟦img:")) return [text];
+  const parts: ReactNode[] = [];
+  const re = /⟦img:(\d+)⟧/g;
+  let last = 0, k = 0, m: RegExpExecArray | null;
+  while ((m = re.exec(text))) {
+    if (m.index > last) parts.push(text.slice(last, m.index));
+    const mm = media[Number(m[1])];
+    parts.push(mm
+      ? <img key={`f${k++}`} className="stmt-formula" src={mediaUrl(mm.key)} alt={mm.alt || ""} loading="lazy" />
+      : m[0]);
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) parts.push(text.slice(last));
+  return parts;
+}
+
 // StatementView renders a task statement, drawing the Markdown tables the
 // content fetcher emits (truth tables задание 2, DB headers задание 3, …) as
-// real styled <table>s and everything else as text (line breaks preserved).
-export function StatementView({ text, style }: { text?: string; style?: CSSProperties }) {
+// real styled <table>s, inline formula placeholders (⟦img:N⟧) as inline images,
+// and everything else as text (line breaks preserved).
+export function StatementView({ text, media, style }: { text?: string; media?: Media[]; style?: CSSProperties }) {
   const lines = (text || "").split("\n");
   const isRow = (l: string) => /^\s*\|.*\|\s*$/.test(l);
   const cellsOf = (l: string) =>
@@ -37,7 +60,7 @@ export function StatementView({ text, style }: { text?: string; style?: CSSPrope
   let para: string[] = [];
   const flush = () => {
     if (para.join("").trim())
-      blocks.push(<div key={blocks.length} style={{ whiteSpace: "pre-wrap" }}>{para.join("\n").trim()}</div>);
+      blocks.push(<div key={blocks.length} style={{ whiteSpace: "pre-wrap" }}>{renderInline(para.join("\n").trim(), media)}</div>);
     para = [];
   };
   for (let i = 0; i < lines.length; ) {
@@ -53,11 +76,11 @@ export function StatementView({ text, style }: { text?: string; style?: CSSPrope
           <table className="stmt-table">
             {header.length > 0 && (
               <thead>{header.map((r, ri) => (
-                <tr key={ri}>{r.map((c, ci) => <th key={ci}>{c || " "}</th>)}</tr>
+                <tr key={ri}>{r.map((c, ci) => <th key={ci}>{c ? renderInline(c, media) : " "}</th>)}</tr>
               ))}</thead>
             )}
             <tbody>{body.map((r, ri) => (
-              <tr key={ri}>{r.map((c, ci) => <td key={ci}>{c || " "}</td>)}</tr>
+              <tr key={ri}>{r.map((c, ci) => <td key={ci}>{c ? renderInline(c, media) : " "}</td>)}</tr>
             ))}</tbody>
           </table>
         </div>,

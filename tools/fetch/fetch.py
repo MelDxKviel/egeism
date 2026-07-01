@@ -2,24 +2,37 @@
 """Hybrid content fetcher: РЕШУ ЕГЭ (answers + номер + images) → normalized JSONL.
 
 Design (see plan §9): the fragile, site-specific scraping lives HERE, in Python,
-reusing the maintained `sdamgia` library — NOT in the Go app. This script emits
-one normalized RawTask per line (the shape `cmd/ingest -source dataset` reads),
-and the Go ingest downloads each media URL into MinIO. Swap or extend this script
-without touching the app.
+NOT in the Go app. This script emits one normalized RawTask per line (the shape
+`cmd/ingest -source dataset` reads), and the Go ingest downloads each media URL
+into MinIO. Swap or extend this script without touching the app.
 
 Hybrid note: РЕШУ's task images are FIPI-origin, so this already gives you
-FIPI-derived conditions + media + the correct answer in one place. A pure
-FIPI-first content mode (open.fipi.ru questions.php per proj GUID) is sketched in
-FIPI_PROJ below; matching FIPI↔РЕШУ for answers needs OCR and is left as an
-extension — low-confidence classifications stay `draft` for curation regardless.
+FIPI-derived conditions + media + the correct answer in one place.
 
-IMPORTANT: this is a runnable template. Validate the sdamgia API calls against
-the version you install (forks differ), and run it locally (RU sites, anti-scrape
-— be gentle: low rate, cache). Usage:
+Inline formulas (the load-bearing detail for МАТЕМАТИКА). РЕШУ renders every
+formula and special symbol as an `<img class="tex">` inside the statement (e.g.
+"цена равна p = 500 руб."). The `sdamgia` library's `get_problem_by_id` throws
+those away from the condition *text* (leaving holes: "цена равна  руб.") and
+dumps ALL of them into a flat image list — so the app used to show each formula
+as a big detached block, out of place. Instead we parse the condition HTML
+ourselves and keep formulas WHERE THEY BELONG: a formula `<img>` becomes an
+inline media entry (``"inline": true``) plus a ``⟦img:N⟧`` placeholder at its
+exact spot in the statement; the web swaps the placeholder for the small,
+baseline-aligned image. Only genuine figures (a graph, a geometry drawing —
+non-``tex`` images) stay as block media rendered under the statement.
+
+We still use the `sdamgia` library ONLY to discover problem ids (catalog +
+category listings); the per-problem page is fetched and parsed here (requests +
+bs4, one GET per problem, same as before) so the number/answer match the library
+byte-for-byte while the statement keeps its formulas in place.
+
+IMPORTANT: this is a runnable template. Validate against the version you install
+(forks differ), and run it locally (RU sites, anti-scrape — be gentle: low rate,
+cache). Usage:
 
     pip install -r tools/fetch/requirements.txt
-    python tools/fetch/fetch.py --subject inf --limit 50 > inf.jsonl
-    go run ./cmd/ingest -source dataset -provider sdamgia -path inf.jsonl   # draft
+    python tools/fetch/fetch.py --subject math --limit 50 > math.jsonl
+    go run ./cmd/ingest -source dataset -provider sdamgia -path math.jsonl  # draft
 """
 import argparse
 import json
@@ -27,15 +40,27 @@ import os
 import random
 import re
 import sys
-import time
 from concurrent.futures import ThreadPoolExecutor
+
+import requests
+from bs4 import (BeautifulSoup, CData, Comment, Declaration, Doctype,
+                 NavigableString, ProcessingInstruction, Tag)
 
 # РЕШУ subject codes per our subject code. NOTE: math = ПРОФИЛЬНАЯ (math-ege);
 # базовая была бы "mathb". Verify against your installed lib/site.
 SDAMGIA_SUBJECT = {"rus": "rus", "math": "math", "inf": "inf", "soc": "soc"}
 
+# sdamgia is one engine behind per-subject subdomains: https://{code}-ege.sdamgia.ru
+SDAMGIA_DOMAIN = "sdamgia.ru"
+
+UA = "Mozilla/5.0 (egeism content fetcher; personal study tool)"
+
 # open.fipi.ru open-bank project GUIDs (for a future FIPI-first content mode).
 FIPI_PROJ = {"math": "AC437B34557F88EA4115D2F374B0A07B"}  # extend as needed
+
+
+def _base_url(subj: str) -> str:
+    return f"https://{subj}-ege.{SDAMGIA_DOMAIN}"
 
 
 def classify_answer(answer: str, subject: str = "math"):
@@ -68,24 +93,124 @@ def classify_answer(answer: str, subject: str = "math"):
     return {"type": "string", "correct": [a], "ci": True, "yo_fold": True}, 0.8
 
 
-def to_raw_task(subject_code: str, problem: dict):
-    """Map a sdamgia problem dict to our RawTask (or None if unusable)."""
-    answer = problem.get("answer")
+# --- condition HTML → inline-aware statement + media -----------------------
+
+# NavigableString subclasses that are NOT real text (comments, PIs, …).
+_NONTEXT = (Comment, ProcessingInstruction, Declaration, Doctype, CData)
+_BLOCK = {"p", "div", "li", "tr", "h1", "h2", "h3", "h4", "h5", "h6", "blockquote"}
+
+
+def _abs_src(src: str, base: str) -> str:
+    """Resolve a (possibly relative) media src to an absolute URL.
+
+    Formula images live on ege.sdamgia.ru (already absolute); attached figures
+    are site-relative ("/get_file?id=…"), so prepend the subject base.
+    """
+    src = (src or "").strip()
+    if not src:
+        return ""
+    if src.startswith(("http://", "https://", "data:")):
+        return src
+    return base + src if src.startswith("/") else base + "/" + src
+
+
+def _is_formula(img) -> bool:
+    """A rendered LaTeX chunk. РЕШУ marks these with class 'tex'; everything
+    else (graphs, geometry drawings, tables-as-image) is a genuine figure."""
+    return "tex" in (img.get("class") or [])
+
+
+def _serialize(node, base, media, out):
+    """Walk the condition DOM in reading order, appending text to `out`.
+
+    A formula <img> is replaced INLINE by a ``⟦img:N⟧`` placeholder (and recorded
+    as inline media, N = its index in `media`); a figure <img> is recorded as
+    block media with NO placeholder (the web renders it under the statement, as
+    before). Block-level tags emit a trailing newline so paragraphs/list items
+    stay on their own line for the web's pre-wrap rendering.
+    """
+    if isinstance(node, NavigableString):
+        if not isinstance(node, _NONTEXT):
+            out.append(str(node))
+        return
+    if not isinstance(node, Tag):
+        return
+    name = node.name
+    if name in ("script", "style"):
+        return
+    if name == "br":
+        out.append("\n")
+        return
+    if name == "img":
+        src = _abs_src(node.get("src"), base)
+        if not src:
+            return
+        alt = (node.get("alt") or "").strip()
+        inline = _is_formula(node)
+        media.append({"url": src, "kind": "image", "alt": alt, "inline": inline})
+        if inline:
+            out.append(f"⟦img:{len(media) - 1}⟧")
+        return
+    for c in node.children:
+        _serialize(c, base, media, out)
+    if name in _BLOCK:
+        out.append("\n")
+
+
+def _clean(s: str) -> str:
+    """Trim lines and drop blanks. Strips the soft hyphens (U+00AD) and NBSPs
+    РЕШУ sprinkles through justified text, which otherwise litter the statement."""
+    s = (s or "").replace("­", "").replace("\xa0", " ").replace("​", "")
+    lines = [re.sub(r"[ \t]+", " ", ln).strip() for ln in s.splitlines()]
+    return "\n".join(ln for ln in lines if ln)
+
+
+def _parse_problem(content: bytes, base: str):
+    """Parse a РЕШУ /problem page → (topic, statement, media, answer) or None.
+
+    Mirrors the sdamgia library's field extraction (so number+answer are
+    identical) but builds the statement with inline formula placeholders.
+    """
+    soup = BeautifulSoup(content, "html.parser")
+    block = soup.find("div", {"class": "prob_maindiv"})
+    if block is None:
+        return None
+    # "Тип 12 № 26718" → topic "12" (drop the leading "Тип" word and "№ id"),
+    # exactly as the library derives it, so номер задания is unchanged.
+    nums = block.find("span", {"class": "prob_nums"})
+    topic = " ".join(nums.get_text().split()[1:][:-2]) if nums else ""
+    pbodies = block.find_all("div", {"class": "pbody"})
+    if not pbodies:
+        return None
+    media, out = [], []
+    _serialize(pbodies[0], base, media, out)  # [0] = condition ([1] = solution)
+    statement = _clean("".join(out))
+    ans = block.find("div", {"class": "answer"})
+    answer = ans.get_text().replace("Ответ: ", "").strip() if ans else ""
+    return topic, statement, media, answer
+
+
+def to_raw_task(subject_code: str, pid: str, url: str,
+                topic: str, statement: str, media: list, answer: str):
+    """Assemble a normalized RawTask (or None if unusable: no/undecidable answer
+    or a non-numeric «тип», i.e. a part-2 problem — skip it like the old int())."""
     schema, conf = classify_answer(answer, subject_code)
     if schema is None:
         return None
-    cond = problem.get("condition") or {}
-    media = [{"url": u, "kind": "image"} for u in (cond.get("images") or [])]
+    try:
+        number = int(topic or 0)
+    except ValueError:
+        return None  # part-2 «тип» like "C4"/"Д14" isn't a plain задание number
     return {
         "subject": subject_code,
-        "number": int(problem.get("topic") or 0),
-        "statement": (cond.get("text") or "").strip(),
+        "number": number,
+        "statement": statement,
         "media": media,
         "answer_schema": schema,
         "source": {
             "provider": "sdamgia",
-            "extern_id": str(problem.get("id")),
-            "url": problem.get("url", ""),
+            "extern_id": str(pid),
+            "url": url,
         },
         # Not persisted by the app; a hint for you when reviewing the JSONL.
         "_confidence": round(conf, 2),
@@ -93,15 +218,22 @@ def to_raw_task(subject_code: str, problem: dict):
 
 
 def fetch(subject_code: str, limit: int, delay: float):
-    """Yield RawTask dicts for a subject using the sdamgia library."""
+    """Yield RawTask dicts for a subject.
+
+    Ids come from the sdamgia library (catalog + category listings); each
+    problem PAGE is fetched and parsed here so formulas stay inline.
+    """
     try:
         from sdamgia import SdamGIA  # validate against your installed version
     except ImportError as e:
-        # Raise (not sys.exit) so the server can catch it and fall back to demo.
+        # Raise (not sys.exit) so the server can catch it and return [].
         raise RuntimeError("sdamgia lib not installed: pip install -r tools/fetch/requirements.txt") from e
 
     subj = SDAMGIA_SUBJECT[subject_code]
+    base = _base_url(subj)
     api = SdamGIA()
+    session = requests.Session()
+    session.headers["User-Agent"] = UA
     # РЕШУ is ~seconds per request, so EVERYTHING here is fetched concurrently — a
     # small pool keeps it gentle while cutting wall-time ~Nx (sequential blows
     # past the fetch deadline on anything but a tiny pull).
@@ -132,8 +264,15 @@ def fetch(subject_code: str, limit: int, delay: float):
     ids = list(dict.fromkeys(ids))[: max(limit * 2, limit + 12)]  # over-fetch for failures
 
     def _one(pid):
+        url = f"{base}/problem?id={pid}"
         try:
-            return to_raw_task(subject_code, api.get_problem_by_id(subj, pid))
+            r = session.get(url, timeout=25)
+            r.raise_for_status()
+            parsed = _parse_problem(r.content, base)
+            if not parsed:
+                return None
+            topic, statement, media, answer = parsed
+            return to_raw_task(subject_code, pid, url, topic, statement, media, answer)
         except Exception as e:  # noqa: BLE001 — keep going on a bad problem
             print(f"skip {pid}: {e}", file=sys.stderr)
             return None

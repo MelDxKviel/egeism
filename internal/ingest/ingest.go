@@ -25,9 +25,10 @@ import (
 // RawMedia is a media reference from a source: a URL to download plus metadata.
 // The runner fetches it into MinIO and rewrites it to a stored object key.
 type RawMedia struct {
-	URL  string `json:"url"`
-	Kind string `json:"kind"` // image | table | file
-	Alt  string `json:"alt,omitempty"`
+	URL    string `json:"url"`
+	Kind   string `json:"kind"` // image | table | file
+	Alt    string `json:"alt,omitempty"`
+	Inline bool   `json:"inline,omitempty"` // inline formula (⟦img:N⟧ placeholder in statement)
 }
 
 // RawTask is a normalized candidate from a source, pre-persistence.
@@ -189,7 +190,7 @@ func (r *Runner) resolveMedia(ctx context.Context, raws []RawMedia) []domain.Med
 				}
 			}
 		}
-		out = append(out, domain.Media{Key: key, Kind: m.Kind, Alt: m.Alt})
+		out = append(out, domain.Media{Key: key, Kind: m.Kind, Alt: m.Alt, Inline: m.Inline})
 	}
 	return out
 }
