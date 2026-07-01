@@ -149,6 +149,13 @@ func (r *Runner) ingestOne(ctx context.Context, sourceName string, raw RawTask) 
 	return err
 }
 
+// MediaFor downloads source media into MinIO and returns stored references. It
+// exposes the same resolution the ingest uses, for the re-fetch/upgrade path
+// that refreshes an existing task's media without a full re-ingest.
+func (r *Runner) MediaFor(ctx context.Context, raws []RawMedia) []domain.Media {
+	return r.resolveMedia(ctx, raws)
+}
+
 // resolveMedia downloads each source media URL into MinIO and returns stored
 // references. Without a media store (or for a non-http key), the URL is kept
 // as-is so nothing is lost — but images won't be served until re-ingested.

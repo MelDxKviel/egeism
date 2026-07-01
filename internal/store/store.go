@@ -18,6 +18,10 @@ import (
 // ErrNotFound is returned when a lookup matches no row.
 var ErrNotFound = errors.New("not found")
 
+// ErrInUse is returned when a delete is refused because the row is still
+// referenced by protected data (e.g. a test that has been attempted).
+var ErrInUse = errors.New("in use")
+
 // Store is the concrete data-access layer backed by a pgx pool.
 type Store struct {
 	pool *pgxpool.Pool

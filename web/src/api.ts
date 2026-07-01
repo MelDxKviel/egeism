@@ -158,6 +158,9 @@ export const api = {
   testDetail: (id: string) => req<TestDetail>("GET", `/api/admin/tests/${id}`),
   createTest: (subject: SubjectCode, kind: TestKind, title: string) =>
     req<Test>("POST", "/api/admin/tests", { subject, kind, title }),
+  deleteTest: (id: string) => req<void>("DELETE", `/api/admin/tests/${id}`),
+  refetchFormulas: () =>
+    req<{ updated: number; scanned: number; by_subject: Record<string, number> }>("POST", "/api/admin/tasks/refetch-formulas"),
   addItem: (testId: string, task_id: string, position: number) =>
     req("POST", `/api/admin/tests/${testId}/items`, { task_id, position }),
   generateVariant: (subject: SubjectCode, kind: TestKind, opts: { number?: number; count?: number; title?: string } = {}) =>

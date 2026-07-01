@@ -320,3 +320,32 @@ func (q *Queries) UpdateTaskAnswer(ctx context.Context, arg UpdateTaskAnswerPara
 	)
 	return i, err
 }
+
+const updateTaskContent = `-- name: UpdateTaskContent :one
+UPDATE tasks SET statement = $2, media = $3 WHERE id = $1 RETURNING id, subject_id, number, statement, media, answer_schema, source, status, created_at
+`
+
+type UpdateTaskContentParams struct {
+	ID        uuid.UUID `json:"id"`
+	Statement string    `json:"statement"`
+	Media     []byte    `json:"media"`
+}
+
+// Refresh a task's statement + media in place (re-fetch/upgrade), leaving its
+// curated answer_schema and status untouched.
+func (q *Queries) UpdateTaskContent(ctx context.Context, arg UpdateTaskContentParams) (Task, error) {
+	row := q.db.QueryRow(ctx, updateTaskContent, arg.ID, arg.Statement, arg.Media)
+	var i Task
+	err := row.Scan(
+		&i.ID,
+		&i.SubjectID,
+		&i.Number,
+		&i.Statement,
+		&i.Media,
+		&i.AnswerSchema,
+		&i.Source,
+		&i.Status,
+		&i.CreatedAt,
+	)
+	return i, err
+}

@@ -50,8 +50,15 @@ def _with_deadline(fn, seconds):
     return box.get("ok", [])
 
 
-def real_tasks(subject: str, limit: int, min_conf: float, number: int = 0):
+def real_tasks(subject: str, limit: int, min_conf: float, number: int = 0, ids=None):
     delay = float(os.getenv("FETCH_DELAY", "0.5"))
+    if ids:
+        # Targeted re-fetch (upgrade path): pull exactly these РЕШУ problem ids so
+        # a task ingested before inline-formula support gets its statement + media
+        # refreshed. openfipi (информатика) has no by-id fetch, so ids are РЕШУ-only.
+        if subject == "inf":
+            return []
+        return list(F.fetch_by_ids(subject, ids))
     if subject == "inf":
         # информатика: pull REAL ФИПИ open-bank tasks WITH answers from openfipi
         # (it filters by задание server-side, only lists tasks that have an
@@ -105,13 +112,14 @@ class Handler(BaseHTTPRequestHandler):
         limit = int(body.get("limit") or 30)
         number = int(body.get("number") or 0)  # drill: restrict to this task number
         min_conf = float(body.get("min_confidence") or 0.0)
+        ids = body.get("ids") or None  # targeted re-fetch (upgrade) by РЕШУ id
         if subject not in SUBJECTS:
             self._send(400, {"error": "unknown subject"})
             return
         # Real sources only. On failure/empty return [] (the API then reports
         # "источник не вернул заданий") — NEVER substitute made-up tasks.
         try:
-            tasks = _with_deadline(lambda: real_tasks(subject, limit, min_conf, number), FETCH_DEADLINE)
+            tasks = _with_deadline(lambda: real_tasks(subject, limit, min_conf, number, ids), FETCH_DEADLINE)
         except Exception as e:  # noqa: BLE001
             print(f"real fetch FAILED for {subject}: {e}", flush=True)
             tasks = []

@@ -36,6 +36,8 @@ func writeStoreErr(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, store.ErrNotFound):
 		writeErr(w, http.StatusNotFound, "not found")
+	case errors.Is(err, store.ErrInUse):
+		writeErr(w, http.StatusConflict, "тест уже назначен или решался — удалить нельзя")
 	default:
 		slog.Error("store error", "err", err)
 		writeErr(w, http.StatusInternalServerError, "internal error")

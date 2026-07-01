@@ -191,17 +191,23 @@ def _parse_problem(content: bytes, base: str):
 
 
 def to_raw_task(subject_code: str, pid: str, url: str,
-                topic: str, statement: str, media: list, answer: str):
+                topic: str, statement: str, media: list, answer: str,
+                require_answer: bool = True):
     """Assemble a normalized RawTask (or None if unusable: no/undecidable answer
-    or a non-numeric «тип», i.e. a part-2 problem — skip it like the old int())."""
+    or a non-numeric «тип», i.e. a part-2 problem — skip it like the old int()).
+
+    With require_answer=False (the re-fetch/upgrade path) the task is returned
+    even when the answer can't be classified: the caller only wants the refreshed
+    statement + inline media and keeps the task's existing (curated) answer.
+    """
     schema, conf = classify_answer(answer, subject_code)
-    if schema is None:
+    if schema is None and require_answer:
         return None
     try:
         number = int(topic or 0)
     except ValueError:
         return None  # part-2 «тип» like "C4"/"Д14" isn't a plain задание number
-    return {
+    rt = {
         "subject": subject_code,
         "number": number,
         "statement": statement,
@@ -215,6 +221,27 @@ def to_raw_task(subject_code: str, pid: str, url: str,
         # Not persisted by the app; a hint for you when reviewing the JSONL.
         "_confidence": round(conf, 2),
     }
+    if schema is None:
+        del rt["answer_schema"]  # upgrade path: leave the existing answer untouched
+    return rt
+
+
+def _fetch_one(subject_code: str, base: str, session, pid, require_answer: bool = True):
+    """Fetch and parse one РЕШУ problem page → RawTask (or None). Shared by the
+    bulk `fetch` (discovery) and `fetch_by_ids` (targeted re-fetch/upgrade)."""
+    url = f"{base}/problem?id={pid}"
+    try:
+        r = session.get(url, timeout=25)
+        r.raise_for_status()
+        parsed = _parse_problem(r.content, base)
+        if not parsed:
+            return None
+        topic, statement, media, answer = parsed
+        return to_raw_task(subject_code, pid, url, topic, statement, media, answer,
+                           require_answer=require_answer)
+    except Exception as e:  # noqa: BLE001 — keep going on a bad problem
+        print(f"skip {pid}: {e}", file=sys.stderr)
+        return None
 
 
 def fetch(subject_code: str, limit: int, delay: float):
@@ -263,22 +290,25 @@ def fetch(subject_code: str, limit: int, delay: float):
                 ids.append(b[i])
     ids = list(dict.fromkeys(ids))[: max(limit * 2, limit + 12)]  # over-fetch for failures
 
-    def _one(pid):
-        url = f"{base}/problem?id={pid}"
-        try:
-            r = session.get(url, timeout=25)
-            r.raise_for_status()
-            parsed = _parse_problem(r.content, base)
-            if not parsed:
-                return None
-            topic, statement, media, answer = parsed
-            return to_raw_task(subject_code, pid, url, topic, statement, media, answer)
-        except Exception as e:  # noqa: BLE001 — keep going on a bad problem
-            print(f"skip {pid}: {e}", file=sys.stderr)
-            return None
-
     with ThreadPoolExecutor(max_workers=workers) as ex:
-        for rt in ex.map(_one, ids):
+        for rt in ex.map(lambda pid: _fetch_one(subject_code, base, session, pid), ids):
+            if rt and rt["statement"]:
+                yield rt
+
+
+def fetch_by_ids(subject_code: str, ids):
+    """Re-fetch specific РЕШУ problems by id → RawTask dicts (statement + inline
+    media refreshed), used to upgrade tasks ingested before inline-formula
+    support. The answer is left to the caller's existing curated value."""
+    subj = SDAMGIA_SUBJECT[subject_code]
+    base = _base_url(subj)
+    session = requests.Session()
+    session.headers["User-Agent"] = UA
+    workers = max(1, int(os.getenv("FETCH_WORKERS", "6")))
+    ids = [str(i) for i in ids if str(i).strip()]
+    with ThreadPoolExecutor(max_workers=workers) as ex:
+        for rt in ex.map(
+            lambda pid: _fetch_one(subject_code, base, session, pid, require_answer=False), ids):
             if rt and rt["statement"]:
                 yield rt
 

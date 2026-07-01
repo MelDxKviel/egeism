@@ -275,6 +275,20 @@ func (s *Store) UpdateTaskAnswer(ctx context.Context, id uuid.UUID, schema domai
 	return toDomainTask(row)
 }
 
+// UpdateTaskContent refreshes a task's statement + media in place (re-fetch /
+// upgrade), leaving its curated answer_schema and status untouched.
+func (s *Store) UpdateTaskContent(ctx context.Context, id uuid.UUID, statement string, media []domain.Media) (domain.Task, error) {
+	blob, err := mustJSON(media)
+	if err != nil {
+		return domain.Task{}, err
+	}
+	row, err := s.q.UpdateTaskContent(ctx, sqlc.UpdateTaskContentParams{ID: id, Statement: statement, Media: blob})
+	if err != nil {
+		return domain.Task{}, mapErr(err)
+	}
+	return toDomainTask(row)
+}
+
 // TaskExistsBySource supports ingest dedup.
 func (s *Store) TaskExistsBySource(ctx context.Context, provider, externID string) (bool, error) {
 	return s.q.TaskExistsBySource(ctx, sqlc.TaskExistsBySourceParams{

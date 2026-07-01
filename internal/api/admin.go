@@ -156,6 +156,24 @@ func (s *Server) handleCreateTest(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, test)
 }
 
+// handleDeleteTest removes a teacher's test (and its items/assignments). Tests
+// that have been attempted are protected (409) so student history is kept.
+func (s *Server) handleDeleteTest(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requireTeacher(w, r); !ok {
+		return
+	}
+	id, err := uuid.Parse(chi.URLParam(r, "testID"))
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid test id")
+		return
+	}
+	if err := s.store.DeleteTest(r.Context(), id); err != nil {
+		writeStoreErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusNoContent, nil)
+}
+
 type addItemReq struct {
 	TaskID   uuid.UUID `json:"task_id"`
 	Position int       `json:"position"`

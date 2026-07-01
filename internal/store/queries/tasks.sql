@@ -44,6 +44,11 @@ LIMIT sqlc.arg('lim');
 -- name: UpdateTaskAnswer :one
 UPDATE tasks SET answer_schema = $2 WHERE id = $1 RETURNING *;
 
+-- name: UpdateTaskContent :one
+-- Refresh a task's statement + media in place (re-fetch/upgrade), leaving its
+-- curated answer_schema and status untouched.
+UPDATE tasks SET statement = $2, media = $3 WHERE id = $1 RETURNING *;
+
 -- name: SetTaskStatus :one
 UPDATE tasks SET status = $2 WHERE id = $1 RETURNING *;
 

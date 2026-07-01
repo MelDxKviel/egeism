@@ -42,6 +42,35 @@ func (s *Store) GetTest(ctx context.Context, id uuid.UUID) (domain.Test, error) 
 	return toDomainTest(t), nil
 }
 
+// DeleteTest removes a test and its items (test_items cascade). Any assignments
+// of the test are removed too. A test that has been attempted is left intact and
+// ErrInUse is returned, so student history is never orphaned. Runs in one tx.
+func (s *Store) DeleteTest(ctx context.Context, id uuid.UUID) error {
+	if _, err := s.q.GetTest(ctx, id); err != nil {
+		return mapErr(err) // ErrNotFound → 404
+	}
+	used, err := s.q.TestHasAttempts(ctx, id)
+	if err != nil {
+		return mapErr(err)
+	}
+	if used {
+		return ErrInUse
+	}
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	qtx := s.q.WithTx(tx)
+	if err := qtx.DeleteAssignmentsByTest(ctx, id); err != nil {
+		return mapErr(err)
+	}
+	if _, err := qtx.DeleteTest(ctx, id); err != nil {
+		return mapErr(err)
+	}
+	return tx.Commit(ctx)
+}
+
 func (s *Store) ListTests(ctx context.Context, subjectID *uuid.UUID) ([]domain.Test, error) {
 	rows, err := s.q.ListTests(ctx, subjectID)
 	if err != nil {

@@ -134,6 +134,7 @@ export function Builder() {
   const [number, setNumber] = useState(1);
   const [count, setCount] = useState(10);
   const [busy, setBusy] = useState(false);
+  const [deleting, setDeleting] = useState("");
   const tests = useTests(subject);
   const activeTasks = useAdminTasks(`?subject=${subject}&status=active&limit=200`);
 
@@ -147,6 +148,17 @@ export function Builder() {
       invalidate("admin-tasks");
     } catch (e) { showToast(String((e as Error).message)); }
     finally { setBusy(false); }
+  };
+
+  const del = async (id: string, title: string) => {
+    if (!window.confirm(`Удалить тест «${testTitle(title)}»? Это действие необратимо.`)) return;
+    setDeleting(id);
+    try {
+      await api.deleteTest(id);
+      showToast("Тест удалён");
+      invalidate("tests");
+    } catch (e) { showToast(String((e as Error).message)); }
+    finally { setDeleting(""); }
   };
 
   return (
@@ -177,10 +189,15 @@ export function Builder() {
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {list.filter((t) => t.title !== "__practice__").map((t) => (
               <div key={t.id} onClick={() => { requestTestView(t.id); go("t-test"); }} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", background: "var(--surface-2)", borderRadius: 10, cursor: "pointer" }}>
-                <div><div style={{ fontWeight: 600 }}>{t.title}</div><div className="mono" style={{ color: "var(--text-3)", fontSize: 12 }}>{new Date(t.created_at).toLocaleDateString("ru")}</div></div>
+                <div><div style={{ fontWeight: 600 }}>{t.title}</div><div className="mono" style={{ color: "var(--text-3)", fontSize: 12 }}>{new Date(t.created_at).toLocaleString("ru", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}</div></div>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   <Pill>{t.kind}</Pill>
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 5, color: "var(--accent-2)", fontSize: 13 }}>смотреть <Icon name="arrowRight" size={15} /></span>
+                  <button onClick={(e) => { e.stopPropagation(); del(t.id, t.title); }} disabled={deleting === t.id}
+                    title="Удалить тест" aria-label="Удалить тест"
+                    style={{ display: "inline-flex", alignItems: "center", background: "transparent", border: "none", color: "var(--text-3)", padding: 4, opacity: deleting === t.id ? 0.4 : 1 }}>
+                    <Icon name="trash" size={16} />
+                  </button>
                 </div>
               </div>
             ))}

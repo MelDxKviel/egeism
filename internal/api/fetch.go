@@ -96,6 +96,33 @@ type fetchResp struct {
 	Source   string `json:"source"`
 }
 
+// callFetcherByIDs asks the fetcher to re-fetch specific РЕШУ problem ids (the
+// upgrade path), returning refreshed RawTasks (statement + inline media).
+func (s *Server) callFetcherByIDs(ctx context.Context, subject domain.SubjectCode, ids []string) ([]ingest.RawTask, error) {
+	body, _ := json.Marshal(map[string]any{"subject": subject, "ids": ids})
+	ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
+	defer cancel()
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, s.fetcherURL+"/fetch", bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(httpReq)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	data, _ := io.ReadAll(io.LimitReader(resp.Body, 32<<20))
+	if resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("fetcher %d: %s", resp.StatusCode, bytes.TrimSpace(data))
+	}
+	var raws []ingest.RawTask
+	if err := json.Unmarshal(data, &raws); err != nil {
+		return nil, fmt.Errorf("decode fetcher response: %w", err)
+	}
+	return raws, nil
+}
+
 // callFetcher POSTs to the fetcher service and decodes the normalized tasks.
 // It also returns the source mode ("real"/"mock") from the X-Fetch-Mode header.
 func (s *Server) callFetcher(ctx context.Context, subject domain.SubjectCode, limit, number int) ([]ingest.RawTask, string, error) {

@@ -67,6 +67,27 @@ func (q *Queries) CreateTest(ctx context.Context, arg CreateTestParams) (Test, e
 	return i, err
 }
 
+const deleteAssignmentsByTest = `-- name: DeleteAssignmentsByTest :exec
+DELETE FROM assignments WHERE test_id = $1
+`
+
+func (q *Queries) DeleteAssignmentsByTest(ctx context.Context, testID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteAssignmentsByTest, testID)
+	return err
+}
+
+const deleteTest = `-- name: DeleteTest :execrows
+DELETE FROM tests WHERE id = $1
+`
+
+func (q *Queries) DeleteTest(ctx context.Context, id uuid.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteTest, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getPracticeTest = `-- name: GetPracticeTest :one
 SELECT id, subject_id, kind, title, created_by, created_at FROM tests
 WHERE subject_id = $1 AND created_by = $2 AND kind = 'drill' AND title = '__practice__'
@@ -194,4 +215,17 @@ func (q *Queries) ListTests(ctx context.Context, subjectID *uuid.UUID) ([]Test, 
 		return nil, err
 	}
 	return items, nil
+}
+
+const testHasAttempts = `-- name: TestHasAttempts :one
+SELECT EXISTS (SELECT 1 FROM attempts WHERE test_id = $1)
+`
+
+// A test that has been attempted (assigned+solved or self-practice) is in use
+// and must not be silently deleted — deleting would orphan student history.
+func (q *Queries) TestHasAttempts(ctx context.Context, testID uuid.UUID) (bool, error) {
+	row := q.db.QueryRow(ctx, testHasAttempts, testID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
 }
