@@ -97,6 +97,7 @@ func (s *Server) Router() http.Handler {
 			// Admin/authoring (§6 WS-C). Kept in one package for stage 1.
 			r.Get("/admin/tasks", s.handleListAdminTasks)
 			r.Post("/admin/tasks", s.handleCreateTask)
+			r.Delete("/admin/tasks", s.handleClearBank) // ?subject=<code>: wipe the bank
 			r.Post("/admin/tasks/import", s.handleImportTasks)
 			r.Post("/admin/tasks/fetch", s.handleFetchTasks)
 			r.Post("/admin/tasks/refetch-formulas", s.handleRefetchFormulas)
@@ -105,6 +106,7 @@ func (s *Server) Router() http.Handler {
 			r.Get("/admin/tests", s.handleListTests)
 			r.Get("/admin/tests/{testID}", s.handleGetTestDetail)
 			r.Post("/admin/tests", s.handleCreateTest)
+			r.Patch("/admin/tests/{testID}", s.handleRenameTest)
 			r.Delete("/admin/tests/{testID}", s.handleDeleteTest)
 			r.Post("/admin/tests/generate", s.handleGenerateVariant)
 			r.Post("/admin/tests/{testID}/items", s.handleAddTestItem)

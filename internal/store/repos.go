@@ -296,6 +296,34 @@ func (s *Store) TaskExistsBySource(ctx context.Context, provider, externID strin
 	})
 }
 
+// ClearBank wipes the task bank for a subject, keeping any task that carries
+// student history (has a recorded answer) so attempts/stats never orphan. The
+// kept tasks are first detached from any tests (test_items). Runs in one tx and
+// returns how many were deleted and how many were kept as in-use.
+func (s *Store) ClearBank(ctx context.Context, subjectID uuid.UUID) (deleted, kept int, err error) {
+	total, err := s.q.CountTasksBySubject(ctx, subjectID)
+	if err != nil {
+		return 0, 0, mapErr(err)
+	}
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return 0, 0, err
+	}
+	defer tx.Rollback(ctx)
+	qtx := s.q.WithTx(tx)
+	if err := qtx.DeleteTestItemsForUnansweredTasksBySubject(ctx, subjectID); err != nil {
+		return 0, 0, mapErr(err)
+	}
+	n, err := qtx.DeleteUnansweredTasksBySubject(ctx, subjectID)
+	if err != nil {
+		return 0, 0, mapErr(err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return 0, 0, err
+	}
+	return int(n), int(total) - int(n), nil
+}
+
 // ---- Attempts & answers ----
 
 func (s *Store) StartAttempt(ctx context.Context, studentID, testID uuid.UUID, assignmentID *uuid.UUID) (domain.Attempt, error) {

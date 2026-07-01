@@ -3,6 +3,7 @@ package api
 import (
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -124,6 +125,35 @@ func (s *Server) handleSetTaskStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, task)
 }
 
+type clearBankResp struct {
+	Deleted int `json:"deleted"`
+	Kept    int `json:"kept"` // tasks preserved because they carry answer history
+}
+
+// handleClearBank wipes the whole bank for one subject (?subject=math), keeping
+// only tasks that have been answered so student history/stats never orphan.
+func (s *Server) handleClearBank(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requireTeacher(w, r); !ok {
+		return
+	}
+	code := r.URL.Query().Get("subject")
+	if code == "" {
+		writeErr(w, http.StatusBadRequest, "subject is required")
+		return
+	}
+	sub, err := s.store.GetSubjectByCode(r.Context(), domain.SubjectCode(code))
+	if err != nil {
+		writeStoreErr(w, err)
+		return
+	}
+	deleted, kept, err := s.store.ClearBank(r.Context(), sub.ID)
+	if err != nil {
+		writeStoreErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, clearBankResp{Deleted: deleted, Kept: kept})
+}
+
 type createTestReq struct {
 	Subject domain.SubjectCode `json:"subject"`
 	Kind    domain.TestKind    `json:"kind"`
@@ -172,6 +202,38 @@ func (s *Server) handleDeleteTest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusNoContent, nil)
+}
+
+type renameTestReq struct {
+	Title string `json:"title"`
+}
+
+// handleRenameTest lets a teacher rename a test/variant so distinct variants are
+// easy to tell apart in the list.
+func (s *Server) handleRenameTest(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requireTeacher(w, r); !ok {
+		return
+	}
+	id, err := uuid.Parse(chi.URLParam(r, "testID"))
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid test id")
+		return
+	}
+	var req renameTestReq
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	title := strings.TrimSpace(req.Title)
+	if title == "" {
+		writeErr(w, http.StatusBadRequest, "title is required")
+		return
+	}
+	test, err := s.store.RenameTest(r.Context(), id, title)
+	if err != nil {
+		writeStoreErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, test)
 }
 
 type addItemReq struct {

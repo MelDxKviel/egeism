@@ -58,3 +58,24 @@ SELECT EXISTS (
     WHERE source ->> 'provider'  = sqlc.arg('provider')::text
       AND source ->> 'extern_id' = sqlc.arg('extern_id')::text
 );
+
+-- name: CountTasksBySubject :one
+SELECT COUNT(*) FROM tasks WHERE subject_id = $1;
+
+-- name: DeleteTestItemsForUnansweredTasksBySubject :exec
+-- Detach the about-to-be-cleared bank tasks from any tests first: test_items
+-- has no ON DELETE CASCADE to tasks, so it must go before the task delete.
+-- Only tasks with no recorded answers are touched (answered ones are kept).
+DELETE FROM test_items
+WHERE task_id IN (
+    SELECT id FROM tasks
+    WHERE subject_id = $1
+      AND NOT EXISTS (SELECT 1 FROM answers a WHERE a.task_id = tasks.id)
+);
+
+-- name: DeleteUnansweredTasksBySubject :execrows
+-- Clear the bank for a subject, preserving any task that carries student
+-- history (has a recorded answer) so attempts/stats never orphan.
+DELETE FROM tasks
+WHERE subject_id = $1
+  AND NOT EXISTS (SELECT 1 FROM answers a WHERE a.task_id = tasks.id);

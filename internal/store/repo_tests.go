@@ -42,6 +42,16 @@ func (s *Store) GetTest(ctx context.Context, id uuid.UUID) (domain.Test, error) 
 	return toDomainTest(t), nil
 }
 
+// RenameTest updates a test's title so a teacher can tell distinct variants
+// apart. Returns ErrNotFound if the test is gone.
+func (s *Store) RenameTest(ctx context.Context, id uuid.UUID, title string) (domain.Test, error) {
+	t, err := s.q.UpdateTestTitle(ctx, sqlc.UpdateTestTitleParams{ID: id, Title: title})
+	if err != nil {
+		return domain.Test{}, mapErr(err)
+	}
+	return toDomainTest(t), nil
+}
+
 // DeleteTest removes a test and its items (test_items cascade). Any assignments
 // of the test are removed too. A test that has been attempted is left intact and
 // ErrInUse is returned, so student history is never orphaned. Runs in one tx.

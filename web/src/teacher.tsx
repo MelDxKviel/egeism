@@ -159,6 +159,18 @@ export function Builder() {
     finally { setDeleting(""); }
   };
 
+  const rename = async (id: string, current: string) => {
+    const next = window.prompt("Новое название теста:", current);
+    if (next === null) return; // cancelled
+    const title = next.trim();
+    if (!title || title === current) return;
+    try {
+      await api.renameTest(id, title);
+      showToast("Тест переименован");
+      invalidate("tests");
+    } catch (e) { showToast(String((e as Error).message)); }
+  };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
       <SubjectTabs value={subject} onChange={setSubject} />
@@ -190,6 +202,11 @@ export function Builder() {
                 <div><div style={{ fontWeight: 600 }}>{t.title}</div><div className="mono" style={{ color: "var(--text-3)", fontSize: 12 }}>{new Date(t.created_at).toLocaleString("ru", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}</div></div>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   <Pill>{t.kind}</Pill>
+                  <button onClick={(e) => { e.stopPropagation(); rename(t.id, t.title); }}
+                    title="Переименовать тест" aria-label="Переименовать тест"
+                    style={{ display: "inline-flex", alignItems: "center", background: "transparent", border: "none", color: "var(--text-3)", padding: 4 }}>
+                    <Icon name="pencil" size={16} />
+                  </button>
                   <button onClick={(e) => { e.stopPropagation(); del(t.id, t.title); }} disabled={deleting === t.id}
                     title="Удалить тест" aria-label="Удалить тест"
                     style={{ display: "inline-flex", alignItems: "center", background: "transparent", border: "none", color: "var(--text-3)", padding: 4, opacity: deleting === t.id ? 0.4 : 1 }}>
@@ -312,15 +329,31 @@ export function Bank() {
     try { await api.setTaskStatus(id, s); showToast(s === "active" ? "Одобрено — в бою" : s === "rejected" ? "Отклонено" : "В черновики"); refresh(); }
     catch (e) { showToast(String((e as Error).message)); }
   };
+  const clearBank = async () => {
+    if (!window.confirm(`Очистить банк по предмету «${SUBJECT_TITLES[subject]}»?\nВсе задания без истории решений будут удалены безвозвратно.`)) return;
+    try {
+      const r = await api.clearBank(subject);
+      showToast(r.kept > 0 ? `Удалено ${r.deleted} · сохранено ${r.kept} (есть решения)` : `Удалено заданий: ${r.deleted}`);
+      refresh();
+    } catch (e) { showToast(String((e as Error).message)); }
+  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
       <SourcePanel subject={subject} onDone={refresh} />
       <SubjectTabs value={subject} onChange={setSubject} />
-      <div style={{ display: "flex", gap: 8 }}>
+      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
         {(["", "draft", "active", "rejected"] as const).map((s) => (
           <ChoiceTab key={s} active={status === s} onClick={() => setStatus(s)}>{s === "" ? "Все" : s}</ChoiceTab>
         ))}
+        <button onClick={clearBank} title="Удалить все задания предмета (кроме решённых)"
+          style={{
+            marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6,
+            background: "transparent", border: "1px solid var(--bad)", color: "var(--bad)",
+            borderRadius: 999, padding: "7px 14px", fontSize: 13, fontWeight: 600,
+          }}>
+          <Icon name="trash" size={15} /> Очистить банк
+        </button>
       </div>
       <Async q={tasks}>{(rows) => rows.length === 0 ? <Empty title="Пусто" hint="Запусти ингест, чтобы наполнить банк." /> : (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>

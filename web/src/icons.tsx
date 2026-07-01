@@ -10,7 +10,7 @@ export type IconName =
   | "overview" | "user" | "tests" | "assign" | "bank"  // teacher nav
   | "moon" | "sun" | "logout" | "logo"        // shell chrome
   | "flame" | "paperclip" | "bot" | "image" | "check"  // inline markers
-  | "close" | "arrowRight" | "arrowLeft" | "trash";     // affordances
+  | "close" | "arrowRight" | "arrowLeft" | "trash" | "pencil";  // affordances
 
 const PATHS: Record<IconName, ReactNode> = {
   dashboard: (
@@ -113,6 +113,12 @@ const PATHS: Record<IconName, ReactNode> = {
       <path d="M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7" />
       <path d="M6 7l1 12.5A1.5 1.5 0 0 0 8.5 21h7a1.5 1.5 0 0 0 1.5-1.5L18 7" />
       <path d="M10 11v6M14 11v6" />
+    </>
+  ),
+  pencil: (
+    <>
+      <path d="M4 20h4L18.5 9.5a2.12 2.12 0 0 0-3-3L5 17v3z" />
+      <path d="M13.5 6.5l3 3" />
     </>
   ),
   close: <path d="M18 6 6 18M6 6l12 12" />,

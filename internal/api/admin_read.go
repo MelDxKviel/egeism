@@ -1,8 +1,10 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -161,17 +163,22 @@ func (s *Server) handleGenerateVariant(w http.ResponseWriter, r *http.Request) {
 		_, source, _ = s.fetchAndIngest(r.Context(), req.Subject, 60, 0, domain.TaskActive)
 	}
 
+	// Distinct default names so variants are easy to tell apart (a teacher can
+	// also rename later). Number by the smallest free ordinal among the subject's
+	// existing tests, so repeat generations never collide and deletion gaps reuse.
+	existing, _ := s.store.ListTests(r.Context(), &sub.ID)
+
 	var gv store.GeneratedVariant
 	if req.Kind == domain.TestClassic {
-		title := req.Title
+		title := strings.TrimSpace(req.Title)
 		if title == "" {
-			title = "Вариант · " + sub.Title
+			title = nextVariantTitle(existing, "Вариант")
 		}
 		gv, err = s.store.GenerateClassicVariant(r.Context(), sub.ID, teacher.ID, title)
 	} else {
-		title := req.Title
+		title := strings.TrimSpace(req.Title)
 		if title == "" {
-			title = "Дрилл · " + sub.Title + " №" + strconv.Itoa(req.Number)
+			title = nextVariantTitle(existing, fmt.Sprintf("Дрилл №%d ·", req.Number))
 		}
 		gv, err = s.store.GenerateDrillVariant(r.Context(), sub.ID, req.Number, req.Count, teacher.ID, title)
 	}
@@ -184,4 +191,19 @@ func (s *Server) handleGenerateVariant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, generateVariantResp{Test: gv.Test, TaskCount: gv.TaskCount, Source: source})
+}
+
+// nextVariantTitle returns a distinct default variant name of the form
+// "<prefix> N", choosing the smallest N≥1 whose title isn't already taken by one
+// of the subject's existing tests — so generated variants never share a name.
+func nextVariantTitle(existing []domain.Test, prefix string) string {
+	taken := make(map[string]bool, len(existing))
+	for _, t := range existing {
+		taken[t.Title] = true
+	}
+	for n := 1; ; n++ {
+		if cand := fmt.Sprintf("%s %d", prefix, n); !taken[cand] {
+			return cand
+		}
+	}
 }

@@ -7,7 +7,7 @@ import { Loading } from "./ui";
 
 const TITLES: Record<string, string> = {
   dashboard: "Дашборд", subject: "Предмет", solve: "Решение", results: "Итоги", history: "История",
-  "t-dashboard": "Статистика ученика", "t-builder": "Конструктор тестов",
+  "t-dashboard": "Обзор", "t-builder": "Конструктор тестов",
   "t-test": "Просмотр теста", "t-assign": "Назначение", "t-bank": "Банк задач",
 };
 

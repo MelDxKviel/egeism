@@ -1,4 +1,5 @@
 import { CSSProperties, ReactNode, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { Media, mediaUrl } from "./api";
 import { Icon } from "./icons";
 
@@ -43,15 +44,17 @@ export function MediaBlock({ media }: { media?: Media[] }) {
           }} />
         </div>
       ))}
-      {zoomed && (
+      {zoomed && createPortal(
         // Telegram-style lightbox: dark backdrop, centered image on a white
         // panel; click backdrop or ✕ (or Esc) to close, click image = no-op.
+        // Portaled to <body> so the fixed backdrop covers the whole viewport
+        // regardless of any transformed/clipping ancestor in the card tree.
         <div onClick={() => setZoom(null)} style={{
-          position: "fixed", inset: 0, zIndex: 100, background: "rgba(0,0,0,.8)",
+          position: "fixed", inset: 0, zIndex: 2000, background: "rgba(0,0,0,.8)",
           display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
         }}>
           <button type="button" aria-label="Закрыть" onClick={() => setZoom(null)} style={{
-            position: "fixed", top: 16, right: 16, zIndex: 101,
+            position: "fixed", top: 16, right: 16, zIndex: 2001,
             display: "inline-flex", alignItems: "center", justifyContent: "center",
             width: 40, height: 40, borderRadius: 999, border: "none", cursor: "pointer",
             background: "rgba(0,0,0,.5)", color: "#fff",
@@ -61,7 +64,8 @@ export function MediaBlock({ media }: { media?: Media[] }) {
               maxWidth: "90vw", maxHeight: "90vh", width: "auto", height: "auto", display: "block",
               background: "#FFFFFF", padding: 10, borderRadius: 12, boxSizing: "border-box",
             }} />
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

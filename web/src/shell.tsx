@@ -18,7 +18,7 @@ const STUDENT_NAV: { v: View; label: string; icon: IconName }[] = [
   { v: "history", label: "История", icon: "history" },
 ];
 const TEACHER_NAV: { v: View; label: string; icon: IconName }[] = [
-  { v: "t-dashboard", label: "Ученик", icon: "overview" },
+  { v: "t-dashboard", label: "Обзор", icon: "overview" },
   { v: "t-builder", label: "Тесты", icon: "tests" },
   { v: "t-assign", label: "Назначить", icon: "assign" },
   { v: "t-bank", label: "Банк", icon: "bank" },

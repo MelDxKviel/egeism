@@ -11,6 +11,17 @@ import (
 	"github.com/google/uuid"
 )
 
+const countTasksBySubject = `-- name: CountTasksBySubject :one
+SELECT COUNT(*) FROM tasks WHERE subject_id = $1
+`
+
+func (q *Queries) CountTasksBySubject(ctx context.Context, subjectID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countTasksBySubject, subjectID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createTask = `-- name: CreateTask :one
 INSERT INTO tasks (subject_id, number, statement, media, answer_schema, source, status)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -50,6 +61,39 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (Task, e
 		&i.CreatedAt,
 	)
 	return i, err
+}
+
+const deleteTestItemsForUnansweredTasksBySubject = `-- name: DeleteTestItemsForUnansweredTasksBySubject :exec
+DELETE FROM test_items
+WHERE task_id IN (
+    SELECT id FROM tasks
+    WHERE subject_id = $1
+      AND NOT EXISTS (SELECT 1 FROM answers a WHERE a.task_id = tasks.id)
+)
+`
+
+// Detach the about-to-be-cleared bank tasks from any tests first: test_items
+// has no ON DELETE CASCADE to tasks, so it must go before the task delete.
+// Only tasks with no recorded answers are touched (answered ones are kept).
+func (q *Queries) DeleteTestItemsForUnansweredTasksBySubject(ctx context.Context, subjectID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteTestItemsForUnansweredTasksBySubject, subjectID)
+	return err
+}
+
+const deleteUnansweredTasksBySubject = `-- name: DeleteUnansweredTasksBySubject :execrows
+DELETE FROM tasks
+WHERE subject_id = $1
+  AND NOT EXISTS (SELECT 1 FROM answers a WHERE a.task_id = tasks.id)
+`
+
+// Clear the bank for a subject, preserving any task that carries student
+// history (has a recorded answer) so attempts/stats never orphan.
+func (q *Queries) DeleteUnansweredTasksBySubject(ctx context.Context, subjectID uuid.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteUnansweredTasksBySubject, subjectID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const getTask = `-- name: GetTask :one

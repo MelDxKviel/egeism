@@ -229,3 +229,26 @@ func (q *Queries) TestHasAttempts(ctx context.Context, testID uuid.UUID) (bool, 
 	err := row.Scan(&exists)
 	return exists, err
 }
+
+const updateTestTitle = `-- name: UpdateTestTitle :one
+UPDATE tests SET title = $2 WHERE id = $1 RETURNING id, subject_id, kind, title, created_by, created_at
+`
+
+type UpdateTestTitleParams struct {
+	ID    uuid.UUID `json:"id"`
+	Title string    `json:"title"`
+}
+
+func (q *Queries) UpdateTestTitle(ctx context.Context, arg UpdateTestTitleParams) (Test, error) {
+	row := q.db.QueryRow(ctx, updateTestTitle, arg.ID, arg.Title)
+	var i Test
+	err := row.Scan(
+		&i.ID,
+		&i.SubjectID,
+		&i.Kind,
+		&i.Title,
+		&i.CreatedBy,
+		&i.CreatedAt,
+	)
+	return i, err
+}

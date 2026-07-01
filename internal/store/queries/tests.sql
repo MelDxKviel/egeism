@@ -20,6 +20,9 @@ ORDER BY created_at DESC;
 -- name: DeleteTest :execrows
 DELETE FROM tests WHERE id = $1;
 
+-- name: UpdateTestTitle :one
+UPDATE tests SET title = $2 WHERE id = $1 RETURNING *;
+
 -- name: TestHasAttempts :one
 -- A test that has been attempted (assigned+solved or self-practice) is in use
 -- and must not be silently deleted — deleting would orphan student history.

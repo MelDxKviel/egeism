@@ -149,6 +149,8 @@ export const api = {
   adminTasks: (q: string) => req<Task[]>("GET", `/api/admin/tasks${q}`),
   fetchTasks: (subject: SubjectCode, limit: number, active: boolean) =>
     req<ImportResult>("POST", "/api/admin/tasks/fetch", { subject, limit, active }),
+  clearBank: (subject: SubjectCode) =>
+    req<{ deleted: number; kept: number }>("DELETE", `/api/admin/tasks?subject=${subject}`),
   setTaskStatus: (id: string, status: TaskStatus) =>
     req<Task>("PATCH", `/api/admin/tasks/${id}/status`, { status }),
   setTaskAnswer: (id: string, answer_schema: AnswerSchema) =>
@@ -159,6 +161,7 @@ export const api = {
   createTest: (subject: SubjectCode, kind: TestKind, title: string) =>
     req<Test>("POST", "/api/admin/tests", { subject, kind, title }),
   deleteTest: (id: string) => req<void>("DELETE", `/api/admin/tests/${id}`),
+  renameTest: (id: string, title: string) => req<Test>("PATCH", `/api/admin/tests/${id}`, { title }),
   refetchFormulas: () =>
     req<{ updated: number; scanned: number; by_subject: Record<string, number> }>("POST", "/api/admin/tasks/refetch-formulas"),
   addItem: (testId: string, task_id: string, position: number) =>
