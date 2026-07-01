@@ -20,9 +20,9 @@ export function MediaBlock({ media }: { media?: Media[] }) {
         // Bounded so a scheme/diagram sits at a modest size instead of filling
         // the card; click opens the full-resolution image in a new tab.
         <a key={i} href={mediaUrl(m.key)} target="_blank" rel="noreferrer"
-          style={{ alignSelf: "flex-start", display: "inline-flex", lineHeight: 0, maxWidth: "100%" }}>
+          style={{ alignSelf: "flex-start", display: "block", width: "min(100%, 340px)", lineHeight: 0 }}>
           <img src={mediaUrl(m.key)} alt={m.alt || ""} loading="lazy" style={{
-            maxWidth: "min(100%, 420px)", maxHeight: 300, width: "auto", height: "auto",
+            width: "100%", height: "auto", maxHeight: 440,
             borderRadius: 12, border: "1px solid var(--border)", display: "block", cursor: "zoom-in",
           }} />
         </a>
