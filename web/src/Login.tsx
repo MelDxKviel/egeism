@@ -39,7 +39,7 @@ export function Login() {
             <Icon name="logo" size={20} strokeWidth={2.4} />
           </div>
           <div>
-            <div style={{ fontWeight: 800, fontSize: 19 }}>Вектор</div>
+            <div style={{ fontWeight: 800, fontSize: 19 }}>ЕГЭизм</div>
             <div className="mono" style={{ fontSize: 11, color: "var(--text-3)" }}>подготовка · ЕГЭ</div>
           </div>
         </div>

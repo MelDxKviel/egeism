@@ -2,12 +2,12 @@ import { useApp } from "./state";
 import { Shell } from "./shell";
 import { Login } from "./Login";
 import { Dashboard, SubjectScreen, Solve, History } from "./student";
-import { TeacherDashboard, StudentStats, Builder, Assign, Bank, TestDetailPage } from "./teacher";
+import { TeacherDashboard, Builder, Assign, Bank, TestDetailPage } from "./teacher";
 import { Loading } from "./ui";
 
 const TITLES: Record<string, string> = {
   dashboard: "Дашборд", subject: "Предмет", solve: "Решение", results: "Итоги", history: "История",
-  "t-dashboard": "Обзор ученика", "t-student": "Статистика ученика", "t-builder": "Конструктор тестов",
+  "t-dashboard": "Статистика ученика", "t-builder": "Конструктор тестов",
   "t-test": "Просмотр теста", "t-assign": "Назначение", "t-bank": "Банк задач",
 };
 
@@ -28,7 +28,6 @@ export default function App() {
     case "solve": case "results": screen = <Solve />; break;
     case "history": screen = <History />; break;
     case "t-dashboard": screen = <TeacherDashboard />; break;
-    case "t-student": screen = <StudentStats />; break;
     case "t-builder": screen = <Builder />; break;
     case "t-test": screen = <TestDetailPage />; break;
     case "t-assign": screen = <Assign />; break;
@@ -37,7 +36,7 @@ export default function App() {
   }
 
   return (
-    <Shell title={TITLES[view] || "Вектор"}>
+    <Shell title={TITLES[view] || "ЕГЭизм"}>
       {screen}
       {toast && (
         <div className="fade" style={{

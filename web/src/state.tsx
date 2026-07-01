@@ -3,7 +3,7 @@ import { Role, SubjectCode, User, api, setToken, clearToken, hasToken, useStuden
 
 export type View =
   | "dashboard" | "subject" | "solve" | "results" | "history"
-  | "t-dashboard" | "t-student" | "t-builder" | "t-assign" | "t-bank" | "t-test";
+  | "t-dashboard" | "t-builder" | "t-assign" | "t-bank" | "t-test";
 
 interface AppState {
   theme: "light" | "dark";
@@ -35,7 +35,7 @@ const homeView = (r: Role): View => (r === "teacher" ? "t-dashboard" : "dashboar
 // their in-progress attempt state doesn't survive a refresh).
 const RESTORABLE: Record<Role, View[]> = {
   student: ["dashboard", "subject", "history"],
-  teacher: ["t-dashboard", "t-student", "t-builder", "t-assign", "t-bank"],
+  teacher: ["t-dashboard", "t-builder", "t-assign", "t-bank"],
 };
 const TAB_VIEWS: View[] = [...RESTORABLE.student, ...RESTORABLE.teacher];
 

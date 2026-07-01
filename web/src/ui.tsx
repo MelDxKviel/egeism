@@ -1,4 +1,4 @@
-import { CSSProperties, ReactNode } from "react";
+import { CSSProperties, ReactNode, useEffect, useState } from "react";
 import { Media, mediaUrl } from "./api";
 import { Icon } from "./icons";
 
@@ -7,7 +7,17 @@ import { Icon } from "./icons";
 // drawn mid-sentence by StatementView via their ⟦img:N⟧ placeholders.
 export function MediaBlock({ media }: { media?: Media[] }) {
   const blocks = (media || []).filter((m) => !m.inline);
+  // Which image is enlarged in the lightbox (its media key, null = closed).
+  const [zoom, setZoom] = useState<string | null>(null);
+  // Esc closes the lightbox while it is open.
+  useEffect(() => {
+    if (!zoom) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setZoom(null); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [zoom]);
   if (blocks.length === 0) return null;
+  const zoomed = zoom ? blocks.find((m) => m.key === zoom) : undefined;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10, margin: "6px 0 16px" }}>
       {blocks.map((m, i) => m.kind === "file" ? (
@@ -18,15 +28,41 @@ export function MediaBlock({ media }: { media?: Media[] }) {
         }}><Icon name="paperclip" size={15} /> {m.alt || "Скачать файл"}</a>
       ) : (
         // Bounded so a scheme/diagram sits at a modest size instead of filling
-        // the card; click opens the full-resolution image in a new tab.
-        <a key={i} href={mediaUrl(m.key)} target="_blank" rel="noreferrer"
-          style={{ alignSelf: "flex-start", display: "block", width: "min(100%, 340px)", lineHeight: 0 }}>
+        // the card; click opens an in-page lightbox. The container is always
+        // white (even in dark theme) so transparent PNG figures stay legible.
+        <div key={i} role="button" tabIndex={0} aria-label="Увеличить изображение"
+          onClick={() => setZoom(m.key)}
+          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setZoom(m.key); } }}
+          style={{
+            alignSelf: "flex-start", display: "block", width: "min(100%, 340px)", lineHeight: 0,
+            background: "#FFFFFF", padding: 6, borderRadius: 12, border: "1px solid var(--border)",
+            cursor: "zoom-in", boxSizing: "border-box",
+          }}>
           <img src={mediaUrl(m.key)} alt={m.alt || ""} loading="lazy" style={{
-            width: "100%", height: "auto", maxHeight: 440,
-            borderRadius: 12, border: "1px solid var(--border)", display: "block", cursor: "zoom-in",
+            width: "100%", height: "auto", maxHeight: 440, display: "block",
           }} />
-        </a>
+        </div>
       ))}
+      {zoomed && (
+        // Telegram-style lightbox: dark backdrop, centered image on a white
+        // panel; click backdrop or ✕ (or Esc) to close, click image = no-op.
+        <div onClick={() => setZoom(null)} style={{
+          position: "fixed", inset: 0, zIndex: 100, background: "rgba(0,0,0,.8)",
+          display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
+        }}>
+          <button type="button" aria-label="Закрыть" onClick={() => setZoom(null)} style={{
+            position: "fixed", top: 16, right: 16, zIndex: 101,
+            display: "inline-flex", alignItems: "center", justifyContent: "center",
+            width: 40, height: 40, borderRadius: 999, border: "none", cursor: "pointer",
+            background: "rgba(0,0,0,.5)", color: "#fff",
+          }}><Icon name="close" size={20} /></button>
+          <img src={mediaUrl(zoomed.key)} alt={zoomed.alt || ""}
+            onClick={(e) => e.stopPropagation()} style={{
+              maxWidth: "90vw", maxHeight: "90vh", width: "auto", height: "auto", display: "block",
+              background: "#FFFFFF", padding: 10, borderRadius: 12, boxSizing: "border-box",
+            }} />
+        </div>
+      )}
     </div>
   );
 }

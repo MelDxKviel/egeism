@@ -18,8 +18,7 @@ const STUDENT_NAV: { v: View; label: string; icon: IconName }[] = [
   { v: "history", label: "История", icon: "history" },
 ];
 const TEACHER_NAV: { v: View; label: string; icon: IconName }[] = [
-  { v: "t-dashboard", label: "Обзор", icon: "overview" },
-  { v: "t-student", label: "Ученик", icon: "user" },
+  { v: "t-dashboard", label: "Ученик", icon: "overview" },
   { v: "t-builder", label: "Тесты", icon: "tests" },
   { v: "t-assign", label: "Назначить", icon: "assign" },
   { v: "t-bank", label: "Банк", icon: "bank" },
@@ -44,7 +43,7 @@ export function Shell({ title, cta, children }: { title: string; cta?: ReactNode
                 <Icon name="logo" size={18} strokeWidth={2.4} />
               </div>
               <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.1 }}>
-                <span style={{ fontWeight: 800, fontSize: 17 }}>Вектор</span>
+                <span style={{ fontWeight: 800, fontSize: 17 }}>ЕГЭизм</span>
                 <span className="mono" style={{ fontSize: 11, color: "var(--text-3)" }}>подготовка · ЕГЭ</span>
               </div>
             </div>

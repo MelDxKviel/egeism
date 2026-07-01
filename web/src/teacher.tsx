@@ -1,14 +1,14 @@
-import { useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid } from "recharts";
 import {
   api, SubjectCode, TestKind, Task, TaskStatus, AnswerSchema, uploadTasks,
-  useForecast, useHeatmap, useWeakSpots, useMastery, useAttempts,
+  useForecast, useHeatmap, useWeakSpots, useMastery, useMasterySeries, useAttempts,
   useAdminTasks, useTests, useTestDetail, useInvalidate,
 } from "./api";
 import { useApp, useStudentId } from "./state";
 import { Card, Label, Pill, Button, Async, Empty, Loading, accColor, SUBJECT_TITLES, testTitle, MediaBlock, StatementView } from "./ui";
-import { ScoreGauge, computeStreak, WeakSpotsList, Section } from "./charts";
-import { StreakBadge } from "./student";
+import { ScoreGauge, computeStreak, WeakSpotsList, Section, MasteryChart } from "./charts";
+import { StreakBadge, Modal } from "./student";
 import { Icon } from "./icons";
 
 const SUBJECTS: SubjectCode[] = ["rus", "math", "inf", "soc"];
@@ -29,37 +29,75 @@ function SubjectTabs({ value, onChange }: { value: SubjectCode; onChange: (s: Su
   );
 }
 
-// ---------- Teacher dashboard ----------
+// ---------- Teacher overview (merged: forecast + per-number stats) ----------
 export function TeacherDashboard() {
   const { subject, setSubject, go } = useApp();
   const sid = useStudentId();
   const forecast = useForecast(sid, subject);
   const heat = useHeatmap(sid);
   const weak = useWeakSpots(sid, subject);
+  const mastery = useMastery(sid, subject);
+  const series = useMasterySeries(sid, subject);
   const attempts = useAttempts(sid);
+  const [open, setOpen] = useState<number | null>(null);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
       <SubjectTabs value={subject} onChange={setSubject} />
       <div style={grid}>
         <Card>
-          <Label>Ученик · {SUBJECT_TITLES[subject]}</Label>
+          <Label>Прогноз балла · {SUBJECT_TITLES[subject]}</Label>
           <Async q={forecast}>{(f) => (
-            <div style={{ display: "flex", alignItems: "center", gap: 20, marginTop: 8 }}>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginTop: 8 }}>
               <ScoreGauge score={f.test_score} />
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                <div><span className="mono" style={{ fontSize: 24, fontWeight: 800 }}>{Math.round(f.accuracy * 100)}%</span><div className="mono" style={{ color: "var(--text-3)", fontSize: 12 }}>точность</div></div>
-                <Async q={heat}>{(h) => <Pill tone="accent"><StreakBadge>{computeStreak(h)} дней</StreakBadge></Pill>}</Async>
+              <div className="mono" style={{ color: "var(--text-2)", fontSize: 13, marginTop: 4 }}>
+                {f.primary_estimate} из {f.primary_max} первичных · точность {Math.round(f.accuracy * 100)}%
+              </div>
+              <div style={{ color: "var(--text-2)", fontSize: 13, marginTop: 10, textAlign: "center" }}>{f.note}</div>
+              <div style={{ marginTop: 12 }}>
+                <Async q={heat}>{(h) => <Pill tone="accent"><StreakBadge>{computeStreak(h)} дней подряд</StreakBadge></Pill>}</Async>
               </div>
             </div>
           )}</Async>
-          <div style={{ marginTop: 14 }}><Button variant="ghost" onClick={() => go("t-student")}>Подробная статистика</Button></div>
         </Card>
 
         <Section title="Слабые места" right={<Button variant="ghost" style={{ padding: "6px 12px", fontSize: 13 }} onClick={() => go("t-builder")}>Собрать дрилл</Button>}>
           <Async q={weak}>{(w) => <WeakSpotsList spots={w} onDrill={() => go("t-builder")} />}</Async>
         </Section>
       </div>
+
+      <Section title="Успешность по номерам">
+        <Async q={mastery}>{(rows) => rows.length === 0 ? <div style={{ color: "var(--text-2)" }}>Нет данных.</div> : (
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart data={rows.map((r) => ({ number: r.number, label: `№${r.number}`, acc: r.total ? Math.round((r.correct / r.total) * 100) : 0 }))} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+              <CartesianGrid stroke="var(--border)" vertical={false} />
+              <XAxis dataKey="label" stroke="var(--text-3)" fontSize={10} tickLine={false} interval={0} angle={-30} textAnchor="end" height={44} />
+              <YAxis domain={[0, 100]} stroke="var(--text-3)" fontSize={11} tickLine={false} />
+              <Tooltip contentStyle={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 12 }} />
+              <Bar dataKey="acc" radius={[4, 4, 0, 0]} cursor="pointer" onClick={(d: any) => { if (d && typeof d.number === "number") setOpen(d.number); }}>
+                {rows.map((r) => { const p = r.total ? (r.correct / r.total) * 100 : 0; return <Cell key={r.number} fill={accColor(p)} />; })}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        )}</Async>
+        <div className="mono" style={{ color: "var(--text-3)", fontSize: 12, marginTop: 8 }}>Кликни по столбцу, чтобы увидеть, как менялась прогрессия по номеру.</div>
+      </Section>
+
+      <Section title="Дольше всего решает">
+        <Async q={mastery}>{(rows) => {
+          const top = [...rows].sort((a, b) => b.avg_time_ms - a.avg_time_ms).slice(0, 5);
+          return top.length === 0 ? <div style={{ color: "var(--text-2)" }}>Нет данных.</div> : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {top.map((r) => (
+                <div key={r.number} style={{ display: "flex", justifyContent: "space-between", padding: "8px 12px", background: "var(--surface-2)", borderRadius: 10 }}>
+                  <span className="mono">№{r.number}</span>
+                  <span className="mono" style={{ color: "var(--warn)" }}>{Math.round(r.avg_time_ms / 1000)} с</span>
+                </div>
+              ))}
+            </div>
+          );
+        }}</Async>
+      </Section>
 
       <Section title="Свежие попытки">
         <Async q={attempts}>{(list) => list.length === 0 ? <div style={{ color: "var(--text-2)" }}>Ученик ещё не решал.</div> : (
@@ -73,51 +111,12 @@ export function TeacherDashboard() {
           </div>
         )}</Async>
       </Section>
-    </div>
-  );
-}
 
-// ---------- Student stats ----------
-export function StudentStats() {
-  const { subject, setSubject } = useApp();
-  const sid = useStudentId();
-  const mastery = useMastery(sid, subject);
-  const weak = useWeakSpots(sid, subject);
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
-      <SubjectTabs value={subject} onChange={setSubject} />
-      <Section title="Успешность по номерам">
-        <Async q={mastery}>{(rows) => rows.length === 0 ? <div style={{ color: "var(--text-2)" }}>Нет данных.</div> : (
-          <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={rows.map((r) => ({ number: `№${r.number}`, acc: r.total ? Math.round((r.correct / r.total) * 100) : 0 }))} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
-              <CartesianGrid stroke="var(--border)" vertical={false} />
-              <XAxis dataKey="number" stroke="var(--text-3)" fontSize={10} tickLine={false} interval={0} angle={-30} textAnchor="end" height={44} />
-              <YAxis domain={[0, 100]} stroke="var(--text-3)" fontSize={11} tickLine={false} />
-              <Tooltip contentStyle={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 12 }} />
-              <Bar dataKey="acc" radius={[4, 4, 0, 0]}>
-                {rows.map((r) => { const p = r.total ? (r.correct / r.total) * 100 : 0; return <Cell key={r.number} fill={accColor(p)} />; })}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        )}</Async>
-      </Section>
-      <div style={grid}>
-        <Section title="Слабые места"><Async q={weak}>{(w) => <WeakSpotsList spots={w} onDrill={() => {}} />}</Async></Section>
-        <Section title="Дольше всего решает">
-          <Async q={mastery}>{(rows) => {
-            const top = [...rows].sort((a, b) => b.avg_time_ms - a.avg_time_ms).slice(0, 5);
-            return <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {top.map((r) => (
-                <div key={r.number} style={{ display: "flex", justifyContent: "space-between", padding: "8px 12px", background: "var(--surface-2)", borderRadius: 10 }}>
-                  <span className="mono">№{r.number}</span>
-                  <span className="mono" style={{ color: "var(--warn)" }}>{Math.round(r.avg_time_ms / 1000)} с</span>
-                </div>
-              ))}
-            </div>;
-          }}</Async>
-        </Section>
-      </div>
+      {open !== null && (
+        <Modal onClose={() => setOpen(null)} title={`Задание №${open} · динамика`}>
+          <MasteryChart points={(series.data || []).filter((p) => p.number === open)} />
+        </Modal>
+      )}
     </div>
   );
 }
@@ -136,7 +135,6 @@ export function Builder() {
   const [busy, setBusy] = useState(false);
   const [deleting, setDeleting] = useState("");
   const tests = useTests(subject);
-  const activeTasks = useAdminTasks(`?subject=${subject}&status=active&limit=200`);
 
   const generate = async () => {
     setBusy(true);
@@ -192,7 +190,6 @@ export function Builder() {
                 <div><div style={{ fontWeight: 600 }}>{t.title}</div><div className="mono" style={{ color: "var(--text-3)", fontSize: 12 }}>{new Date(t.created_at).toLocaleString("ru", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}</div></div>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   <Pill>{t.kind}</Pill>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 5, color: "var(--accent-2)", fontSize: 13 }}>смотреть <Icon name="arrowRight" size={15} /></span>
                   <button onClick={(e) => { e.stopPropagation(); del(t.id, t.title); }} disabled={deleting === t.id}
                     title="Удалить тест" aria-label="Удалить тест"
                     style={{ display: "inline-flex", alignItems: "center", background: "transparent", border: "none", color: "var(--text-3)", padding: 4, opacity: deleting === t.id ? 0.4 : 1 }}>
@@ -201,15 +198,6 @@ export function Builder() {
                 </div>
               </div>
             ))}
-          </div>
-        )}</Async>
-      </Section>
-
-      <Section title={`Банк · активные задачи (${activeTasks.data?.length ?? 0})`}>
-        <Async q={activeTasks}>{(rows) => (
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-            {rows.map((t) => <Pill key={t.id}>№{t.number} {t.answer_kind}</Pill>)}
-            {rows.length === 0 && <div style={{ color: "var(--text-2)" }}>Нет одобренных задач — одобри в банке.</div>}
           </div>
         )}</Async>
       </Section>
