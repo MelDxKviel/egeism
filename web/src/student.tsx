@@ -350,12 +350,16 @@ export function History() {
 // scrolls internally so the panel never exceeds the viewport.
 export function Modal({ title, children, onClose, maxWidth = 560 }:
   { title: string; children: React.ReactNode; onClose: () => void; maxWidth?: number | string }) {
+  const { theme } = useApp();
   // Portaled to <body> so the fixed backdrop covers the whole viewport — the page
   // content lives inside a `.fade` wrapper whose transform animation makes it the
   // containing block for position:fixed, which would otherwise clip the backdrop
   // to the centered content column (same reason the MediaBlock lightbox portals).
+  // The overlay re-establishes the theme scope (`.app` + data-theme) because the
+  // design tokens (var(--surface)…) are defined there and would be undefined at
+  // <body> level, leaving the panel transparent.
   return createPortal(
-    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 16 }}>
+    <div className="app" data-theme={theme} onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 16 }}>
       <div onClick={(e) => e.stopPropagation()} className="fade" style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 18, padding: 24, maxWidth, width: "100%", maxHeight: "92vh", display: "flex", flexDirection: "column", boxShadow: "var(--shadow-lg)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
           <div style={{ fontWeight: 700, fontSize: 16 }}>{title}</div>
