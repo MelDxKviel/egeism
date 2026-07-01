@@ -122,6 +122,8 @@ export const api = {
   login: (username: string, password: string) =>
     req<AuthResult>("POST", "/api/auth/login", { username, password }),
   me: () => req<User>("GET", "/api/auth/me"),
+  telegramLinkCode: () =>
+    req<{ code: string; deep_link?: string; expires_at: string }>("POST", "/api/auth/telegram/link-code"),
   students: () => req<User[]>("GET", "/api/students"),
   subjects: () => req<Subject[]>("GET", "/api/subjects"),
   task: (id: string) => req<TaskView>("GET", `/api/tasks/${id}`),

@@ -2,6 +2,8 @@ package store
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"time"
 
@@ -52,6 +54,63 @@ func (s *Store) GetOrCreateStudentByTelegram(ctx context.Context, tgID int64, na
 		return domain.User{}, false, err
 	}
 	return created, true, nil
+}
+
+// ---- Telegram account linking ----
+
+// CreateTelegramLinkCode issues a one-time code that, when redeemed in the bot,
+// binds a Telegram account to this user. The code expires after ttl.
+func (s *Store) CreateTelegramLinkCode(ctx context.Context, userID uuid.UUID, ttl time.Duration) (string, time.Time, error) {
+	code, err := randomCode()
+	if err != nil {
+		return "", time.Time{}, err
+	}
+	expires := time.Now().Add(ttl)
+	if _, err := s.q.CreateTelegramLinkCode(ctx, sqlc.CreateTelegramLinkCodeParams{
+		Code: code, UserID: userID, ExpiresAt: expires,
+	}); err != nil {
+		return "", time.Time{}, mapErr(err)
+	}
+	return code, expires, nil
+}
+
+// RedeemTelegramLinkCode validates a link code and binds tgID to the code's user
+// in one transaction. Returns ErrNotFound for an unknown/expired/used code and
+// ErrTelegramTaken if the Telegram id is already linked to another account.
+func (s *Store) RedeemTelegramLinkCode(ctx context.Context, code string, tgID int64) (domain.User, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return domain.User{}, err
+	}
+	defer tx.Rollback(ctx)
+	qtx := s.q.WithTx(tx)
+	lc, err := qtx.GetValidTelegramLinkCode(ctx, code)
+	if err != nil {
+		return domain.User{}, mapErr(err)
+	}
+	u, err := qtx.LinkTelegramToUser(ctx, sqlc.LinkTelegramToUserParams{ID: lc.UserID, TelegramID: &tgID})
+	if err != nil {
+		if isUniqueViolation(err) {
+			return domain.User{}, ErrTelegramTaken
+		}
+		return domain.User{}, mapErr(err)
+	}
+	if err := qtx.MarkTelegramLinkCodeUsed(ctx, code); err != nil {
+		return domain.User{}, mapErr(err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return domain.User{}, err
+	}
+	return toDomainUser(u), nil
+}
+
+// randomCode returns a short URL-safe code (8 hex chars) for Telegram deep links.
+func randomCode() (string, error) {
+	b := make([]byte, 4)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
 }
 
 func (s *Store) ListStudentsForTeacher(ctx context.Context, teacherID uuid.UUID) ([]domain.User, error) {

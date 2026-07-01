@@ -4,12 +4,16 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"golang.org/x/crypto/bcrypt"
 
 	"egeism/internal/domain"
 	"egeism/internal/store"
 )
+
+// linkCodeTTL is how long a Telegram link code stays valid after issue.
+const linkCodeTTL = 15 * time.Minute
 
 // authResp is the login/register/telegram response: a session token + the user.
 type authResp struct {
@@ -115,9 +119,10 @@ type telegramAuthReq struct {
 	Name       string `json:"name"`
 }
 
-// handleTelegramAuth resolves a Telegram user to a student and returns a session
-// token, so the bot authenticates the same way as the web (Bearer token) — it
-// just enters via telegram_id instead of a password.
+// handleTelegramAuth resolves an already-linked Telegram id to its account and
+// returns a session token — the bot's "login". It no longer auto-provisions an
+// anonymous student: an unlinked telegram_id gets 404 so the bot prompts the
+// user to link their web account first (see handleTelegramLink).
 func (s *Server) handleTelegramAuth(w http.ResponseWriter, r *http.Request) {
 	var req telegramAuthReq
 	if !decodeJSON(w, r, &req) {
@@ -127,13 +132,71 @@ func (s *Server) handleTelegramAuth(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "telegram_id is required")
 		return
 	}
-	name := req.Name
-	if name == "" {
-		name = "Ученик"
+	user, err := s.store.GetUserByTelegram(r.Context(), req.TelegramID)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			writeErr(w, http.StatusNotFound, "telegram not linked")
+			return
+		}
+		writeStoreErr(w, err)
+		return
 	}
-	user, _, err := s.store.GetOrCreateStudentByTelegram(r.Context(), req.TelegramID, name)
+	s.respondWithToken(w, user, http.StatusOK)
+}
+
+// linkCodeResp is the payload the web shows so the user can complete linking in
+// the bot: the raw code plus a ready-made deep link (when the bot username is set).
+type linkCodeResp struct {
+	Code      string    `json:"code"`
+	DeepLink  string    `json:"deep_link,omitempty"`
+	ExpiresAt time.Time `json:"expires_at"`
+}
+
+// handleTelegramLinkCode issues a one-time code for the logged-in web user to
+// bind their account to Telegram. The bot redeems it via handleTelegramLink.
+func (s *Server) handleTelegramLinkCode(w http.ResponseWriter, r *http.Request) {
+	user, _ := userFrom(r.Context())
+	code, expires, err := s.store.CreateTelegramLinkCode(r.Context(), user.ID, linkCodeTTL)
 	if err != nil {
 		writeStoreErr(w, err)
+		return
+	}
+	resp := linkCodeResp{Code: code, ExpiresAt: expires}
+	if s.botUsername != "" {
+		resp.DeepLink = "https://t.me/" + s.botUsername + "?start=" + code
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+type telegramLinkReq struct {
+	Code       string `json:"code"`
+	TelegramID int64  `json:"telegram_id"`
+	Name       string `json:"name"`
+}
+
+// handleTelegramLink redeems a link code from the bot: it binds the chat's
+// telegram_id to the code's account and returns a session token, so the bot then
+// acts as that real (web) user — student or teacher.
+func (s *Server) handleTelegramLink(w http.ResponseWriter, r *http.Request) {
+	var req telegramLinkReq
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	req.Code = strings.TrimSpace(req.Code)
+	if req.Code == "" || req.TelegramID == 0 {
+		writeErr(w, http.StatusBadRequest, "code and telegram_id are required")
+		return
+	}
+	user, err := s.store.RedeemTelegramLinkCode(r.Context(), req.Code, req.TelegramID)
+	if err != nil {
+		switch {
+		case errors.Is(err, store.ErrNotFound):
+			writeErr(w, http.StatusBadRequest, "код недействителен или истёк")
+		case errors.Is(err, store.ErrTelegramTaken):
+			writeErr(w, http.StatusConflict, "этот Telegram уже привязан к другому аккаунту")
+		default:
+			writeStoreErr(w, err)
+		}
 		return
 	}
 	s.respondWithToken(w, user, http.StatusOK)

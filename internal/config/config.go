@@ -10,12 +10,13 @@ import (
 
 // Config is the union of settings the binaries need; each uses a subset.
 type Config struct {
-	DatabaseURL   string
-	HTTPAddr      string
-	RedisAddr     string
-	TelegramToken string
-	JWTSecret     string
-	FetcherURL    string
+	DatabaseURL         string
+	HTTPAddr            string
+	RedisAddr           string
+	TelegramToken       string
+	TelegramBotUsername string
+	JWTSecret           string
+	FetcherURL          string
 
 	MinIOEndpoint  string
 	MinIOAccessKey string
@@ -29,18 +30,19 @@ type Config struct {
 // Load reads configuration from the environment, applying local-dev defaults.
 func Load() Config {
 	return Config{
-		DatabaseURL:     env("DATABASE_URL", "postgres://egeism:egeism@localhost:5432/egeism?sslmode=disable"),
-		HTTPAddr:        env("HTTP_ADDR", ":8080"),
-		RedisAddr:       env("REDIS_ADDR", "localhost:6379"),
-		TelegramToken:   env("TELEGRAM_TOKEN", ""),
-		JWTSecret:       env("JWT_SECRET", "dev-insecure-change-me"),
-		FetcherURL:      env("FETCHER_URL", "http://localhost:8090"),
-		MinIOEndpoint:   env("MINIO_ENDPOINT", "localhost:9000"),
-		MinIOAccessKey:  env("MINIO_ACCESS_KEY", "minioadmin"),
-		MinIOSecretKey:  env("MINIO_SECRET_KEY", "minioadmin"),
-		MinIOBucket:     env("MINIO_BUCKET", "egeism-media"),
-		MinIOUseSSL:     env("MINIO_USE_SSL", "false") == "true",
-		ShutdownTimeout: 15 * time.Second,
+		DatabaseURL:         env("DATABASE_URL", "postgres://egeism:egeism@localhost:5432/egeism?sslmode=disable"),
+		HTTPAddr:            env("HTTP_ADDR", ":8080"),
+		RedisAddr:           env("REDIS_ADDR", "localhost:6379"),
+		TelegramToken:       env("TELEGRAM_TOKEN", ""),
+		TelegramBotUsername: env("TELEGRAM_BOT_USERNAME", ""),
+		JWTSecret:           env("JWT_SECRET", "dev-insecure-change-me"),
+		FetcherURL:          env("FETCHER_URL", "http://localhost:8090"),
+		MinIOEndpoint:       env("MINIO_ENDPOINT", "localhost:9000"),
+		MinIOAccessKey:      env("MINIO_ACCESS_KEY", "minioadmin"),
+		MinIOSecretKey:      env("MINIO_SECRET_KEY", "minioadmin"),
+		MinIOBucket:         env("MINIO_BUCKET", "egeism-media"),
+		MinIOUseSSL:         env("MINIO_USE_SSL", "false") == "true",
+		ShutdownTimeout:     15 * time.Second,
 	}
 }
 

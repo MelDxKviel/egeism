@@ -10,6 +10,7 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"egeism/internal/store/sqlc"
@@ -21,6 +22,10 @@ var ErrNotFound = errors.New("not found")
 // ErrInUse is returned when a delete is refused because the row is still
 // referenced by protected data (e.g. a test that has been attempted).
 var ErrInUse = errors.New("in use")
+
+// ErrTelegramTaken is returned when a Telegram id is already linked to another
+// account (users.telegram_id UNIQUE violation on link).
+var ErrTelegramTaken = errors.New("telegram already linked")
 
 // Store is the concrete data-access layer backed by a pgx pool.
 type Store struct {
@@ -56,4 +61,11 @@ func mapErr(err error) error {
 		return ErrNotFound
 	}
 	return err
+}
+
+// isUniqueViolation reports whether err is a Postgres unique-constraint (23505)
+// violation, so callers can turn a race on a UNIQUE column into a friendly error.
+func isUniqueViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505"
 }

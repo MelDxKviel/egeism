@@ -13,6 +13,7 @@ x-app-env: &app-env
   MINIO_SECRET_KEY: minioadmin
   MINIO_BUCKET: egeism-media
   TELEGRAM_TOKEN: ${TELEGRAM_TOKEN:-}
+  TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-}
   JWT_SECRET: ${JWT_SECRET:-dev-insecure-change-me}
   FETCHER_URL: http://fetcher:8090
 

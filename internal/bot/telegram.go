@@ -1,19 +1,23 @@
 package bot
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 )
 
-// Telegram is a minimal Bot API transport (long-poll getUpdates + sendMessage).
-// It is intentionally small and dependency-free; swap for telego/telebot if the
-// bot grows inline keyboards, media, etc. The conversation logic lives in Bot.
+// Telegram is a minimal Bot API transport (long-poll getUpdates + send*). It is
+// intentionally small and dependency-free; swap for telego/telebot if the bot
+// grows inline keyboards, etc. Conversation logic lives in Bot; this layer also
+// owns the rich-message send (HTML text + fetched, white-flattened photos/files).
 type Telegram struct {
 	token  string
 	http   *http.Client
@@ -72,15 +76,44 @@ func (t *Telegram) Run(ctx context.Context) error {
 				TelegramID: u.Message.From.ID,
 				ChatID:     u.Message.Chat.ID,
 				Text:       u.Message.Text,
+				FirstName:  u.Message.From.FirstName,
 			}
-			reply := t.bot.Handle(ctx, in)
-			if reply.Text != "" {
-				if err := t.sendMessage(ctx, reply.ChatID, reply.Text); err != nil {
-					slog.Error("sendMessage", "err", err)
-				}
-			}
+			t.deliver(ctx, t.bot.Handle(ctx, in))
 		}
 	}
+}
+
+// deliver renders one Reply: the HTML text, then each media as a photo (figures,
+// flattened onto white) or a document (attached files).
+func (t *Telegram) deliver(ctx context.Context, r Reply) {
+	if strings.TrimSpace(r.HTML) != "" {
+		if err := t.sendMessageHTML(ctx, r.ChatID, r.HTML); err != nil {
+			slog.Error("sendMessage", "err", err)
+		}
+	}
+	for _, m := range r.Media {
+		data, err := t.bot.api.FetchMedia(ctx, m.Key)
+		if err != nil {
+			slog.Error("fetch media", "key", m.Key, "err", err)
+			continue
+		}
+		if m.Kind == "file" {
+			if err := t.sendFile(ctx, r.ChatID, "sendDocument", "document", fileName(m), data); err != nil {
+				slog.Error("sendDocument", "err", err)
+			}
+			continue
+		}
+		if err := t.sendFile(ctx, r.ChatID, "sendPhoto", "photo", "figure.jpg", flattenToWhite(data)); err != nil {
+			slog.Error("sendPhoto", "err", err)
+		}
+	}
+}
+
+func fileName(m MediaRef) string {
+	if name := strings.TrimSpace(m.Alt); name != "" {
+		return name
+	}
+	return "file"
 }
 
 func (t *Telegram) getUpdates(ctx context.Context) ([]tgUpdate, error) {
@@ -107,20 +140,58 @@ func (t *Telegram) getUpdates(ctx context.Context) ([]tgUpdate, error) {
 	return out.Result, nil
 }
 
-func (t *Telegram) sendMessage(ctx context.Context, chatID int64, text string) error {
-	q := url.Values{}
-	q.Set("chat_id", strconv.FormatInt(chatID, 10))
-	q.Set("text", text)
+// sendMessageHTML posts an HTML-formatted message (parse_mode=HTML). The body is
+// form-encoded (not query) so long statements aren't capped by URL length.
+func (t *Telegram) sendMessageHTML(ctx context.Context, chatID int64, html string) error {
+	form := url.Values{}
+	form.Set("chat_id", strconv.FormatInt(chatID, 10))
+	form.Set("text", html)
+	form.Set("parse_mode", "HTML")
+	form.Set("disable_web_page_preview", "true")
 	u := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", t.token)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, strings.NewReader(form.Encode()))
 	if err != nil {
 		return err
 	}
-	req.URL.RawQuery = q.Encode()
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	return t.doExpectOK(req)
+}
+
+// sendFile uploads bytes via a multipart Bot API call (sendPhoto/sendDocument).
+func (t *Telegram) sendFile(ctx context.Context, chatID int64, method, field, filename string, data []byte) error {
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	_ = mw.WriteField("chat_id", strconv.FormatInt(chatID, 10))
+	fw, err := mw.CreateFormFile(field, filename)
+	if err != nil {
+		return err
+	}
+	if _, err := fw.Write(data); err != nil {
+		return err
+	}
+	if err := mw.Close(); err != nil {
+		return err
+	}
+	u := fmt.Sprintf("https://api.telegram.org/bot%s/%s", t.token, method)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, &buf)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	return t.doExpectOK(req)
+}
+
+// doExpectOK runs a request and treats any non-2xx as an error (with the body).
+func (t *Telegram) doExpectOK(req *http.Request) error {
 	resp, err := t.http.Do(req)
 	if err != nil {
 		return err
 	}
-	resp.Body.Close()
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		var b bytes.Buffer
+		_, _ = b.ReadFrom(resp.Body)
+		return fmt.Errorf("telegram %s: %d %s", req.URL.Path, resp.StatusCode, strings.TrimSpace(b.String()))
+	}
 	return nil
 }

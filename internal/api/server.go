@@ -26,17 +26,18 @@ type AssignmentScheduler interface {
 
 // Server holds handler dependencies.
 type Server struct {
-	store      *store.Store
-	scheduler  AssignmentScheduler // optional; nil disables enqueue
-	jwtSecret  string
-	media      *media.Store // optional; nil disables media serving
-	fetcherURL string       // optional; empty disables button-driven fetch
+	store       *store.Store
+	scheduler   AssignmentScheduler // optional; nil disables enqueue
+	jwtSecret   string
+	media       *media.Store // optional; nil disables media serving
+	fetcherURL  string       // optional; empty disables button-driven fetch
+	botUsername string       // optional; empty omits deep_link in link-code responses
 }
 
 // NewServer builds a Server over the given store. scheduler and mediaStore may
-// be nil; fetcherURL may be empty.
-func NewServer(st *store.Store, sched AssignmentScheduler, jwtSecret string, mediaStore *media.Store, fetcherURL string) *Server {
-	return &Server{store: st, scheduler: sched, jwtSecret: jwtSecret, media: mediaStore, fetcherURL: fetcherURL}
+// be nil; fetcherURL and botUsername may be empty.
+func NewServer(st *store.Store, sched AssignmentScheduler, jwtSecret string, mediaStore *media.Store, fetcherURL, botUsername string) *Server {
+	return &Server{store: st, scheduler: sched, jwtSecret: jwtSecret, media: mediaStore, fetcherURL: fetcherURL, botUsername: botUsername}
 }
 
 // Router wires all routes and returns an http.Handler.
@@ -59,7 +60,8 @@ func (s *Server) Router() http.Handler {
 		// Auth: credential login for the web, telegram entry for the bot.
 		r.Post("/auth/register", s.handleRegister)
 		r.Post("/auth/login", s.handleLogin)
-		r.Post("/auth/telegram", s.handleTelegramAuth)
+		r.Post("/auth/telegram", s.handleTelegramAuth)      // bot: resolve a linked telegram_id → token
+		r.Post("/auth/telegram/link", s.handleTelegramLink) // bot: redeem a link code → bind telegram_id
 
 		// Public-ish content reads.
 		r.Get("/subjects", s.handleListSubjects)
@@ -72,6 +74,7 @@ func (s *Server) Router() http.Handler {
 
 			// Current user + teacher's students.
 			r.Get("/auth/me", s.handleMe)
+			r.Post("/auth/telegram/link-code", s.handleTelegramLinkCode) // web: issue a code to link this account to Telegram
 			r.Get("/students", s.handleListStudents)
 
 			// Student solve flow (§6 WS-A).

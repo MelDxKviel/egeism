@@ -70,11 +70,22 @@ answers per subject is required before trusting it in production (§7 checkpoint
 
 Real per-account auth, role tied to the account (no role toggle). Web users
 `POST /api/auth/register` / `/api/auth/login` (username + password, bcrypt-hashed)
-and get a signed JWT. The bot gets a token from `POST /api/auth/telegram`
-(telegram_id → student). Every protected call sends `Authorization: Bearer <jwt>`;
+and get a signed JWT. Every protected call sends `Authorization: Bearer <jwt>`;
 `withUser` verifies it (secret from `JWT_SECRET`) and loads the user.
 `domain.User` never carries the password hash, so it can't leak. `GET /api/auth/me`
 returns the current user; the web restores the session from a stored token.
+
+**Telegram linking (bot auth).** The bot no longer auto-provisions an anonymous
+student. A user (student *or* teacher) links their real web account to Telegram
+via a one-time code: the web (sidebar "Привязать Telegram" button →
+`POST /api/auth/telegram/link-code`) issues a code + `t.me/<TELEGRAM_BOT_USERNAME>?start=<code>`
+deep link (short-lived, `telegram_link_codes` table, migration 00003). The bot
+redeems it — `/start <code>` or `/link <code>` → `POST /api/auth/telegram/link`
+(`{code, telegram_id}`) — which binds `telegram_id` to that account
+(`RedeemTelegramLinkCode`, one tx; `users.telegram_id` UNIQUE → one Telegram per
+account). Thereafter `POST /api/auth/telegram` (`{telegram_id}`) is **resolve-only**
+(404 if unlinked → the bot prompts to link). The account's role decides the bot's
+command set: students solve, teachers get read-only stats/что назначено/как решено.
 
 ## Web frontend (`/web`)
 
@@ -150,8 +161,15 @@ are read and uploaded. The API serves them at public `GET /api/media/<key>`
 (keys are unguessable hashes). If a download fails, the source URL is kept as the
 key and `mediaUrl()` uses it directly (graceful fallback; a bad `data:` URI is
 dropped rather than kept as a giant key). The web renders images
-inline and files as download links (`MediaBlock`); such tasks are web-only (§8),
-and the web solve does NOT filter on `bot_solvable` (that's a bot-only concern).
+inline and files as download links (`MediaBlock`). The **bot now renders media
+tasks too, as Rich Messages** (it no longer filters on `bot_solvable`): the
+statement goes out as Telegram HTML (pipe tables → aligned monospace `<pre>`,
+`⟦img:N⟧` inline formulas → their `alt` text — mirrors `web/src/ui.tsx`), then
+block figures are sent as photos and attached files as documents. Presentation
+lives in the bot (`internal/bot/format.go`, `richmedia.go`), not the API — it is
+UI, not the frozen business logic. Transparent PNG figures are **flattened onto
+white** (`flattenToWhite`) before sending so they stay legible on Telegram's dark
+theme, exactly like the web's always-white figure container.
 
 ## Run it
 

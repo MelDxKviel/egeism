@@ -63,6 +63,14 @@ type Task struct {
 	CreatedAt    time.Time `json:"created_at"`
 }
 
+type TelegramLinkCode struct {
+	Code      string     `json:"code"`
+	UserID    uuid.UUID  `json:"user_id"`
+	ExpiresAt time.Time  `json:"expires_at"`
+	UsedAt    *time.Time `json:"used_at"`
+	CreatedAt time.Time  `json:"created_at"`
+}
+
 type Test struct {
 	ID        uuid.UUID `json:"id"`
 	SubjectID uuid.UUID `json:"subject_id"`
