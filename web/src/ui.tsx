@@ -61,8 +61,12 @@ export function MediaBlock({ media }: { media?: Media[] }) {
           }}><Icon name="close" size={20} /></button>
           <img src={mediaUrl(zoomed.key)} alt={zoomed.alt || ""}
             onClick={(e) => e.stopPropagation()} style={{
-              maxWidth: "90vw", maxHeight: "90vh", width: "auto", height: "auto", display: "block",
-              background: "#FFFFFF", padding: 10, borderRadius: 12, boxSizing: "border-box",
+              // Scale the figure UP to fill a large white panel (not its tiny
+              // natural size): object-fit contain keeps the aspect ratio and
+              // letterboxes onto white, so small schemes actually get bigger.
+              width: "min(92vw, 960px)", height: "min(86vh, 720px)",
+              objectFit: "contain", display: "block",
+              background: "#FFFFFF", padding: 12, borderRadius: 12, boxSizing: "border-box",
             }} />
         </div>,
         document.body,
