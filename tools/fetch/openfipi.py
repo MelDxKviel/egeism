@@ -178,26 +178,88 @@ def _node_to_text(node):
         return ""
     if name == "br":
         return "\n"
-    if name == "table" and node.find("table") is None:  # leaf data table → markdown
-        rows = []
-        for tr in node.find_all("tr"):
-            cells = [" ".join(_node_to_text(c).split()) for c in tr.find_all(["td", "th"])]
-            if any(cells):  # skip fully-empty rows
-                rows.append(cells)
-        if not rows:
-            return ""
-        width = max(len(r) for r in rows)
-        md = []
-        for i, r in enumerate(rows):
-            r = r + [""] * (width - len(r))  # pad ragged rows to a rectangle
-            md.append("| " + " | ".join(r) + " |")
-            if i == 0:  # header rule after the first row (leading/trailing pipes
-                md.append("| " + " | ".join(["---"] * width) + " |")  # survive _clean)
-        return "\n" + "\n".join(md) + "\n"
+    if name == "table" and node.find("table") is None:  # leaf table
+        md = _table_to_markdown(node)
+        if md is not None:
+            return md
+        # Not a real data grid — a layout/wrapper table the site uses for the
+        # statement body / download row. Fall through and serialize it as text so
+        # it wraps, instead of a one-cell table that scrolls sideways and clips.
     text = "".join(_node_to_text(c) for c in node.children)
     if name in _BLOCK:
         text += "\n"
     return text
+
+
+def _intattr(tag, name):
+    """A colspan/rowspan value as a positive int (missing/garbage → 1)."""
+    try:
+        return max(1, int(tag.get(name) or 1))
+    except (TypeError, ValueError):
+        return 1
+
+
+def _table_to_markdown(table):
+    """Render a leaf <table> as a Markdown grid, or return None if it isn't one.
+
+    A naive `td` list per row gets two real ФИПИ tables wrong:
+
+    * **Merged cells.** задание-1 distance matrices merge the "Номер пункта"
+      banner (colspan) and diagonal corners (rowspan). Reading the raw cells of
+      each row shifts every following cell left, so nothing lines up — the
+      mangled grid. We expand spans into a rectangle (the merged value in its
+      first cell, the cells it covers left blank) so the columns align.
+    * **Layout tables.** Attachment tasks wrap the whole statement (and the
+      download row) in a <table>; that is not data. We return None unless it
+      looks like a real grid — at least two columns and only short cells — so the
+      caller renders it as ordinary text that wraps, not a one-cell table.
+    """
+    grid = []
+    carry = {}  # col -> [rows_left, fill] for cells spanning down from above
+    for tr in table.find_all("tr"):
+        cells = tr.find_all(["td", "th"], recursive=False) or tr.find_all(["td", "th"])
+        row, col, ci = [], 0, 0
+        while ci < len(cells) or any(c >= col for c in carry):
+            if col in carry:                      # a rowspan reaching down to here
+                rows_left, fill = carry[col]
+                if rows_left <= 1:
+                    del carry[col]
+                else:
+                    carry[col] = [rows_left - 1, fill]
+                row.append(fill)
+                col += 1
+                continue
+            if ci >= len(cells):                  # gap before a rightward rowspan
+                row.append("")
+                col += 1
+                continue
+            cell = cells[ci]
+            ci += 1
+            txt = " ".join(_node_to_text(cell).split())
+            cspan, rspan = _intattr(cell, "colspan"), _intattr(cell, "rowspan")
+            for k in range(cspan):                # value in the first cell, then blanks
+                row.append(txt if k == 0 else "")
+                if rspan > 1:
+                    carry[col] = [rspan - 1, ""]  # rows this cell covers stay blank
+                col += 1
+        if any(c.strip() for c in row):           # skip fully-empty rows
+            grid.append(row)
+
+    if not grid:
+        return None
+    width = max(len(r) for r in grid)
+    longest = max((len(c) for r in grid for c in r), default=0)
+    # A data table has several columns of short values; a wrapper table is one
+    # column, or a single cell holding a whole paragraph.
+    if width < 2 or longest > 80:
+        return None
+    md = []
+    for i, r in enumerate(grid):
+        r = r + [""] * (width - len(r))           # pad ragged rows to a rectangle
+        md.append("| " + " | ".join(r) + " |")
+        if i == 0:  # header rule after the first row (leading/trailing pipes
+            md.append("| " + " | ".join(["---"] * width) + " |")  # survive _clean)
+    return "\n" + "\n".join(md) + "\n"
 
 
 def _clean(s):
