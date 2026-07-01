@@ -2,11 +2,13 @@ package api
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
 	"egeism/internal/checker"
+	"egeism/internal/domain"
 )
 
 type startAttemptReq struct {
@@ -133,4 +135,62 @@ func (s *Server) handleListAttemptAnswers(w http.ResponseWriter, r *http.Request
 		return
 	}
 	writeJSON(w, http.StatusOK, answers)
+}
+
+// attemptReviewItem is one answered task in an attempt, enriched with the task's
+// condition + media and the correct answer, so a teacher can review what the
+// student saw and how they answered (not just the bare number).
+type attemptReviewItem struct {
+	AnswerID    uuid.UUID         `json:"answer_id"`
+	TaskID      uuid.UUID         `json:"task_id"`
+	Number      int               `json:"number"`
+	Statement   string            `json:"statement"`
+	Media       []domain.Media    `json:"media"`
+	AnswerKind  domain.AnswerType `json:"answer_kind"`
+	RawAnswer   string            `json:"raw_answer"`
+	IsCorrect   bool              `json:"is_correct"`
+	Correct     []string          `json:"correct"`
+	TimeSpentMS int64             `json:"time_spent_ms"`
+	AnsweredAt  time.Time         `json:"answered_at"`
+}
+
+// handleAttemptReview returns an attempt's answers joined to their tasks — the
+// reviewable variant (condition + correct answer per task). Works for any attempt,
+// including free-practice ones that have no stored test items.
+func (s *Server) handleAttemptReview(w http.ResponseWriter, r *http.Request) {
+	attemptID, err := uuid.Parse(chi.URLParam(r, "attemptID"))
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid attempt id")
+		return
+	}
+	answers, err := s.store.ListAnswersForAttempt(r.Context(), attemptID)
+	if err != nil {
+		writeStoreErr(w, err)
+		return
+	}
+	items := make([]attemptReviewItem, 0, len(answers))
+	for _, a := range answers {
+		it := attemptReviewItem{
+			AnswerID:    a.ID,
+			TaskID:      a.TaskID,
+			RawAnswer:   a.RawAnswer,
+			IsCorrect:   a.IsCorrect,
+			TimeSpentMS: a.TimeSpentMS,
+			AnsweredAt:  a.AnsweredAt,
+			Media:       []domain.Media{},
+			Correct:     []string{},
+		}
+		// The task may have been deleted since; keep the answer row regardless.
+		if task, terr := s.store.GetTask(r.Context(), a.TaskID); terr == nil {
+			it.Number = task.Number
+			it.Statement = task.Statement
+			if task.Media != nil {
+				it.Media = task.Media
+			}
+			it.AnswerKind = task.AnswerSchema.Type
+			it.Correct = task.AnswerSchema.Correct
+		}
+		items = append(items, it)
+	}
+	writeJSON(w, http.StatusOK, items)
 }

@@ -37,6 +37,13 @@ export interface DayAnswer {
   answer_id: string; task_id: string; number: number; subject_id: string;
   raw_answer: string; is_correct: boolean; time_spent_ms: number; answered_at: string;
 }
+// One reviewed answer in an attempt: the task's condition + media, the student's
+// answer, the verdict, and the correct answer — for the teacher's attempt review.
+export interface AttemptReviewItem {
+  answer_id: string; task_id: string; number: number; statement: string;
+  media: Media[]; answer_kind: AnswerKind; raw_answer: string;
+  is_correct: boolean; correct: string[]; time_spent_ms: number; answered_at: string;
+}
 export interface AssignmentCard {
   id: string; test_id: string; title: string; kind: TestKind; subject_id: string;
   scheduled_at: string; notified_at?: string; status: string; task_count: number;
@@ -129,6 +136,7 @@ export const api = {
     req<SubmitResult>("POST", `/api/attempts/${attemptId}/answers`, { task_id, raw_answer, time_spent_ms }),
   finish: (attemptId: string) => req<Attempt>("POST", `/api/attempts/${attemptId}/finish`),
   attemptAnswers: (attemptId: string) => req<DayAnswer[]>("GET", `/api/attempts/${attemptId}/answers`),
+  attemptReview: (attemptId: string) => req<AttemptReviewItem[]>("GET", `/api/attempts/${attemptId}/review`),
 
   forecast: (sid: string, subject: SubjectCode) =>
     req<Forecast>("GET", `/api/students/${sid}/stats/forecast?subject=${subject}`),

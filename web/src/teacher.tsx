@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid } from "recharts";
 import {
-  api, SubjectCode, TestKind, Task, TaskStatus, AnswerSchema, AttemptSummary, DayAnswer, uploadTasks,
+  api, SubjectCode, TestKind, Task, TaskStatus, AnswerSchema, AttemptSummary, AttemptReviewItem, uploadTasks,
   useForecast, useHeatmap, useWeakSpots, useMastery, useMasterySeries, useAttempts,
   useAdminTasks, useTests, useTestDetail, useInvalidate,
 } from "./api";
@@ -46,12 +46,13 @@ export function TeacherDashboard() {
   const series = useMasterySeries(sid, subject);
   const attempts = useAttempts(sid);
   const [open, setOpen] = useState<number | null>(null);
-  const [review, setReview] = useState<{ title: string; items: DayAnswer[] } | null>(null);
+  const [review, setReview] = useState<{ title: string; items: AttemptReviewItem[] } | null>(null);
 
   // Open a solved attempt (even a free-practice "Свободное решение" one) as its
-  // reviewable variant: the tasks the student answered, with their answer + verdict.
+  // reviewable variant: each task's condition + correct answer, plus the student's
+  // answer and verdict.
   const openAttempt = async (a: AttemptSummary) => {
-    try { const items = await api.attemptAnswers(a.id); setReview({ title: testTitle(a.title), items }); }
+    try { const items = await api.attemptReview(a.id); setReview({ title: testTitle(a.title), items }); }
     catch { setReview({ title: testTitle(a.title), items: [] }); }
   };
   const toDrill = (number?: number) => { requestBuilder({ kind: "drill", number, count: 10 }); go("t-builder"); };
@@ -139,11 +140,19 @@ export function TeacherDashboard() {
           {review.items.length === 0
             ? <div style={{ color: "var(--text-2)" }}>В этой попытке нет ответов.</div>
             : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 12, maxHeight: "70vh", overflowY: "auto" }} className="scroll">
                 {review.items.map((it) => (
-                  <div key={it.answer_id} style={{ display: "flex", justifyContent: "space-between", padding: "8px 12px", background: "var(--surface-2)", borderRadius: 10 }}>
-                    <span className="mono">№{it.number} · {it.raw_answer}</span>
-                    <span style={{ color: it.is_correct ? "var(--accent)" : "var(--bad)" }}>{it.is_correct ? "верно" : "неверно"}</span>
+                  <div key={it.answer_id} style={{ padding: 14, background: "var(--surface-2)", borderRadius: 12 }}>
+                    <div style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
+                      <Pill tone="neutral">№{it.number}</Pill>
+                      <Pill tone={it.is_correct ? "accent" : "bad"}>{it.is_correct ? "верно" : "неверно"}</Pill>
+                    </div>
+                    <StatementView text={it.statement} media={it.media} style={{ fontSize: 14, lineHeight: 1.45, marginBottom: 8 }} />
+                    <MediaBlock media={it.media} />
+                    <div className="mono" style={{ fontSize: 13, display: "flex", flexDirection: "column", gap: 4 }}>
+                      <div><span style={{ color: "var(--text-3)" }}>ответ ученика: </span><b style={{ color: it.is_correct ? "var(--accent-2)" : "var(--bad)" }}>{it.raw_answer || "—"}</b></div>
+                      <div><span style={{ color: "var(--text-3)" }}>верный ответ: </span><b style={{ color: "var(--accent-2)" }}>{it.correct.join(" / ")}</b></div>
+                    </div>
                   </div>
                 ))}
               </div>

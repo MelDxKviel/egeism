@@ -304,6 +304,14 @@ paths:
       responses:
         '200': { description: answers }
 
+  /api/attempts/{attemptID}/review:
+    get:
+      summary: Review an attempt — each answer joined to its task condition and correct answer
+      parameters:
+        - { name: attemptID, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: reviewed answers (number, statement, media, answer_kind, raw_answer, is_correct, correct) }
+
   /api/attempts/{attemptID}/finish:
     post:
       summary: Finish an attempt

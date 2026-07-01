@@ -81,6 +81,7 @@ func (s *Server) Router() http.Handler {
 			r.Post("/attempts/{attemptID}/answers", s.handleSubmitAnswer)
 			r.Post("/attempts/{attemptID}/finish", s.handleFinishAttempt)
 			r.Get("/attempts/{attemptID}/answers", s.handleListAttemptAnswers)
+			r.Get("/attempts/{attemptID}/review", s.handleAttemptReview)
 
 			// Statistics (§6 WS-A/WS-C).
 			r.Get("/students/{studentID}/stats/heatmap", s.handleHeatmap)
