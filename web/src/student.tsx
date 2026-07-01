@@ -344,15 +344,19 @@ export function History() {
 }
 
 // ---------- Modal ----------
-export function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
+// maxWidth defaults to a compact dialog; pass a larger value (e.g. a near-full
+// "min(1200px, 96vw)") for content-heavy modals like the attempt review. The body
+// scrolls internally so the panel never exceeds the viewport.
+export function Modal({ title, children, onClose, maxWidth = 560 }:
+  { title: string; children: React.ReactNode; onClose: () => void; maxWidth?: number | string }) {
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 16 }}>
-      <div onClick={(e) => e.stopPropagation()} className="fade" style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 18, padding: 24, maxWidth: 560, width: "100%", boxShadow: "var(--shadow-lg)" }}>
+      <div onClick={(e) => e.stopPropagation()} className="fade" style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 18, padding: 24, maxWidth, width: "100%", maxHeight: "92vh", display: "flex", flexDirection: "column", boxShadow: "var(--shadow-lg)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
           <div style={{ fontWeight: 700, fontSize: 16 }}>{title}</div>
           <button onClick={onClose} title="Закрыть" style={{ display: "flex", alignItems: "center", background: "none", border: "none", color: "var(--text-3)", padding: 2 }}><Icon name="close" size={20} /></button>
         </div>
-        {children}
+        <div className="scroll" style={{ overflowY: "auto", flex: 1, minHeight: 0 }}>{children}</div>
       </div>
     </div>
   );

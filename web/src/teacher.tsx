@@ -136,11 +136,11 @@ export function TeacherDashboard() {
       )}
 
       {review && (
-        <Modal onClose={() => setReview(null)} title={`Разбор · ${review.title}`}>
+        <Modal onClose={() => setReview(null)} title={`Разбор · ${review.title}`} maxWidth="min(1200px, 96vw)">
           {review.items.length === 0
             ? <div style={{ color: "var(--text-2)" }}>В этой попытке нет ответов.</div>
             : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 12, maxHeight: "70vh", overflowY: "auto" }} className="scroll">
+              <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", alignItems: "start" }}>
                 {review.items.map((it) => (
                   <div key={it.answer_id} style={{ padding: 14, background: "var(--surface-2)", borderRadius: 12 }}>
                     <div style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
