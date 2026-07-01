@@ -1,7 +1,7 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid } from "recharts";
 import {
-  api, SubjectCode, TestKind, Task, TaskStatus, AnswerSchema, uploadTasks,
+  api, SubjectCode, TestKind, Task, TaskStatus, AnswerSchema, AttemptSummary, DayAnswer, uploadTasks,
   useForecast, useHeatmap, useWeakSpots, useMastery, useMasterySeries, useAttempts,
   useAdminTasks, useTests, useTestDetail, useInvalidate,
 } from "./api";
@@ -13,6 +13,12 @@ import { Icon } from "./icons";
 
 const SUBJECTS: SubjectCode[] = ["rus", "math", "inf", "soc"];
 const grid = { display: "grid", gap: "var(--gap)", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))" } as const;
+
+// Builder prefill handoff (set before navigating to the builder). Lets the
+// overview's "Прокачать" open the builder already in drill mode, pre-aimed at the
+// weak number and 10 tasks — one click from creating the drill variant.
+let builderRequest: { kind: TestKind; number?: number; count?: number } | null = null;
+export const requestBuilder = (r: NonNullable<typeof builderRequest>) => { builderRequest = r; };
 
 function SubjectTabs({ value, onChange }: { value: SubjectCode; onChange: (s: SubjectCode) => void }) {
   return (
@@ -40,6 +46,15 @@ export function TeacherDashboard() {
   const series = useMasterySeries(sid, subject);
   const attempts = useAttempts(sid);
   const [open, setOpen] = useState<number | null>(null);
+  const [review, setReview] = useState<{ title: string; items: DayAnswer[] } | null>(null);
+
+  // Open a solved attempt (even a free-practice "Свободное решение" one) as its
+  // reviewable variant: the tasks the student answered, with their answer + verdict.
+  const openAttempt = async (a: AttemptSummary) => {
+    try { const items = await api.attemptAnswers(a.id); setReview({ title: testTitle(a.title), items }); }
+    catch { setReview({ title: testTitle(a.title), items: [] }); }
+  };
+  const toDrill = (number?: number) => { requestBuilder({ kind: "drill", number, count: 10 }); go("t-builder"); };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
@@ -61,8 +76,8 @@ export function TeacherDashboard() {
           )}</Async>
         </Card>
 
-        <Section title="Слабые места" right={<Button variant="ghost" style={{ padding: "6px 12px", fontSize: 13 }} onClick={() => go("t-builder")}>Собрать дрилл</Button>}>
-          <Async q={weak}>{(w) => <WeakSpotsList spots={w} onDrill={() => go("t-builder")} />}</Async>
+        <Section title="Слабые места" right={<Button variant="ghost" style={{ padding: "6px 12px", fontSize: 13 }} onClick={() => toDrill()}>Собрать дрилл</Button>}>
+          <Async q={weak}>{(w) => <WeakSpotsList spots={w} onDrill={(n) => toDrill(n)} />}</Async>
         </Section>
       </div>
 
@@ -74,7 +89,7 @@ export function TeacherDashboard() {
               <XAxis dataKey="label" stroke="var(--text-3)" fontSize={10} tickLine={false} interval={0} angle={-30} textAnchor="end" height={44} />
               <YAxis domain={[0, 100]} stroke="var(--text-3)" fontSize={11} tickLine={false} />
               <Tooltip contentStyle={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 12 }} />
-              <Bar dataKey="acc" radius={[4, 4, 0, 0]} cursor="pointer" onClick={(d: any) => { if (d && typeof d.number === "number") setOpen(d.number); }}>
+              <Bar dataKey="acc" minPointSize={2} radius={[4, 4, 0, 0]} cursor="pointer" onClick={(d: any) => { if (d && typeof d.number === "number") setOpen(d.number); }}>
                 {rows.map((r) => { const p = r.total ? (r.correct / r.total) * 100 : 0; return <Cell key={r.number} fill={accColor(p)} />; })}
               </Bar>
             </BarChart>
@@ -103,7 +118,8 @@ export function TeacherDashboard() {
         <Async q={attempts}>{(list) => list.length === 0 ? <div style={{ color: "var(--text-2)" }}>Ученик ещё не решал.</div> : (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {list.map((a) => (
-              <div key={a.id} style={{ display: "flex", justifyContent: "space-between", padding: "10px 12px", background: "var(--surface-2)", borderRadius: 10 }}>
+              <div key={a.id} onClick={() => openAttempt(a)} title="Открыть решённый вариант"
+                style={{ display: "flex", justifyContent: "space-between", padding: "10px 12px", background: "var(--surface-2)", borderRadius: 10, cursor: "pointer" }}>
                 <div><div style={{ fontWeight: 600 }}>{testTitle(a.title)}</div><div className="mono" style={{ color: "var(--text-3)", fontSize: 12 }}>{new Date(a.started_at).toLocaleString("ru")}</div></div>
                 <span className="mono" style={{ color: accColor(a.total ? (Number(a.correct) / Number(a.total)) * 100 : 0), fontWeight: 700 }}>{a.correct}/{a.total}</span>
               </div>
@@ -115,6 +131,23 @@ export function TeacherDashboard() {
       {open !== null && (
         <Modal onClose={() => setOpen(null)} title={`Задание №${open} · динамика`}>
           <MasteryChart points={(series.data || []).filter((p) => p.number === open)} />
+        </Modal>
+      )}
+
+      {review && (
+        <Modal onClose={() => setReview(null)} title={`Разбор · ${review.title}`}>
+          {review.items.length === 0
+            ? <div style={{ color: "var(--text-2)" }}>В этой попытке нет ответов.</div>
+            : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {review.items.map((it) => (
+                  <div key={it.answer_id} style={{ display: "flex", justifyContent: "space-between", padding: "8px 12px", background: "var(--surface-2)", borderRadius: 10 }}>
+                    <span className="mono">№{it.number} · {it.raw_answer}</span>
+                    <span style={{ color: it.is_correct ? "var(--accent)" : "var(--bad)" }}>{it.is_correct ? "верно" : "неверно"}</span>
+                  </div>
+                ))}
+              </div>
+            )}
         </Modal>
       )}
     </div>
@@ -129,9 +162,12 @@ export const requestTestView = (id: string) => { viewTestId = id; };
 export function Builder() {
   const { subject, setSubject, showToast, go } = useApp();
   const invalidate = useInvalidate();
-  const [kind, setKind] = useState<TestKind>("classic");
-  const [number, setNumber] = useState(1);
-  const [count, setCount] = useState(10);
+  // Prefill from the overview's "Прокачать": drill mode, aimed at a weak number.
+  const prefill = useRef(builderRequest).current;
+  useEffect(() => { builderRequest = null; }, []);
+  const [kind, setKind] = useState<TestKind>(prefill?.kind ?? "classic");
+  const [number, setNumber] = useState(prefill?.number ?? 1);
+  const [count, setCount] = useState(prefill?.count ?? 10);
   const [busy, setBusy] = useState(false);
   const [deleting, setDeleting] = useState("");
   const tests = useTests(subject);
@@ -157,18 +193,6 @@ export function Builder() {
       invalidate("tests");
     } catch (e) { showToast(String((e as Error).message)); }
     finally { setDeleting(""); }
-  };
-
-  const rename = async (id: string, current: string) => {
-    const next = window.prompt("Новое название теста:", current);
-    if (next === null) return; // cancelled
-    const title = next.trim();
-    if (!title || title === current) return;
-    try {
-      await api.renameTest(id, title);
-      showToast("Тест переименован");
-      invalidate("tests");
-    } catch (e) { showToast(String((e as Error).message)); }
   };
 
   return (
@@ -202,11 +226,6 @@ export function Builder() {
                 <div><div style={{ fontWeight: 600 }}>{t.title}</div><div className="mono" style={{ color: "var(--text-3)", fontSize: 12 }}>{new Date(t.created_at).toLocaleString("ru", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}</div></div>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   <Pill>{t.kind}</Pill>
-                  <button onClick={(e) => { e.stopPropagation(); rename(t.id, t.title); }}
-                    title="Переименовать тест" aria-label="Переименовать тест"
-                    style={{ display: "inline-flex", alignItems: "center", background: "transparent", border: "none", color: "var(--text-3)", padding: 4 }}>
-                    <Icon name="pencil" size={16} />
-                  </button>
                   <button onClick={(e) => { e.stopPropagation(); del(t.id, t.title); }} disabled={deleting === t.id}
                     title="Удалить тест" aria-label="Удалить тест"
                     style={{ display: "inline-flex", alignItems: "center", background: "transparent", border: "none", color: "var(--text-3)", padding: 4, opacity: deleting === t.id ? 0.4 : 1 }}>
@@ -219,6 +238,44 @@ export function Builder() {
         )}</Async>
       </Section>
     </div>
+  );
+}
+
+// EditableTitle renames a variant in place: click the name to turn it into an
+// input, Enter/blur saves (Esc cancels). No prompt dialog — you rename the open
+// variant right where you're looking at it.
+function EditableTitle({ id, title }: { id: string; title: string }) {
+  const { showToast } = useApp();
+  const invalidate = useInvalidate();
+  const [editing, setEditing] = useState(false);
+  const [val, setVal] = useState(title);
+  useEffect(() => { setVal(title); }, [title]);
+
+  const save = async () => {
+    setEditing(false);
+    const next = val.trim();
+    if (!next || next === title) { setVal(title); return; }
+    try {
+      await api.renameTest(id, next);
+      showToast("Вариант переименован");
+      invalidate("tests");
+      invalidate("test-detail");
+    } catch (e) { showToast(String((e as Error).message)); setVal(title); }
+  };
+
+  if (editing) {
+    return (
+      <input autoFocus value={val} onChange={(e) => setVal(e.target.value)} onBlur={save}
+        onKeyDown={(e) => { if (e.key === "Enter") save(); else if (e.key === "Escape") { setVal(title); setEditing(false); } }}
+        style={{ fontWeight: 700, fontSize: 18, width: "100%", maxWidth: 420 }} />
+    );
+  }
+  return (
+    <button onClick={() => setEditing(true)} title="Нажми, чтобы переименовать вариант"
+      style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "transparent", border: "none", padding: 0, cursor: "text", color: "var(--text)", fontWeight: 700, fontSize: 18 }}>
+      {testTitle(title)}
+      <Icon name="pencil" size={15} />
+    </button>
   );
 }
 
@@ -237,7 +294,7 @@ export function TestDetailPage() {
       <Async q={q}>{(d) => (
         <>
           <Card>
-            <div style={{ fontWeight: 700, fontSize: 18 }}>{testTitle(d.test.title)}</div>
+            <EditableTitle id={d.test.id} title={d.test.title} />
             <div className="mono" style={{ color: "var(--text-3)", fontSize: 13, marginTop: 4 }}>{d.test.kind} · {d.tasks.length} задач</div>
           </Card>
           {d.tasks.length === 0 ? <Empty title="В тесте пока нет заданий" /> : (
