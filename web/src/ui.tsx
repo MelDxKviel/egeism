@@ -17,9 +17,15 @@ export function MediaBlock({ media }: { media?: Media[] }) {
           padding: "8px 12px", fontSize: 13, textDecoration: "none", color: "var(--accent-2)",
         }}><Icon name="paperclip" size={15} /> {m.alt || "Скачать файл"}</a>
       ) : (
-        <img key={i} src={mediaUrl(m.key)} alt={m.alt || ""} loading="lazy" style={{
-          maxWidth: "100%", borderRadius: 12, border: "1px solid var(--border)", display: "block",
-        }} />
+        // Bounded so a scheme/diagram sits at a modest size instead of filling
+        // the card; click opens the full-resolution image in a new tab.
+        <a key={i} href={mediaUrl(m.key)} target="_blank" rel="noreferrer"
+          style={{ alignSelf: "flex-start", display: "inline-flex", lineHeight: 0, maxWidth: "100%" }}>
+          <img src={mediaUrl(m.key)} alt={m.alt || ""} loading="lazy" style={{
+            maxWidth: "min(100%, 420px)", maxHeight: 300, width: "auto", height: "auto",
+            borderRadius: 12, border: "1px solid var(--border)", display: "block", cursor: "zoom-in",
+          }} />
+        </a>
       ))}
     </div>
   );
