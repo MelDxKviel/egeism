@@ -28,9 +28,37 @@ type Telegram struct {
 	offset int64
 }
 
-// NewTelegram wires the transport to the conversation Bot.
+// NewTelegram wires the transport to the conversation Bot. It also registers
+// itself as the Bot's command-menu so per-role command lists can be pushed to
+// Telegram when a user's role becomes known.
 func NewTelegram(token string, b *Bot) *Telegram {
-	return &Telegram{token: token, http: &http.Client{Timeout: 65 * time.Second}, bot: b}
+	t := &Telegram{token: token, http: &http.Client{Timeout: 65 * time.Second}, bot: b}
+	b.menu = t
+	return t
+}
+
+// botCommand is one entry in the Telegram command menu (the ☰/⁄ button).
+type botCommand struct {
+	Command     string `json:"command"`
+	Description string `json:"description"`
+}
+
+// SetChatCommands pushes the role's command list to one chat's menu, so a
+// student and a teacher each see their own commands. Implements bot.CommandMenu.
+func (t *Telegram) SetChatCommands(ctx context.Context, chatID int64, role string) error {
+	return t.setMyCommands(ctx, commandsFor(role), chatID)
+}
+
+// setMyCommands sets the command menu. scopeChatID <= 0 sets the global default
+// (all private chats); a positive id scopes the list to that chat.
+func (t *Telegram) setMyCommands(ctx context.Context, cmds []botCommand, scopeChatID int64) error {
+	payload := map[string]any{"commands": cmds}
+	if scopeChatID > 0 {
+		payload["scope"] = map[string]any{"type": "chat", "chat_id": scopeChatID}
+	} else {
+		payload["scope"] = map[string]any{"type": "all_private_chats"}
+	}
+	return t.postJSON(ctx, "setMyCommands", payload)
 }
 
 type tgUpdate struct {
@@ -69,6 +97,11 @@ type tgResponse struct {
 
 // Run polls for updates until ctx is cancelled, dispatching each to Bot.Handle.
 func (t *Telegram) Run(ctx context.Context) error {
+	// Publish a default command menu so commands are discoverable before we know
+	// a chat's role; per-role menus are set per chat on first interaction.
+	if err := t.setMyCommands(ctx, defaultCommands, 0); err != nil {
+		slog.Warn("setMyCommands default", "err", err)
+	}
 	slog.Info("bot polling started")
 	for {
 		select {
@@ -205,11 +238,16 @@ func (t *Telegram) postRich(ctx context.Context, chatID int64, richHTML, markup 
 	if markup != "" {
 		payload["reply_markup"] = json.RawMessage(markup)
 	}
+	return t.postJSON(ctx, "sendRichMessage", payload)
+}
+
+// postJSON posts a JSON body to a Bot API method and expects a 2xx.
+func (t *Telegram) postJSON(ctx context.Context, method string, payload any) error {
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return err
 	}
-	u := fmt.Sprintf("https://api.telegram.org/bot%s/sendRichMessage", t.token)
+	u := fmt.Sprintf("https://api.telegram.org/bot%s/%s", t.token, method)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, bytes.NewReader(body))
 	if err != nil {
 		return err

@@ -16,6 +16,18 @@ func TestMarkupJSON(t *testing.T) {
 	}
 }
 
+func TestCommandsFor(t *testing.T) {
+	if got := commandsFor("teacher"); len(got) == 0 || got[0].Command != "students" {
+		t.Fatalf("teacher menu should start with /students, got %+v", got)
+	}
+	// Any non-teacher role (student, empty) gets the student menu.
+	for _, role := range []string{"student", ""} {
+		if got := commandsFor(role); len(got) == 0 || got[0].Command != "solve" {
+			t.Fatalf("role %q menu should start with /solve, got %+v", role, got)
+		}
+	}
+}
+
 func TestPluralTasks(t *testing.T) {
 	cases := map[int64]string{
 		1: "задание", 2: "задания", 4: "задания", 5: "заданий",

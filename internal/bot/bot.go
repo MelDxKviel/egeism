@@ -79,12 +79,21 @@ type session struct {
 	students []User           // last listed students (index → student)
 	active   *User            // selected student
 	attempts []AttemptSummary // last listed attempts (index → attempt, for /review)
+
+	commandsSet bool // per-role command menu already pushed to this chat
+}
+
+// CommandMenu pushes a chat's command menu for a resolved role. Implemented by
+// the transport (Telegram); nil in tests (menu setup is skipped).
+type CommandMenu interface {
+	SetChatCommands(ctx context.Context, chatID int64, role string) error
 }
 
 // Bot holds the API client and per-user session state.
 type Bot struct {
 	api       *APIClient
-	mediaBase string // public web origin for inlining figures in rich messages ("" = don't inline)
+	mediaBase string      // public web origin for inlining figures in rich messages ("" = don't inline)
+	menu      CommandMenu // set by the transport; pushes per-role command menus
 	mu        sync.Mutex
 	sessions  map[int64]*session
 }
@@ -94,6 +103,17 @@ type Bot struct {
 // local) to send figures as separate photos instead.
 func New(api *APIClient, mediaBase string) *Bot {
 	return &Bot{api: api, mediaBase: mediaBase, sessions: make(map[int64]*session)}
+}
+
+// ensureCommands pushes this chat's per-role command menu once, after the user's
+// role is known — so a student and a teacher each see their own command list.
+func (b *Bot) ensureCommands(ctx context.Context, sess *session, chatID int64) {
+	if sess.commandsSet || b.menu == nil || sess.user.Role == "" {
+		return
+	}
+	if err := b.menu.SetChatCommands(ctx, chatID, sess.user.Role); err == nil {
+		sess.commandsSet = true
+	}
 }
 
 var subjectAliases = map[string]string{
@@ -144,6 +164,7 @@ func (b *Bot) Handle(ctx context.Context, in InMessage) Reply {
 		sess.token, sess.user = token, user
 	}
 
+	b.ensureCommands(ctx, sess, in.ChatID)
 	if sess.user.Role == "teacher" {
 		return b.handleTeacher(ctx, sess, in, text)
 	}
@@ -170,6 +191,7 @@ func (b *Bot) HandleCallback(ctx context.Context, in InCallback) Reply {
 		}
 		sess.token, sess.user = token, user
 	}
+	b.ensureCommands(ctx, sess, in.ChatID)
 	data := strings.TrimSpace(in.Data)
 
 	if sess.user.Role == "teacher" {
@@ -240,6 +262,7 @@ func (b *Bot) link(ctx context.Context, sess *session, in InMessage, code string
 	}
 	// Reset any stale state and greet as the linked account.
 	*sess = session{token: token, user: user}
+	b.ensureCommands(ctx, sess, in.ChatID) // role just became known → set its menu
 	greet := "🔗 <b>Аккаунт привязан:</b> " + escapeHTML(user.Name) + "\n\n"
 	if user.Role == "teacher" {
 		r := b.welcomeTeacherReply(in.ChatID)
@@ -843,3 +866,40 @@ const welcomeTeacher = `👩‍🏫 <b>Режим учителя</b>
 ▫️ Статистика и прогноз: /stats [предмет]
 ▫️ Что назначено: /assigned
 ▫️ Как решено: /attempts, разбор — /review N`
+
+// Command menus shown in the Telegram ☰ button. Kept in sync with the handlers
+// in handleStudent / handleTeacher. The default list is published globally
+// before a chat's role is known; the per-role lists are set per chat once the
+// account resolves (see ensureCommands / Telegram.SetChatCommands).
+var (
+	studentCommands = []botCommand{
+		{"solve", "Тренироваться — выбрать предмет"},
+		{"tests", "Мои назначенные тесты"},
+		{"next", "Следующее задание"},
+		{"finish", "Завершить тест"},
+		{"help", "Что умеет бот"},
+	}
+	teacherCommands = []botCommand{
+		{"students", "Список учеников"},
+		{"stats", "Статистика и прогноз ученика"},
+		{"assigned", "Что назначено ученику"},
+		{"attempts", "Как решено (потом /review N)"},
+		{"help", "Что умеет бот"},
+	}
+	// defaultCommands is the pre-role menu: start/help plus the common student
+	// actions (the primary user), corrected to the exact role menu per chat.
+	defaultCommands = []botCommand{
+		{"start", "Начать / привязать аккаунт"},
+		{"solve", "Тренироваться — выбрать предмет"},
+		{"tests", "Мои назначенные тесты"},
+		{"help", "Что умеет бот"},
+	}
+)
+
+// commandsFor returns the command menu for a role.
+func commandsFor(role string) []botCommand {
+	if role == "teacher" {
+		return teacherCommands
+	}
+	return studentCommands
+}
