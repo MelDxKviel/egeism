@@ -104,6 +104,12 @@ func (s *Server) Router() http.Handler {
 			r.Get("/students/{studentID}/assignments", s.handleStudentAssignments)
 			r.Get("/students/{studentID}/attempts", s.handleStudentAttempts)
 
+			// In-app notifications (the web bell): assigned tests for students,
+			// completed assignments for teachers.
+			r.Get("/notifications", s.handleListNotifications)
+			r.Post("/notifications/read-all", s.handleMarkAllNotificationsRead)
+			r.Post("/notifications/{notificationID}/read", s.handleMarkNotificationRead)
+
 			// Admin/authoring (§6 WS-C). Kept in one package for stage 1.
 			r.Get("/admin/tasks", s.handleListAdminTasks)
 			r.Post("/admin/tasks", s.handleCreateTask)

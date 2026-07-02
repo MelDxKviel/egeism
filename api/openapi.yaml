@@ -115,6 +115,26 @@ components:
         primary_max: { type: integer }
         test_score: { type: integer }
         note: { type: string }
+    Notification:
+      type: object
+      description: >
+        In-app (web bell) notification about an assignment event, enriched with
+        the assignment/test context so the client can render it and jump to the
+        test. assignment_created goes to the student, assignment_done to the
+        teacher who assigned.
+      properties:
+        id: { type: string, format: uuid }
+        kind: { type: string, enum: [assignment_created, assignment_done] }
+        assignment_id: { type: string, format: uuid }
+        test_id: { type: string, format: uuid }
+        test_title: { type: string }
+        subject_id: { type: string, format: uuid }
+        student_id: { type: string, format: uuid }
+        student_name: { type: string }
+        scheduled_at: { type: string, format: date-time }
+        assignment_status: { type: string, enum: [scheduled, done, missed] }
+        read_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
 
 security:
   - BearerAuth: []
@@ -380,6 +400,39 @@ paths:
         - { name: limit, in: query, schema: { type: integer, default: 20 } }
       responses:
         '200': { description: attempt summaries }
+
+  /api/notifications:
+    get:
+      summary: In-app notifications for the acting user (web bell), newest first
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, default: 30, maximum: 100 } }
+      responses:
+        '200':
+          description: notifications + exact unread count for the badge
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  unread: { type: integer, format: int64 }
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Notification' }
+
+  /api/notifications/{notificationID}/read:
+    post:
+      summary: Mark one of the acting user's notifications as read
+      parameters:
+        - { name: notificationID, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '204': { description: marked }
+        '404': { description: not found (or not this user's) }
+
+  /api/notifications/read-all:
+    post:
+      summary: Mark all of the acting user's notifications as read
+      responses:
+        '204': { description: marked }
 
   /api/students/{studentID}/stats/weak-spots:
     get:

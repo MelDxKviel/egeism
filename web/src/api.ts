@@ -55,6 +55,18 @@ export interface AttemptSummary {
   id: string; test_id: string; title: string; kind: TestKind; subject_id: string;
   started_at: string; finished_at?: string; total: number; correct: number; time_ms: number;
 }
+// In-app notification (the bell): assignment_created goes to the student,
+// assignment_done to the teacher who assigned. Carries the assignment/test
+// context so the client can render it and jump straight to the test.
+export type NotificationKind = "assignment_created" | "assignment_done";
+export interface NotificationItem {
+  id: string; kind: NotificationKind; assignment_id: string;
+  test_id: string; test_title: string; subject_id: string;
+  student_id: string; student_name: string;
+  scheduled_at: string; assignment_status: string;
+  read_at?: string; created_at: string;
+}
+export interface NotificationsFeed { unread: number; items: NotificationItem[]; }
 export interface Test {
   id: string; subject_id: string; kind: TestKind; title: string;
   created_by: string; created_at: string;
@@ -162,6 +174,9 @@ export const api = {
   assignments: (sid: string) => req<AssignmentCard[]>("GET", `/api/students/${sid}/assignments`),
   attempts: (sid: string, limit = 12) =>
     req<AttemptSummary[]>("GET", `/api/students/${sid}/attempts?limit=${limit}`),
+  notifications: (limit = 30) => req<NotificationsFeed>("GET", `/api/notifications?limit=${limit}`),
+  markNotificationRead: (id: string) => req<void>("POST", `/api/notifications/${id}/read`),
+  markAllNotificationsRead: () => req<void>("POST", "/api/notifications/read-all"),
 
   adminTasks: (q: string) => req<Task[]>("GET", `/api/admin/tasks${q}`),
   fetchTasks: (subject: SubjectCode, limit: number, active: boolean) =>
@@ -205,6 +220,16 @@ export const useWeakSpots = (sid: string, s: SubjectCode) =>
   useQuery({ queryKey: ["weak", sid, s], queryFn: () => api.weakSpots(sid, s), enabled: !!sid });
 export const useAssignments = (sid: string) =>
   useQuery({ queryKey: ["assignments", sid], queryFn: () => api.assignments(sid), enabled: !!sid });
+// The bell polls so a fresh assignment / completed test shows up without a
+// reload (30s is plenty for a 1-teacher-1-student stage). Keyed by the acting
+// user id: the cache must not leak across a logout→login on one browser.
+export const useNotifications = (uid: string) =>
+  useQuery({
+    queryKey: ["notifications", uid],
+    queryFn: () => api.notifications(),
+    refetchInterval: 30_000,
+    enabled: !!uid,
+  });
 export const useAttempts = (sid: string) =>
   useQuery({ queryKey: ["attempts", sid], queryFn: () => api.attempts(sid), enabled: !!sid });
 export const useAdminTasks = (q: string) =>

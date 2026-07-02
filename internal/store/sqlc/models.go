@@ -45,6 +45,15 @@ type Enrollment struct {
 	StudentID uuid.UUID `json:"student_id"`
 }
 
+type Notification struct {
+	ID           uuid.UUID  `json:"id"`
+	UserID       uuid.UUID  `json:"user_id"`
+	Kind         string     `json:"kind"`
+	AssignmentID uuid.UUID  `json:"assignment_id"`
+	ReadAt       *time.Time `json:"read_at"`
+	CreatedAt    time.Time  `json:"created_at"`
+}
+
 type Subject struct {
 	ID    uuid.UUID `json:"id"`
 	Code  string    `json:"code"`

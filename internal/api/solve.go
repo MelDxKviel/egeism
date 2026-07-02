@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"time"
@@ -143,11 +144,32 @@ func (s *Server) handleFinishAttempt(w http.ResponseWriter, r *http.Request) {
 	// the "Назначено тебе" feed and the teacher's overview reflect it. Best-effort:
 	// the finished attempt itself is already the source of truth.
 	if att.AssignmentID != nil {
-		if _, err := s.store.SetAssignmentStatus(r.Context(), *att.AssignmentID, domain.AssignmentDone); err != nil {
-			slog.Warn("mark assignment done failed", "assignment", *att.AssignmentID, "err", err)
-		}
+		s.completeAssignment(r.Context(), *att.AssignmentID)
 	}
 	writeJSON(w, http.StatusOK, finished)
+}
+
+// completeAssignment flips an assignment to done and, on the first transition
+// into done, drops an in-app notification for the teacher who assigned it (the
+// web bell). A later re-finish of another attempt on the same assignment stays
+// silent. Failures are logged, not surfaced: the finished attempt is already
+// the source of truth.
+func (s *Server) completeAssignment(ctx context.Context, assignmentID uuid.UUID) {
+	asg, err := s.store.GetAssignment(ctx, assignmentID)
+	if err != nil {
+		slog.Warn("load assignment on finish failed", "assignment", assignmentID, "err", err)
+		return
+	}
+	if asg.Status == domain.AssignmentDone {
+		return
+	}
+	if _, err := s.store.SetAssignmentStatus(ctx, assignmentID, domain.AssignmentDone); err != nil {
+		slog.Warn("mark assignment done failed", "assignment", assignmentID, "err", err)
+		return
+	}
+	if err := s.store.CreateNotification(ctx, asg.AssignedBy, domain.NotificationAssignmentDone, assignmentID); err != nil {
+		slog.Warn("create done-notification failed", "assignment", assignmentID, "err", err)
+	}
 }
 
 // attemptReadable guards attempt reads: the owning student or any teacher (the
