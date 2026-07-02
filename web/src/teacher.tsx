@@ -6,7 +6,7 @@ import {
   useAdminTasks, useTests, useTestDetail, useInvalidate,
 } from "./api";
 import { useApp, useStudentId } from "./state";
-import { Card, Label, Pill, Button, Async, Empty, Loading, Modal, accColor, SUBJECT_TITLES, testTitle, MediaBlock, StatementView } from "./ui";
+import { Card, Label, Pill, Button, Async, Empty, Loading, Modal, accColor, SUBJECT_TITLES, testTitle, MediaBlock, StatementView, AttemptReviewGrid } from "./ui";
 import { ScoreGauge, computeStreak, WeakSpotsList, Section, MasteryChart } from "./charts";
 import { StreakBadge } from "./student";
 import { Icon } from "./icons";
@@ -142,26 +142,7 @@ export function TeacherDashboard() {
 
       {review && (
         <Modal onClose={() => setReview(null)} title={`Разбор · ${review.title}`} maxWidth="min(1200px, 96vw)">
-          {review.items.length === 0
-            ? <div style={{ color: "var(--text-2)" }}>В этой попытке нет ответов.</div>
-            : (
-              <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", alignItems: "start" }}>
-                {review.items.map((it) => (
-                  <div key={it.answer_id} style={{ padding: 14, background: "var(--surface-2)", borderRadius: 12 }}>
-                    <div style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
-                      <Pill tone="neutral">№{it.number}</Pill>
-                      <Pill tone={it.is_correct ? "accent" : "bad"}>{it.is_correct ? "верно" : "неверно"}</Pill>
-                    </div>
-                    <StatementView text={it.statement} media={it.media} style={{ fontSize: 14, lineHeight: 1.45, marginBottom: 8 }} />
-                    <MediaBlock media={it.media} />
-                    <div className="mono" style={{ fontSize: 13, display: "flex", flexDirection: "column", gap: 4 }}>
-                      <div><span style={{ color: "var(--text-3)" }}>ответ ученика: </span><b style={{ color: it.is_correct ? "var(--accent-2)" : "var(--bad)" }}>{it.raw_answer || "—"}</b></div>
-                      <div><span style={{ color: "var(--text-3)" }}>верный ответ: </span><b style={{ color: "var(--accent-2)" }}>{it.correct.join(" / ")}</b></div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+          <AttemptReviewGrid items={review.items} />
         </Modal>
       )}
     </div>

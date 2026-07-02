@@ -361,7 +361,12 @@ paths:
 
   /api/students/{studentID}/assignments:
     get:
-      summary: Assignments for a student (with test info + task count)
+      summary: Assignments for a student (test info + task count + latest finished attempt result)
+      description: >
+        Each card includes the result of the assignment's latest finished attempt —
+        attempt_id, finished_at, correct, total — so the assigned-tests history can
+        show whether, what, and how each test was solved. Those fields are absent /
+        zero until the assignment has been solved at least once.
       parameters:
         - { name: studentID, in: path, required: true, schema: { type: string, format: uuid } }
       responses:

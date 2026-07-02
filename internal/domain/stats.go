@@ -50,7 +50,11 @@ type DayAnswer struct {
 	AnsweredAt  time.Time `json:"answered_at"`
 }
 
-// AssignmentCard is a scheduled test as shown in "Назначено тебе".
+// AssignmentCard is a scheduled test as shown in "Назначено тебе" and the
+// assigned-tests history. Beyond the schedule it carries the result of the
+// latest finished attempt for the assignment, so the student can see whether,
+// what, and how each assigned test was solved. AttemptID/FinishedAt are nil and
+// Correct/Total are 0 until the assignment has been solved at least once.
 type AssignmentCard struct {
 	ID          uuid.UUID        `json:"id"`
 	TestID      uuid.UUID        `json:"test_id"`
@@ -61,6 +65,11 @@ type AssignmentCard struct {
 	NotifiedAt  *time.Time       `json:"notified_at,omitempty"`
 	Status      AssignmentStatus `json:"status"`
 	TaskCount   int64            `json:"task_count"`
+	// Result of the latest finished attempt (the assigned test's history).
+	AttemptID  *uuid.UUID `json:"attempt_id,omitempty"`
+	FinishedAt *time.Time `json:"finished_at,omitempty"`
+	Correct    int64      `json:"correct"`
+	Total      int64      `json:"total"`
 }
 
 // AttemptSummary is one row of the attempts feed with its score.

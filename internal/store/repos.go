@@ -477,7 +477,7 @@ func (s *Store) ListAssignmentCards(ctx context.Context, studentID uuid.UUID) ([
 	}
 	out := make([]domain.AssignmentCard, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, domain.AssignmentCard{
+		card := domain.AssignmentCard{
 			ID:          r.ID,
 			TestID:      r.TestID,
 			Title:       r.Title,
@@ -487,7 +487,17 @@ func (s *Store) ListAssignmentCards(ctx context.Context, studentID uuid.UUID) ([
 			NotifiedAt:  r.NotifiedAt,
 			Status:      domain.AssignmentStatus(r.Status),
 			TaskCount:   r.TaskCount,
-		})
+		}
+		// A finished attempt exists iff attempt_finished_at is set; only then is
+		// the (COALESCE'd) attempt id / score meaningful.
+		if r.AttemptFinishedAt != nil {
+			id := r.AttemptID
+			card.AttemptID = &id
+			card.FinishedAt = r.AttemptFinishedAt
+			card.Correct = r.Correct
+			card.Total = r.Total
+		}
+		out = append(out, card)
 	}
 	return out, nil
 }

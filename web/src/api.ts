@@ -47,6 +47,9 @@ export interface AttemptReviewItem {
 export interface AssignmentCard {
   id: string; test_id: string; title: string; kind: TestKind; subject_id: string;
   scheduled_at: string; notified_at?: string; status: string; task_count: number;
+  // Result of the latest finished attempt (the assigned test's history): present
+  // only once solved. finished_at is the reliable "was it solved" signal.
+  attempt_id?: string; finished_at?: string; correct: number; total: number;
 }
 export interface AttemptSummary {
   id: string; test_id: string; title: string; kind: TestKind; subject_id: string;
