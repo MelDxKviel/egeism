@@ -1,0 +1,48 @@
+name: Deploy
+
+# Continuous deployment: on every push to main (after you've done the one-time
+# server bootstrap below), and on-demand via the Actions "Run workflow" button.
+#
+# One-time setup before this can succeed:
+#  1. On the server: clone the repo to ~/egeism, `cp deploy/.env.prod.example
+#     deploy/.env` and fill it in (DOMAIN, ACME_EMAIL, secrets). See deploy/DEPLOY.md.
+#  2. Create an SSH keypair for CI (`ssh-keygen -t ed25519 -f deploy_key`), add
+#     deploy_key.pub to the server's ~/.ssh/authorized_keys.
+#  3. In the repo: Settings → Secrets and variables → Actions, add:
+#       SSH_HOST  — server IP (e.g. 193.247.81.179)
+#       SSH_USER  — ssh user (e.g. root)
+#       SSH_KEY   — the PRIVATE key (contents of deploy_key)
+#       SSH_PORT  — optional, defaults to 22
+#  Also make sure the repo is reachable from the server for `git pull` (public
+#  repo, or add a read deploy key on the server for a private one).
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Never let two deploys overlap.
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: SSH deploy to server
+    runs-on: ubuntu-latest
+    steps:
+      - name: Pull latest + (re)build the prod stack over SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          script: |
+            set -e
+            cd ~/egeism
+            git pull --ff-only
+            # Raw compose command (mirrors `make prod-up`) so the server needs no
+            # `make`. Migrations run as a one-shot before the API; Caddy renews TLS.
+            docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env up --build -d
+            docker image prune -f

@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel superseded runs on the same ref.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  go:
+    name: Go build / vet / test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: go build ./...
+      - run: go vet ./...
+      - run: go test ./...   # includes the checker safety-net suite (§7)
+
+  fetcher:
+    name: Python fetcher tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # The offline test suite only needs requests + bs4 (the sdamgia fork is
+      # imported lazily inside functions, so it isn't required to run the tests).
+      - run: pip install beautifulsoup4 requests pytest
+      - run: python -m pytest -q
+        working-directory: tools/fetch
+
+  web:
+    name: Web typecheck / build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - run: npm install
+        working-directory: web
+      - run: npm run build   # vite build runs the TypeScript typecheck
+        working-directory: web

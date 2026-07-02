@@ -51,6 +51,32 @@ make prod-up         # rebuilds changed images, recreates only what changed
 ```
 
 Migrations run automatically (the one-shot `migrate` service before the API).
+If you don't have `make` on the server, the raw command is the same:
+`docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env up --build -d`.
+
+## CI/CD (GitHub Actions)
+
+- **CI** (`.github/workflows/ci.yml`) runs on every push/PR to `main`: Go
+  build/vet/test (incl. the checker suite), the Python fetcher tests, and the
+  web build/typecheck.
+- **CD** (`.github/workflows/deploy.yml`) runs on push to `main` (and a manual
+  button): it SSHes to the server and runs the redeploy command above. After the
+  one-time bootstrap here, every merge to `main` ships itself.
+
+To enable CD, add these repo **Secrets** (Settings → Secrets and variables →
+Actions):
+
+| Secret | Value |
+|---|---|
+| `SSH_HOST` | server IP (e.g. `193.247.81.179`) |
+| `SSH_USER` | ssh user (e.g. `root`) |
+| `SSH_KEY`  | the **private** key whose public half is in the server's `~/.ssh/authorized_keys` |
+| `SSH_PORT` | optional, defaults to `22` |
+
+Generate a dedicated CI key with `ssh-keygen -t ed25519 -f deploy_key`, put
+`deploy_key.pub` on the server, and paste `deploy_key` (private) into `SSH_KEY`.
+The deploy pulls with `git pull`, so a **public** repo works out of the box; for
+a private repo add a read deploy key on the server too.
 
 ## Media in the bot's rich messages
 
