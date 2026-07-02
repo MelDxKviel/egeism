@@ -117,6 +117,8 @@ export async function uploadTasks(file: File, opts: { provider?: string; active?
 export interface AuthResult { token: string; user: User; }
 
 export const api = {
+  // Public runtime flags read before login (e.g. whether signup is open).
+  config: () => req<{ allow_registration: boolean }>("GET", "/api/config"),
   register: (role: Role, username: string, password: string, name: string) =>
     req<AuthResult>("POST", "/api/auth/register", { role, username, password, name }),
   login: (username: string, password: string) =>

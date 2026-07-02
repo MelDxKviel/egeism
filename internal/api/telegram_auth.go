@@ -32,6 +32,10 @@ type registerReq struct {
 // and returns a session token. Stage-1 family setup: create the two accounts
 // once.
 func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
+	if !s.allowRegistration {
+		writeErr(w, http.StatusForbidden, "регистрация отключена")
+		return
+	}
 	var req registerReq
 	if !decodeJSON(w, r, &req) {
 		return

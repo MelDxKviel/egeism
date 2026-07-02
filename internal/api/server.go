@@ -26,18 +26,19 @@ type AssignmentScheduler interface {
 
 // Server holds handler dependencies.
 type Server struct {
-	store       *store.Store
-	scheduler   AssignmentScheduler // optional; nil disables enqueue
-	jwtSecret   string
-	media       *media.Store // optional; nil disables media serving
-	fetcherURL  string       // optional; empty disables button-driven fetch
-	botUsername string       // optional; empty omits deep_link in link-code responses
+	store             *store.Store
+	scheduler         AssignmentScheduler // optional; nil disables enqueue
+	jwtSecret         string
+	media             *media.Store // optional; nil disables media serving
+	fetcherURL        string       // optional; empty disables button-driven fetch
+	botUsername       string       // optional; empty omits deep_link in link-code responses
+	allowRegistration bool         // false disables self-service signup (prod)
 }
 
 // NewServer builds a Server over the given store. scheduler and mediaStore may
 // be nil; fetcherURL and botUsername may be empty.
-func NewServer(st *store.Store, sched AssignmentScheduler, jwtSecret string, mediaStore *media.Store, fetcherURL, botUsername string) *Server {
-	return &Server{store: st, scheduler: sched, jwtSecret: jwtSecret, media: mediaStore, fetcherURL: fetcherURL, botUsername: botUsername}
+func NewServer(st *store.Store, sched AssignmentScheduler, jwtSecret string, mediaStore *media.Store, fetcherURL, botUsername string, allowRegistration bool) *Server {
+	return &Server{store: st, scheduler: sched, jwtSecret: jwtSecret, media: mediaStore, fetcherURL: fetcherURL, botUsername: botUsername, allowRegistration: allowRegistration}
 }
 
 // Router wires all routes and returns an http.Handler.
@@ -57,6 +58,10 @@ func (s *Server) Router() http.Handler {
 	r.Get("/api/media/*", s.handleGetMedia)
 
 	r.Route("/api", func(r chi.Router) {
+		// Public runtime flags the web reads before login (e.g. hide the
+		// registration tab when signup is disabled).
+		r.Get("/config", s.handleConfig)
+
 		// Auth: credential login for the web, telegram entry for the bot.
 		r.Post("/auth/register", s.handleRegister)
 		r.Post("/auth/login", s.handleLogin)
@@ -128,6 +133,11 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+// handleConfig exposes public runtime flags the web needs before authenticating.
+func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]bool{"allow_registration": s.allowRegistration})
 }
 
 // corsDev is a permissive CORS policy for local web development. Tighten before

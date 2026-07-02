@@ -48,7 +48,7 @@ func main() {
 
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           api.NewServer(st, enq, cfg.JWTSecret, mediaStore, cfg.FetcherURL, cfg.TelegramBotUsername).Router(),
+		Handler:           api.NewServer(st, enq, cfg.JWTSecret, mediaStore, cfg.FetcherURL, cfg.TelegramBotUsername, cfg.AllowRegistration).Router(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 

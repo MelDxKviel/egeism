@@ -1,15 +1,24 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useApp } from "./state";
-import { Role } from "./api";
+import { Role, api } from "./api";
 import { Button, Label } from "./ui";
 import { Icon } from "./icons";
 
 // Login / registration screen. Role is chosen at registration and tied to the
 // account — there is no role toggle; the logged-in account decides student vs
-// teacher UI.
+// teacher UI. Registration can be disabled server-side (prod): the tab is then
+// hidden and the API rejects signup regardless.
 export function Login() {
   const { theme, login, register } = useApp();
   const [mode, setMode] = useState<"login" | "register">("login");
+  // Whether self-service signup is open (from GET /api/config). Assume closed
+  // until known, so the register tab never flashes when it's disabled.
+  const [canRegister, setCanRegister] = useState(false);
+  useEffect(() => {
+    api.config()
+      .then((c) => setCanRegister(c.allow_registration))
+      .catch(() => setCanRegister(false));
+  }, []);
   const [role, setRole] = useState<Role>("student");
   const [name, setName] = useState("");
   const [username, setUsername] = useState("");
@@ -44,10 +53,12 @@ export function Login() {
           </div>
         </div>
 
-        <div style={{ display: "flex", gap: 6, background: "var(--bg-2)", borderRadius: 10, padding: 3, marginBottom: 20 }}>
-          <Tab active={mode === "login"} onClick={() => setMode("login")}>Вход</Tab>
-          <Tab active={mode === "register"} onClick={() => setMode("register")}>Регистрация</Tab>
-        </div>
+        {canRegister && (
+          <div style={{ display: "flex", gap: 6, background: "var(--bg-2)", borderRadius: 10, padding: 3, marginBottom: 20 }}>
+            <Tab active={mode === "login"} onClick={() => setMode("login")}>Вход</Tab>
+            <Tab active={mode === "register"} onClick={() => setMode("register")}>Регистрация</Tab>
+          </div>
+        )}
 
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           {mode === "register" && (

@@ -27,6 +27,9 @@ x-app-env: &app-env
   # Override only if you serve media straight from MinIO (see the Caddyfile note);
   # empty falls back to WEB_URL/api/media, which works out of the box.
   MEDIA_PUBLIC_URL: ${MEDIA_PUBLIC_URL:-}
+  # Self-service signup is OFF in prod (accounts are provisioned once). Set to
+  # "true" temporarily if you ever need to register another account.
+  ALLOW_REGISTRATION: ${ALLOW_REGISTRATION:-false}
   TZ: ${TZ:-Europe/Moscow}
 
 services:

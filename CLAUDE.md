@@ -70,7 +70,10 @@ answers per subject is required before trusting it in production (§7 checkpoint
 
 Real per-account auth, role tied to the account (no role toggle). Web users
 `POST /api/auth/register` / `/api/auth/login` (username + password, bcrypt-hashed)
-and get a signed JWT. Every protected call sends `Authorization: Bearer <jwt>`;
+and get a signed JWT. **Self-service signup is gated by `ALLOW_REGISTRATION`**
+(default `true` for dev; the prod compose sets it `false`): when off, `/register`
+returns 403 and the web hides the tab — it reads the flag from the public
+`GET /api/config` (`{allow_registration}`). Every protected call sends `Authorization: Bearer <jwt>`;
 `withUser` verifies it (secret from `JWT_SECRET`) and loads the user.
 `domain.User` never carries the password hash, so it can't leak. `GET /api/auth/me`
 returns the current user; the web restores the session from a stored token.
