@@ -1,0 +1,32 @@
+# Caddy edge for production. Terminates TLS with automatic Let's Encrypt certs
+# (issued on first request; renewed automatically) and reverse-proxies the whole
+# app to the web container — which serves the React SPA and proxies /api (incl.
+# the public /api/media/<key> the Telegram bot's rich figures are fetched from).
+#
+# DOMAIN and ACME_EMAIL come from deploy/.env (see docker-compose.prod.yml).
+# Certs/account persist in the caddy_data volume — do NOT wipe it, or you risk
+# hitting Let's Encrypt rate limits on re-issue.
+
+{
+	email {$ACME_EMAIL}
+	# For first-time testing against the Let's Encrypt STAGING CA (higher rate
+	# limits, untrusted certs), uncomment the next line, deploy once, then remove
+	# it and `docker compose ... up -d caddy` again to get a real cert.
+	# acme_ca https://acme-staging-v02.api.letsencrypt.org/directory
+}
+
+{$DOMAIN} {
+	encode zstd gzip
+
+	# Everything flows through the web nginx (SPA + /api + /api/media). Media for
+	# the bot's rich messages is fetched by Telegram over this same HTTPS origin.
+	reverse_proxy web:80
+
+	# Optional: serve media straight from MinIO instead of through the API (one
+	# fewer hop for figure fetches). Then set MEDIA_PUBLIC_URL=https://<domain>/media
+	# in deploy/.env. Leave commented to route media through the API (the default).
+	# handle_path /media/* {
+	# 	rewrite * /egeism-media{uri}
+	# 	reverse_proxy minio:9000
+	# }
+}

@@ -2,12 +2,15 @@
 # On Windows without `make`, run the underlying commands from README.md.
 
 COMPOSE ?= docker compose -f deploy/docker-compose.yml
+# Production stack: standalone compose + secrets from deploy/.env (DOMAIN, ACME_EMAIL, …).
+PROD_COMPOSE ?= docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env
 DATABASE_URL ?= postgres://egeism:egeism@localhost:5432/egeism?sslmode=disable
 SEED ?= deploy/seed/tasks.sample.json
 
 .PHONY: help
 help:
-	@echo "Targets: dev up down migrate sqlc test build ingest tidy"
+	@echo "Dev:  dev up down migrate sqlc test build ingest tidy"
+	@echo "Prod: prod-config prod-up prod-down prod-logs prod-ps"
 
 ## dev: bring up infra (postgres/redis/minio) only, for local `go run`.
 .PHONY: dev
@@ -53,3 +56,30 @@ ingest:
 .PHONY: tidy
 tidy:
 	go mod tidy
+
+# ── Production (run ON THE SERVER; needs deploy/.env, see deploy/.env.prod.example) ──
+
+## prod-config: validate the prod compose + env interpolation without starting anything.
+.PHONY: prod-config
+prod-config:
+	$(PROD_COMPOSE) config >/dev/null && echo "prod compose OK"
+
+## prod-up: build + start the whole prod stack (Caddy edge, auto-TLS). Idempotent — also the deploy step.
+.PHONY: prod-up
+prod-up:
+	$(PROD_COMPOSE) up --build -d
+
+## prod-down: stop the prod stack (keeps volumes: DB, MinIO, Caddy certs).
+.PHONY: prod-down
+prod-down:
+	$(PROD_COMPOSE) down
+
+## prod-logs: tail all prod service logs.
+.PHONY: prod-logs
+prod-logs:
+	$(PROD_COMPOSE) logs -f --tail=100
+
+## prod-ps: show prod service status.
+.PHONY: prod-ps
+prod-ps:
+	$(PROD_COMPOSE) ps

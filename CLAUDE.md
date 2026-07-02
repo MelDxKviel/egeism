@@ -237,6 +237,19 @@ make up             # or: build+run the whole stack in docker (web on :3000)
 make test           # all Go tests (checker safety net)
 ```
 
+**Production** (on the server) is a separate, hardened stack — see
+[deploy/DEPLOY.md](deploy/DEPLOY.md). `deploy/docker-compose.prod.yml` is
+standalone (NOT layered on the dev compose): only **Caddy** is exposed (80/443,
+automatic Let's Encrypt TLS via `deploy/Caddyfile`), everything else is
+internal-network-only — the dev compose publishes DB/Redis/MinIO/API host ports,
+which is unsafe on a public box (Docker bypasses host firewalls). Keep the two
+files' service topology in sync. `make prod-up` builds + starts (also the
+redeploy command; migrations run as a one-shot before the API). Secrets +
+`DOMAIN`/`ACME_EMAIL` come from `deploy/.env` (template: `deploy/.env.prod.example`);
+`WEB_URL` is derived as `https://$DOMAIN`, so the bot's site button and inline
+rich-message media work with zero code change. Use a **separate bot token** from
+local dev (one token can't long-poll from two places).
+
 ## Status / what's stubbed
 
 Done: Phase 0, checker + full test suite, student solve flow (M1 backbone),
