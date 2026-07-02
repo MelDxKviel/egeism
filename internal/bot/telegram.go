@@ -42,6 +42,21 @@ type tgUpdate struct {
 		} `json:"from"`
 		Text string `json:"text"`
 	} `json:"message"`
+	// CallbackQuery arrives when an inline button is pressed — including buttons
+	// on notifications the WORKER sent (same bot token, one long-poll).
+	CallbackQuery *struct {
+		ID   string `json:"id"`
+		From struct {
+			ID        int64  `json:"id"`
+			FirstName string `json:"first_name"`
+		} `json:"from"`
+		Message *struct {
+			Chat struct {
+				ID int64 `json:"id"`
+			} `json:"chat"`
+		} `json:"message"`
+		Data string `json:"data"`
+	} `json:"callback_query"`
 }
 
 type tgResponse struct {
@@ -69,6 +84,21 @@ func (t *Telegram) Run(ctx context.Context) error {
 		}
 		for _, u := range updates {
 			t.offset = u.UpdateID + 1
+			if cq := u.CallbackQuery; cq != nil {
+				// Ack first so the button stops spinning even if handling fails.
+				t.answerCallback(ctx, cq.ID)
+				if cq.Message == nil || cq.Data == "" {
+					continue
+				}
+				in := InCallback{
+					TelegramID: cq.From.ID,
+					ChatID:     cq.Message.Chat.ID,
+					Data:       cq.Data,
+					FirstName:  cq.From.FirstName,
+				}
+				t.deliver(ctx, t.bot.HandleCallback(ctx, in))
+				continue
+			}
 			if u.Message == nil || u.Message.Text == "" {
 				continue
 			}
@@ -83,11 +113,27 @@ func (t *Telegram) Run(ctx context.Context) error {
 	}
 }
 
-// deliver renders one Reply: the HTML text, then each media as a photo (figures,
-// flattened onto white) or a document (attached files).
+// answerCallback acks a button press (required, or the client shows a spinner
+// for ~30s). Errors are logged only — the reply itself still goes out.
+func (t *Telegram) answerCallback(ctx context.Context, id string) {
+	form := url.Values{}
+	form.Set("callback_query_id", id)
+	u := fmt.Sprintf("https://api.telegram.org/bot%s/answerCallbackQuery", t.token)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, strings.NewReader(form.Encode()))
+	if err != nil {
+		return
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if err := t.doExpectOK(req); err != nil {
+		slog.Error("answerCallbackQuery", "err", err)
+	}
+}
+
+// deliver renders one Reply: the HTML text (with its inline keyboard), then each
+// media as a photo (figures, flattened onto white) or a document (attached files).
 func (t *Telegram) deliver(ctx context.Context, r Reply) {
 	if strings.TrimSpace(r.HTML) != "" {
-		if err := t.sendMessageHTML(ctx, r.ChatID, r.HTML); err != nil {
+		if err := t.sendMessageHTML(ctx, r.ChatID, r.HTML, r.Buttons); err != nil {
 			slog.Error("sendMessage", "err", err)
 		}
 	}
@@ -140,15 +186,61 @@ func (t *Telegram) getUpdates(ctx context.Context) ([]tgUpdate, error) {
 	return out.Result, nil
 }
 
-// sendMessageHTML posts an HTML-formatted message (parse_mode=HTML). The body is
-// form-encoded (not query) so long statements aren't capped by URL length.
-func (t *Telegram) sendMessageHTML(ctx context.Context, chatID int64, html string) error {
+// sendMessageHTML posts an HTML-formatted message (parse_mode=HTML) with an
+// optional inline keyboard. The body is form-encoded (not query) so long
+// statements aren't capped by URL length. If Telegram rejects the keyboard
+// (e.g. an invalid button URL), it retries without it — text beats nothing.
+func (t *Telegram) sendMessageHTML(ctx context.Context, chatID int64, html string, buttons [][]Button) error {
 	form := url.Values{}
 	form.Set("chat_id", strconv.FormatInt(chatID, 10))
 	form.Set("text", html)
 	form.Set("parse_mode", "HTML")
 	form.Set("disable_web_page_preview", "true")
-	u := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", t.token)
+	if markup := markupJSON(buttons); markup != "" {
+		form.Set("reply_markup", markup)
+		if err := t.postForm(ctx, "sendMessage", form); err == nil {
+			return nil
+		} else {
+			slog.Warn("sendMessage with keyboard failed; retrying without", "err", err)
+		}
+		form.Del("reply_markup")
+	}
+	return t.postForm(ctx, "sendMessage", form)
+}
+
+// markupJSON renders button rows as Telegram reply_markup JSON ("" if none).
+func markupJSON(rows [][]Button) string {
+	type tgBtn struct {
+		Text string `json:"text"`
+		URL  string `json:"url,omitempty"`
+		Data string `json:"callback_data,omitempty"`
+	}
+	var kb [][]tgBtn
+	for _, row := range rows {
+		var r []tgBtn
+		for _, b := range row {
+			if b.Text == "" || (b.URL == "" && b.Data == "") {
+				continue
+			}
+			r = append(r, tgBtn{Text: b.Text, URL: b.URL, Data: b.Data})
+		}
+		if len(r) > 0 {
+			kb = append(kb, r)
+		}
+	}
+	if len(kb) == 0 {
+		return ""
+	}
+	raw, err := json.Marshal(map[string]any{"inline_keyboard": kb})
+	if err != nil {
+		return ""
+	}
+	return string(raw)
+}
+
+// postForm posts a form-encoded Bot API call and expects a 2xx.
+func (t *Telegram) postForm(ctx context.Context, method string, form url.Values) error {
+	u := fmt.Sprintf("https://api.telegram.org/bot%s/%s", t.token, method)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, strings.NewReader(form.Encode()))
 	if err != nil {
 		return err

@@ -87,6 +87,20 @@ account). Thereafter `POST /api/auth/telegram` (`{telegram_id}`) is **resolve-on
 (404 if unlinked → the bot prompts to link). The account's role decides the bot's
 command set: students solve, teachers get read-only stats/что назначено/как решено.
 
+**Bot UX (inline keyboards).** Messages are styled Telegram-HTML with inline
+keyboards; `Reply.Buttons` rides through the transport as `reply_markup`, and
+`callback_query` updates are dispatched to `Bot.HandleCallback` (data grammar:
+`solve:<code>`, `next`, `tests`, `assign:<id>`, `finish`, teacher `t:<cmd>`).
+Students solve **assigned tests in the chat**: the worker's assignment
+notification carries «▶️ Решать тут» (callback `assign:<id>`; the worker and bot
+share one bot identity, so worker-sent buttons arrive at the bot's long-poll)
+and «🌐 Решать на сайте» (URL from `WEB_URL`, omitted when unset). The test flow
+serves exactly the variant's tasks (`GET /api/tests/{id}/tasks` +
+`POST /api/attempts {assignment_id}`), shows «3/15» progress, and `/finish` (or
+the last «Итоги» button) closes the attempt — the assignment flips to done
+server-side. Notifier degrades keyboard → callback-only → plain so a bad button
+URL never loses the notification.
+
 ## Web frontend (`/web`)
 
 React + Vite + TypeScript, TanStack Query, Recharts. Design tokens (light/dark)

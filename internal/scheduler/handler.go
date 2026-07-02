@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/hibiken/asynq"
@@ -21,11 +23,12 @@ const idleThreshold = 3 * 24 * time.Hour
 type Handlers struct {
 	store    *store.Store
 	notifier Notifier
+	webURL   string // public web app URL for the "решать на сайте" button ("" = omit)
 }
 
-// NewHandlers builds task handlers.
-func NewHandlers(st *store.Store, n Notifier) *Handlers {
-	return &Handlers{store: st, notifier: n}
+// NewHandlers builds task handlers. webURL may be empty (no site button then).
+func NewHandlers(st *store.Store, n Notifier, webURL string) *Handlers {
+	return &Handlers{store: st, notifier: n, webURL: strings.TrimRight(webURL, "/")}
 }
 
 // Register mounts the handlers on an asynq mux.
@@ -61,13 +64,67 @@ func (h *Handlers) handleNotifyAssignment(ctx context.Context, task *asynq.Task)
 	if err != nil {
 		return err
 	}
-	msg := fmt.Sprintf("📌 Назначен тест «%s» на %s. Удачи!",
-		test.Title, a.ScheduledAt.Format("02.01 15:04"))
-	if err := h.notifier.Send(ctx, *student.TelegramID, msg); err != nil {
+	// Enrich the card: subject title + task count (best-effort; the message
+	// works without them). ListAssignmentCards already aggregates the count.
+	subjectTitle := ""
+	if subs, err := h.store.ListSubjects(ctx); err == nil {
+		for _, sub := range subs {
+			if sub.ID == test.SubjectID {
+				subjectTitle = sub.Title
+				break
+			}
+		}
+	}
+	var taskCount int64
+	if cards, err := h.store.ListAssignmentCards(ctx, a.StudentID); err == nil {
+		for _, c := range cards {
+			if c.ID == a.ID {
+				taskCount = c.TaskCount
+				break
+			}
+		}
+	}
+
+	var msg strings.Builder
+	fmt.Fprintf(&msg, "📌 <b>Тебе назначен тест!</b>\n\n📝 <b>«%s»</b>", html.EscapeString(test.Title))
+	if subjectTitle != "" {
+		fmt.Fprintf(&msg, "\n📚 %s", html.EscapeString(subjectTitle))
+	}
+	if taskCount > 0 {
+		fmt.Fprintf(&msg, " · %d %s", taskCount, pluralTasks(taskCount))
+	}
+	// time.Local honors the TZ env (compose sets Europe/Moscow); timestamps from
+	// pg are UTC instants and must be shown in the family's local time.
+	fmt.Fprintf(&msg, "\n🗓 на %s", a.ScheduledAt.In(time.Local).Format("02.01 в 15:04"))
+	msg.WriteString("\n\nУдачи! 💪")
+
+	// "Решать тут" is a callback the bot handles (same bot identity as the
+	// worker); "На сайте" opens the web app when its URL is configured.
+	rows := [][]Button{{{Text: "▶️ Решать тут", Data: "assign:" + a.ID.String()}}}
+	if h.webURL != "" {
+		rows = append(rows, []Button{{Text: "🌐 Решать на сайте", URL: h.webURL}})
+	}
+	if err := h.notifier.SendHTML(ctx, *student.TelegramID, msg.String(), rows); err != nil {
 		return err // asynq will retry
 	}
 	_, err = h.store.MarkAssignmentNotified(ctx, a.ID)
 	return err
+}
+
+// pluralTasks declines «задание» for a count (1 задание, 2 задания, 15 заданий).
+func pluralTasks(n int64) string {
+	n = n % 100
+	if n >= 11 && n <= 14 {
+		return "заданий"
+	}
+	switch n % 10 {
+	case 1:
+		return "задание"
+	case 2, 3, 4:
+		return "задания"
+	default:
+		return "заданий"
+	}
 }
 
 // handleStreakNudge messages students who have gone quiet for idleThreshold.

@@ -16,6 +16,12 @@ x-app-env: &app-env
   TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-}
   JWT_SECRET: ${JWT_SECRET:-dev-insecure-change-me}
   FETCHER_URL: http://fetcher:8090
+  # Public URL of the web app for the bot's «решать на сайте» buttons. Set a
+  # real host in deploy/.env when exposed; empty = the button is omitted.
+  WEB_URL: ${WEB_URL:-}
+  # Display timezone for bot/worker timestamps (zone DB is embedded in the
+  # binaries via time/tzdata). Postgres stores UTC instants regardless.
+  TZ: ${TZ:-Europe/Moscow}
 
 services:
   postgres:

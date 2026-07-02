@@ -17,6 +17,7 @@ type Config struct {
 	TelegramBotUsername string
 	JWTSecret           string
 	FetcherURL          string
+	WebURL              string // public URL of the web app (for bot "открыть сайт" buttons); empty = omit
 
 	MinIOEndpoint  string
 	MinIOAccessKey string
@@ -37,6 +38,7 @@ func Load() Config {
 		TelegramBotUsername: env("TELEGRAM_BOT_USERNAME", ""),
 		JWTSecret:           env("JWT_SECRET", "dev-insecure-change-me"),
 		FetcherURL:          env("FETCHER_URL", "http://localhost:8090"),
+		WebURL:              env("WEB_URL", ""),
 		MinIOEndpoint:       env("MINIO_ENDPOINT", "localhost:9000"),
 		MinIOAccessKey:      env("MINIO_ACCESS_KEY", "minioadmin"),
 		MinIOSecretKey:      env("MINIO_SECRET_KEY", "minioadmin"),

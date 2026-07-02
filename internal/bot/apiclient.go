@@ -90,9 +90,11 @@ type SubmitResult struct {
 	Solution  []string `json:"solution"`
 }
 
-// AssignmentCard mirrors domain.AssignmentCard (teacher: "что назначено").
+// AssignmentCard mirrors domain.AssignmentCard ("что назначено" — the teacher
+// read AND the student's own /tests list).
 type AssignmentCard struct {
 	ID          string    `json:"id"`
+	TestID      string    `json:"test_id"`
 	Title       string    `json:"title"`
 	Kind        string    `json:"kind"`
 	SubjectID   string    `json:"subject_id"`
@@ -223,6 +225,33 @@ func (c *APIClient) PracticeTasks(ctx context.Context, token, subject string, li
 	var tasks []TaskView
 	err := c.do(ctx, http.MethodGet, "/api/practice/tasks?"+q.Encode(), token, nil, &tasks)
 	return tasks, err
+}
+
+// TestTasks returns a composed/assigned test's tasks in order (student-safe, no
+// answers) — what the bot serves when solving an assigned variant.
+func (c *APIClient) TestTasks(ctx context.Context, token, testID string) ([]TaskView, error) {
+	var tasks []TaskView
+	err := c.do(ctx, http.MethodGet, "/api/tests/"+testID+"/tasks", token, nil, &tasks)
+	return tasks, err
+}
+
+// StartAttempt opens an attempt on a test; assignmentID (may be "") ties it to
+// an assignment so finishing marks the assignment done.
+func (c *APIClient) StartAttempt(ctx context.Context, token, testID, assignmentID string) (string, error) {
+	body := map[string]any{"test_id": testID}
+	if assignmentID != "" {
+		body["assignment_id"] = assignmentID
+	}
+	var out struct {
+		ID string `json:"id"`
+	}
+	err := c.do(ctx, http.MethodPost, "/api/attempts", token, body, &out)
+	return out.ID, err
+}
+
+// FinishAttempt closes an attempt (an assigned test's assignment flips to done).
+func (c *APIClient) FinishAttempt(ctx context.Context, token, attemptID string) error {
+	return c.do(ctx, http.MethodPost, "/api/attempts/"+attemptID+"/finish", token, nil, nil)
 }
 
 // SubmitAnswer submits a raw answer and returns the verdict (+ solution if wrong).

@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	_ "time/tzdata" // embed the zone DB so TZ=Europe/Moscow works in scratch containers
 
 	"egeism/internal/bot"
 	"egeism/internal/config"

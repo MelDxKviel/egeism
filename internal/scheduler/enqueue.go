@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
@@ -34,8 +35,10 @@ func (e *Enqueuer) ScheduleAssignmentNotification(ctx context.Context, assignmen
 		asynq.TaskID("notify:"+assignmentID.String()),
 		asynq.MaxRetry(5),
 	)
-	// Re-scheduling an already-queued assignment is not an error.
-	if err == asynq.ErrTaskIDConflict {
+	// Re-scheduling an already-queued assignment is not an error. asynq wraps
+	// the sentinel, so match with errors.Is (a bare == let the sweep log a
+	// spurious "task ID conflicts" every minute while a task was in flight).
+	if errors.Is(err, asynq.ErrTaskIDConflict) {
 		return nil
 	}
 	return err

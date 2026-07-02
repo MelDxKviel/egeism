@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+	_ "time/tzdata" // embed the zone DB so TZ=Europe/Moscow works in scratch containers
 
 	"github.com/hibiken/asynq"
 
@@ -42,7 +43,7 @@ func main() {
 		}}
 	}
 
-	handlers := scheduler.NewHandlers(st, notifier)
+	handlers := scheduler.NewHandlers(st, notifier, cfg.WebURL)
 	enq := scheduler.NewEnqueuer(cfg.RedisAddr)
 	defer enq.Close()
 
