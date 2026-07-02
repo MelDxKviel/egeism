@@ -188,13 +188,15 @@ func (t *Telegram) deliver(ctx context.Context, r Reply) {
 func (t *Telegram) deliverMedia(ctx context.Context, chatID int64, media []MediaRef) {
 	photos, files := splitMedia(media)
 	blobs := t.fetchPhotos(ctx, photos)
+	// Captions tie the follow-up bubbles to the task above them (inline embedding
+	// needs a public media URL — see richhtml.go; until then these are separate).
 	switch {
 	case len(blobs) == 1:
-		if err := t.sendFile(ctx, chatID, "sendPhoto", "photo", "figure.jpg", blobs[0]); err != nil {
+		if err := t.sendFile(ctx, chatID, "sendPhoto", "photo", "figure.jpg", blobs[0], "<i>🖼 Рисунок к заданию</i>"); err != nil {
 			slog.Error("sendPhoto", "err", err)
 		}
 	case len(blobs) > 1:
-		if err := t.sendAlbum(ctx, chatID, blobs, ""); err != nil {
+		if err := t.sendAlbum(ctx, chatID, blobs, "<i>🖼 Рисунки к заданию</i>"); err != nil {
 			slog.Error("sendMediaGroup", "err", err)
 		}
 	}
@@ -204,7 +206,7 @@ func (t *Telegram) deliverMedia(ctx context.Context, chatID int64, media []Media
 			slog.Error("fetch media", "key", m.Key, "err", err)
 			continue
 		}
-		if err := t.sendFile(ctx, chatID, "sendDocument", "document", fileName(m), data); err != nil {
+		if err := t.sendFile(ctx, chatID, "sendDocument", "document", fileName(m), data, "<i>📎 Файлы к заданию — реши с ними</i>"); err != nil {
 			slog.Error("sendDocument", "err", err)
 		}
 	}
@@ -306,7 +308,7 @@ func (t *Telegram) deliverClassic(ctx context.Context, r Reply) {
 		}
 		switch {
 		case len(blobs) == 1:
-			if err := t.sendFile(ctx, r.ChatID, "sendPhoto", "photo", "figure.jpg", blobs[0]); err != nil {
+			if err := t.sendFile(ctx, r.ChatID, "sendPhoto", "photo", "figure.jpg", blobs[0], ""); err != nil {
 				slog.Error("sendPhoto", "err", err)
 			}
 		case len(blobs) > 1: // one album beats a burst of separate photo messages
@@ -322,7 +324,7 @@ func (t *Telegram) deliverClassic(ctx context.Context, r Reply) {
 			slog.Error("fetch media", "key", m.Key, "err", err)
 			continue
 		}
-		if err := t.sendFile(ctx, r.ChatID, "sendDocument", "document", fileName(m), data); err != nil {
+		if err := t.sendFile(ctx, r.ChatID, "sendDocument", "document", fileName(m), data, "<i>📎 Файлы к заданию — реши с ними</i>"); err != nil {
 			slog.Error("sendDocument", "err", err)
 		}
 	}
@@ -438,7 +440,7 @@ func (t *Telegram) sendAlbum(ctx context.Context, chatID int64, blobs [][]byte, 
 		return err
 	}
 	for _, b := range rest {
-		if err := t.sendFile(ctx, chatID, "sendPhoto", "photo", "figure.jpg", b); err != nil {
+		if err := t.sendFile(ctx, chatID, "sendPhoto", "photo", "figure.jpg", b, ""); err != nil {
 			slog.Error("sendPhoto overflow", "err", err)
 		}
 	}
@@ -550,11 +552,16 @@ func (t *Telegram) postForm(ctx context.Context, method string, form url.Values)
 	return t.doExpectOK(req)
 }
 
-// sendFile uploads bytes via a multipart Bot API call (sendPhoto/sendDocument).
-func (t *Telegram) sendFile(ctx context.Context, chatID int64, method, field, filename string, data []byte) error {
+// sendFile uploads bytes via a multipart Bot API call (sendPhoto/sendDocument);
+// captionHTML (may be "") labels the bubble.
+func (t *Telegram) sendFile(ctx context.Context, chatID int64, method, field, filename string, data []byte, captionHTML string) error {
 	var buf bytes.Buffer
 	mw := multipart.NewWriter(&buf)
 	_ = mw.WriteField("chat_id", strconv.FormatInt(chatID, 10))
+	if captionHTML != "" {
+		_ = mw.WriteField("caption", captionHTML)
+		_ = mw.WriteField("parse_mode", "HTML")
+	}
 	fw, err := mw.CreateFormFile(field, filename)
 	if err != nil {
 		return err
