@@ -253,9 +253,16 @@ def _table_to_markdown(table):
     # column, or a single cell holding a whole paragraph.
     if width < 2 or longest > 80:
         return None
+    # Drop fully-empty TRAILING columns (stray <td>s at the source's right edge)
+    # — they'd render as a blank stripe. Leading/middle empty columns are kept:
+    # in a distance matrix an empty column is data.
+    def _col_empty(k):
+        return all(k >= len(r) or not r[k].strip() for r in grid)
+    while width > 2 and _col_empty(width - 1):
+        width -= 1
     md = []
     for i, r in enumerate(grid):
-        r = r + [""] * (width - len(r))           # pad ragged rows to a rectangle
+        r = (r + [""] * width)[:width]            # pad/trim rows to the rectangle
         md.append("| " + " | ".join(r) + " |")
         if i == 0:  # header rule after the first row (leading/trailing pipes
             md.append("| " + " | ".join(["---"] * width) + " |")  # survive _clean)
@@ -371,6 +378,46 @@ def fetch(number, limit, delay, budget=60.0):
         if rt:
             yield rt
             yielded += 1
+        time.sleep(delay)  # be gentle with the mirror
+
+
+def fetch_by_ids(ids, delay=0.25):
+    """Re-fetch specific openfipi tasks by id → RawTask dicts, re-parsed by the
+    CURRENT parser (statement + media refreshed) — the upgrade path that heals
+    tasks ingested before a parser fix (e.g. the mangled colspan/rowspan distance
+    matrices of задание 1). The caller keeps its curated answer; answer_schema
+    here is best-effort and may be null."""
+    session = _session()
+    for tid in ids:
+        tid = str(tid).strip()
+        if not tid:
+            continue
+        try:
+            r = _utf8(session.get(f"{BASE}/task/{tid}", timeout=25))
+            r.raise_for_status()
+            parsed = _parse_task(r.text, tid)
+        except Exception as e:  # noqa: BLE001 — keep going on a bad task
+            print(f"openfipi refetch skip {tid}: {e}", file=sys.stderr)
+            continue
+        if not parsed:
+            continue
+        number, statement, media, answer = parsed
+        if not statement:
+            continue
+        schema, conf = classify_answer(answer, "inf")
+        yield {
+            "subject": "inf",
+            "number": number,
+            "statement": statement,
+            "media": media,
+            "answer_schema": schema,
+            "source": {
+                "provider": "openfipi",
+                "extern_id": tid,
+                "url": f"{BASE}/task/{tid}",
+            },
+            "_confidence": round(conf, 2),
+        }
         time.sleep(delay)  # be gentle with the mirror
 
 

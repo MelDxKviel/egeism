@@ -468,9 +468,11 @@ function SourcePanel({ subject, onDone }: { subject: SubjectCode; onDone: () => 
     } finally { setBusy(null); }
   };
 
-  // Re-reads the condition of already-imported РЕШУ tasks whose text is broken —
-  // theory dumped instead of the question, or formulas shown as detached blocks —
-  // and rewrites it in place. Answers/статус сохраняются, дубли не плодятся.
+  // Re-reads the condition of already-imported tasks whose text is broken —
+  // РЕШУ: theory dumped instead of the question / formulas as detached blocks;
+  // openfipi (информатика): statements re-parsed by the current parser (e.g.
+  // mangled distance-matrix tables) — and rewrites it in place. Answers/статус
+  // сохраняются, дубли не плодятся.
   const refreshStale = async () => {
     setBusy("refresh");
     try {
@@ -520,12 +522,12 @@ function SourcePanel({ subject, onDone }: { subject: SubjectCode; onDone: () => 
         </div>
       </div>
       <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        <span title="Перечитывает условия у РЕШУ-заданий с битым текстом (теория/справка вместо задания) или формулами-блоками. Ответы и статус сохранятся.">
+        <span title="Перечитывает условия у заданий с битым текстом: теория/справка вместо задания, формулы-блоки (РЕШУ), разъехавшиеся таблицы (ФИПИ/информатика). Ответы и статус сохранятся.">
           <Button variant="soft" onClick={refreshStale} disabled={busy !== null} style={{ padding: "8px 14px", fontSize: 13 }}>
             {busy === "refresh" ? "Обновляю…" : "Обновить условия у старых заданий"}
           </Button>
         </span>
-        <span style={{ fontSize: 12, color: "var(--text-3)" }}>чинит задания, где вместо условия попала теория</span>
+        <span style={{ fontSize: 12, color: "var(--text-3)" }}>чинит битые условия: теория вместо текста, разъехавшиеся таблицы</span>
       </div>
       <div style={{ marginTop: 12, borderTop: "1px solid var(--border)", paddingTop: 10, display: "flex", alignItems: "center", gap: 10 }}>
         <span style={{ fontSize: 13, color: "var(--text-3)" }}>или загрузить файлом</span>

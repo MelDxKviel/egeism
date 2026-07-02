@@ -13,6 +13,8 @@ instruction) is wrapped in a `div.nobreak`; the «Пояснение/Решен�
 pbody outside it; theory cards are display:none. See `_condition_pbodies`.
 """
 import fetch as F
+import openfipi as OF
+from bs4 import BeautifulSoup
 
 # A русский задание-1 page: hidden theory card + passage + instruction (all under
 # nobreak) + a bare solution pbody + a second (bare, hidden) theory + the answer.
@@ -96,3 +98,48 @@ def test_fallback_to_first_visible_pbody_when_no_nobreak():
     _, statement, _, answer = _parse(html)
     assert statement == "Настоящее условие задания."
     assert answer == "7"
+
+
+# --- openfipi table normalization -------------------------------------------
+
+# The load-bearing shape of a ФИПИ задание-1 distance matrix on openfipi: the
+# top-left corner is a colspan=2/rowspan=2 merged cell, the «Номер пункта»
+# banner spans all value columns, the vertical «Номер пункта» label spans the
+# data rows, and every row carries a stray empty <td> at the right edge. Read
+# naively this shifts every row differently — the mangled grid this pins against.
+MATRIX_HTML = """
+<table>
+  <tr><td colspan="2" rowspan="2"></td><td colspan="8">Номер пункта</td><td rowspan="2"></td></tr>
+  <tr><td>1</td><td>2</td><td>3</td><td>4</td><td>5</td><td>6</td><td>7</td><td>8</td></tr>
+  <tr><td rowspan="2">Номер пункта</td><td>1</td>
+      <td></td><td>8</td><td></td><td></td><td></td><td></td><td>1</td><td>3</td><td></td></tr>
+  <tr><td>2</td><td>8</td><td></td><td></td><td></td><td>74</td><td></td><td></td><td></td><td></td></tr>
+</table>
+"""
+
+
+def test_openfipi_matrix_spans_align_and_trailing_column_trimmed():
+    table = BeautifulSoup(MATRIX_HTML, "html.parser").find("table")
+    md = OF._table_to_markdown(table)
+    assert md is not None
+    lines = md.strip().splitlines()
+    rows = [[c.strip() for c in ln.strip().strip("|").split("|")] for ln in lines]
+    banner, header, data1, data2 = rows[0], rows[2], rows[3], rows[4]  # rows[1] = --- rule
+
+    # Merged corner expands to two leading header columns; 1..8 line up after them.
+    assert banner[2] == "Номер пункта"
+    assert header[2:10] == ["1", "2", "3", "4", "5", "6", "7", "8"]
+
+    # Row П1: label + index, values under their own column headers.
+    assert data1[0] == "Номер пункта" and data1[1] == "1"
+    assert data1[header.index("2")] == "8"
+    assert data1[header.index("7")] == "1"
+    assert data1[header.index("8")] == "3"
+
+    # Row П2 sits under the rowspan label (blank first cell) and stays symmetric.
+    assert data2[0] == "" and data2[1] == "2"
+    assert data2[header.index("1")] == "8"
+    assert data2[header.index("5")] == "74"
+
+    # The stray all-empty trailing column is trimmed: a clean 10-wide rectangle.
+    assert all(len(r) == 10 for r in rows)

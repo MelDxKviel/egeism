@@ -53,11 +53,13 @@ def _with_deadline(fn, seconds):
 def real_tasks(subject: str, limit: int, min_conf: float, number: int = 0, ids=None):
     delay = float(os.getenv("FETCH_DELAY", "0.5"))
     if ids:
-        # Targeted re-fetch (upgrade path): pull exactly these РЕШУ problem ids so
-        # a task ingested before inline-formula support gets its statement + media
-        # refreshed. openfipi (информатика) has no by-id fetch, so ids are РЕШУ-only.
+        # Targeted re-fetch (upgrade path): pull exactly these ids so a task
+        # ingested before a parser fix gets its statement + media re-parsed by
+        # the CURRENT parser. РЕШУ ids for rus/math/soc; openfipi task ids
+        # (/task/<id>) for информатика — e.g. healing the mangled
+        # colspan/rowspan distance-matrix tables of задание 1.
         if subject == "inf":
-            return []
+            return list(OF.fetch_by_ids(ids, delay))
         return list(F.fetch_by_ids(subject, ids))
     if subject == "inf":
         # информатика: pull REAL ФИПИ open-bank tasks WITH answers from openfipi

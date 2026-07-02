@@ -164,6 +164,16 @@ for rus/math/soc, check `docker compose logs fetcher`. A file upload
 the `demo` compose profile, so a plain `up` leaves the bank empty (pull real via
 the button).
 
+**Statement repair (`POST /api/admin/tasks/refetch-formulas`, the bank's
+«Обновить условия у старых заданий» button)** heals tasks ingested before a
+parser fix, in place — answers/status/test placements survive. РЕШУ tasks are
+re-fetched when they look stale (theory-card bloat, formulas as detached
+blocks); **openfipi tasks are ALL re-parsed by the current parser** (by-id
+`/task/<id>` re-fetch) and rewritten only when the statement actually changed —
+statement diff, no per-bug heuristic, so e.g. the mangled colspan/rowspan
+distance matrices (задание 1) healed automatically. Repeated clicks converge to
+«updated: 0». Both sources' by-id paths live in `server.py` (`ids` mode).
+
 ## Media (MinIO) — `internal/media`
 
 Task images and attached files live in MinIO. Ingest downloads each source media
