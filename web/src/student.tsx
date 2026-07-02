@@ -1,10 +1,10 @@
 import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import {
-  api, SubjectCode, TaskView, DayAnswer, useForecast, useHeatmap, useWeakSpots,
+  api, SubjectCode, TaskView, DayAnswer, AssignmentCard, AttemptReviewItem, useForecast, useHeatmap, useWeakSpots,
   useMastery, useMasterySeries, useAssignments, useAttempts, useInvalidate,
 } from "./api";
 import { useApp, useStudentId } from "./state";
-import { Card, Label, Pill, Button, Async, Empty, Loading, Modal, accColor, SUBJECT_TITLES, testTitle, MediaBlock, StatementView } from "./ui";
+import { Card, Label, Pill, Button, Async, Empty, Loading, Modal, accColor, SUBJECT_TITLES, testTitle, MediaBlock, StatementView, AttemptReviewGrid } from "./ui";
 import { ScoreGauge, Heatmap, computeStreak, WeakSpotsList, Section, MasteryChart, Sparkline } from "./charts";
 import { AnswerInput } from "./answer";
 import { Icon } from "./icons";
@@ -37,6 +37,68 @@ export const ASSIGNMENT_STATUS_RU: Record<string, string> = {
 
 const grid12 = { display: "grid", gap: "var(--gap)", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))" } as const;
 
+// useAttemptReview loads a solved assignment's per-task review into a modal — the
+// «как решил» drill-down. It owns the modal, so a screen just renders `modal` and
+// calls `open(card)`. Shared by the dashboard's assigned cards and the History
+// screen's assigned-tests list.
+function useAttemptReview() {
+  const [review, setReview] = useState<{ title: string; items: AttemptReviewItem[] } | null>(null);
+  const open = async (card: AssignmentCard) => {
+    if (!card.attempt_id) return;
+    const title = testTitle(card.title);
+    try { const items = await api.attemptReview(card.attempt_id); setReview({ title, items }); }
+    catch { setReview({ title, items: [] }); }
+  };
+  const modal = review && (
+    <Modal onClose={() => setReview(null)} title={`Разбор · ${review.title}`} maxWidth="min(1200px, 96vw)">
+      <AttemptReviewGrid items={review.items} selfView />
+    </Modal>
+  );
+  return { open, modal };
+}
+
+// AssignedTestsList renders the assigned-tests history: each assignment with its
+// schedule, and — once solved — the score and a «Разбор» drill-down (что/как решил).
+// Not-yet-solved rows show «Начать» (whether it was solved is read straight from
+// the presence of a score). onSolve starts the variant; onReview opens the review.
+function AssignedTestsList({ cards, onSolve, onReview }: {
+  cards: AssignmentCard[];
+  onSolve: (c: AssignmentCard) => void;
+  onReview: (c: AssignmentCard) => void;
+}) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      {cards.map((a) => {
+        // "Solved" reads off an actual finished attempt, not just the status flag
+        // (which the finish handler sets best-effort) — the honest «решал ли».
+        const solved = !!a.finished_at;
+        const pct = a.total ? Math.round((a.correct / a.total) * 100) : 0;
+        return (
+          <div key={a.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: 12, background: "var(--surface-2)", borderRadius: 12 }}>
+            <div>
+              <div style={{ fontWeight: 600 }}>{testTitle(a.title)}</div>
+              <div className="mono" style={{ color: "var(--text-3)", fontSize: 12 }}>
+                {new Date(a.scheduled_at).toLocaleString("ru")} · {a.task_count} зад.
+                {solved && a.finished_at
+                  ? ` · решён ${new Date(a.finished_at).toLocaleString("ru")}`
+                  : ` · ${ASSIGNMENT_STATUS_RU[a.status] || a.status}`}
+              </div>
+            </div>
+            {solved
+              ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span className="mono" title={`${pct}% верно`} style={{ color: accColor(pct), fontWeight: 700 }}>{a.correct}/{a.total}</span>
+                  {a.attempt_id && <Button variant="ghost" style={{ padding: "6px 12px", fontSize: 13 }} onClick={() => onReview(a)}>Разбор</Button>}
+                </div>
+              )
+              : <Button variant="soft" onClick={() => onSolve(a)}>Начать</Button>}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ---------- Dashboard ----------
 export function Dashboard() {
   const { subject, go } = useApp();
@@ -45,9 +107,14 @@ export function Dashboard() {
   const heat = useHeatmap(sid);
   const weak = useWeakSpots(sid, subject);
   const assignments = useAssignments(sid);
+  const { open: openReview, modal: reviewModal } = useAttemptReview();
 
   const startPractice = () => { requestSolve({ subject }); go("solve"); };
   const drill = (n: number) => { requestSolve({ subject, number: n }); go("solve"); };
+  const solveAssigned = (a: AssignmentCard) => {
+    requestSolve({ subject, testId: a.test_id, assignmentId: a.id, title: testTitle(a.title) });
+    go("solve");
+  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
@@ -81,31 +148,13 @@ export function Dashboard() {
           <Async q={weak}>{(w) => <WeakSpotsList spots={w} onDrill={drill} />}</Async>
         </Section>
 
-        <Section title="Назначено тебе">
+        <Section title="Назначено тебе" right={<Button variant="ghost" style={{ padding: "6px 12px", fontSize: 13 }} onClick={() => go("history")}>Вся история</Button>}>
           <Async q={assignments}>{(list) => list.length === 0
             ? <Empty title="Пока ничего не назначено" hint="Учитель запланирует тест — он появится здесь." action={<Button onClick={startPractice}>Решать самому</Button>} />
-            : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {list.map((a) => (
-                  <div key={a.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: 12, background: "var(--surface-2)", borderRadius: 12 }}>
-                    <div>
-                      <div style={{ fontWeight: 600 }}>{testTitle(a.title)}</div>
-                      <div className="mono" style={{ color: "var(--text-3)", fontSize: 12 }}>
-                        {new Date(a.scheduled_at).toLocaleString("ru")} · {a.task_count} зад. · {ASSIGNMENT_STATUS_RU[a.status] || a.status}
-                      </div>
-                    </div>
-                    {a.status === "done"
-                      ? <Pill tone="accent">решён ✓</Pill>
-                      : <Button variant="soft" onClick={() => {
-                          requestSolve({ subject, testId: a.test_id, assignmentId: a.id, title: testTitle(a.title) });
-                          go("solve");
-                        }}>Начать</Button>}
-                  </div>
-                ))}
-              </div>
-            )}</Async>
+            : <AssignedTestsList cards={list} onSolve={solveAssigned} onReview={openReview} />}</Async>
         </Section>
       </div>
+      {reviewModal}
     </div>
   );
 }
@@ -354,18 +403,30 @@ function Results({ tasks, done, onExit }: { tasks: TaskView[]; done: Answered[];
 
 // ---------- History ----------
 export function History() {
+  const { subject, go } = useApp();
   const sid = useStudentId();
   const heat = useHeatmap(sid);
   const attempts = useAttempts(sid);
+  const assignments = useAssignments(sid);
+  const { open: openReview, modal: reviewModal } = useAttemptReview();
   const [day, setDay] = useState<{ date: string; items: DayAnswer[] } | null>(null);
 
   const openDay = async (dateISO: string) => {
     const date = dateISO.slice(0, 10);
     try { const items = await api.day(sid, date); setDay({ date, items }); } catch { setDay({ date, items: [] }); }
   };
+  const solveAssigned = (a: AssignmentCard) => {
+    requestSolve({ subject, testId: a.test_id, assignmentId: a.id, title: testTitle(a.title) });
+    go("solve");
+  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
+      <Section title="Назначенные тесты">
+        <Async q={assignments}>{(list) => list.length === 0
+          ? <div style={{ color: "var(--text-2)" }}>Учитель ещё ничего не назначал.</div>
+          : <AssignedTestsList cards={list} onSolve={solveAssigned} onReview={openReview} />}</Async>
+      </Section>
       <Section title="Активность за год">
         <Async q={heat}>{(h) => <Heatmap cells={h} big onDay={(c) => c.total > 0 && openDay(c.day)} />}</Async>
       </Section>
@@ -402,6 +463,7 @@ export function History() {
           )}
         </Modal>
       )}
+      {reviewModal}
     </div>
   );
 }

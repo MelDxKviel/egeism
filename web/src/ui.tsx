@@ -1,6 +1,6 @@
 import { CSSProperties, ReactNode, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { Media, mediaUrl } from "./api";
+import { AttemptReviewItem, Media, mediaUrl } from "./api";
 import { useApp } from "./state";
 import { Icon } from "./icons";
 
@@ -285,3 +285,31 @@ export const SUBJECT_TITLES: Record<string, string> = {
 
 // The internal practice test carries a sentinel title; show it nicely in feeds.
 export const testTitle = (t: string) => (t === "__practice__" ? "Свободное решение" : t);
+
+// AttemptReviewGrid renders a solved attempt as reviewable cards — each task's
+// condition + media, the answer given, the verdict, and the correct answer.
+// Shared by the teacher's attempt review and the student's assigned-tests
+// history (the «как решил» drill-down), so the two stay identical. Pass
+// selfView when the solver is viewing their own attempt («твой ответ» vs the
+// teacher's «ответ ученика»). Wrap it in a <Modal maxWidth="min(1200px, 96vw)">.
+export function AttemptReviewGrid({ items, selfView }: { items: AttemptReviewItem[]; selfView?: boolean }) {
+  if (items.length === 0) return <div style={{ color: "var(--text-2)" }}>В этой попытке нет ответов.</div>;
+  return (
+    <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", alignItems: "start" }}>
+      {items.map((it) => (
+        <div key={it.answer_id} style={{ padding: 14, background: "var(--surface-2)", borderRadius: 12 }}>
+          <div style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
+            <Pill tone="neutral">№{it.number}</Pill>
+            <Pill tone={it.is_correct ? "accent" : "bad"}>{it.is_correct ? "верно" : "неверно"}</Pill>
+          </div>
+          <StatementView text={it.statement} media={it.media} style={{ fontSize: 14, lineHeight: 1.45, marginBottom: 8 }} />
+          <MediaBlock media={it.media} />
+          <div className="mono" style={{ fontSize: 13, display: "flex", flexDirection: "column", gap: 4 }}>
+            <div><span style={{ color: "var(--text-3)" }}>{selfView ? "твой ответ" : "ответ ученика"}: </span><b style={{ color: it.is_correct ? "var(--accent-2)" : "var(--bad)" }}>{it.raw_answer || "—"}</b></div>
+            <div><span style={{ color: "var(--text-3)" }}>верный ответ: </span><b style={{ color: "var(--accent-2)" }}>{it.correct.join(" / ")}</b></div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}

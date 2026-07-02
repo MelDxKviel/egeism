@@ -101,26 +101,53 @@ func (q *Queries) ListAssignmentsForStudent(ctx context.Context, studentID uuid.
 const listAssignmentsWithTestForStudent = `-- name: ListAssignmentsWithTestForStudent :many
 SELECT a.id, a.test_id, a.scheduled_at, a.notified_at, a.status,
        t.title, t.kind, t.subject_id,
-       (SELECT count(*) FROM test_items ti WHERE ti.test_id = t.id) AS task_count
+       (SELECT count(*) FROM test_items ti WHERE ti.test_id = t.id) AS task_count,
+       COALESCE(res.attempt_id, '00000000-0000-0000-0000-000000000000'::uuid) AS attempt_id,
+       res.attempt_finished_at,
+       COALESCE(res.total, 0)   AS total,
+       COALESCE(res.correct, 0) AS correct
 FROM assignments a
 JOIN tests t ON t.id = a.test_id
+LEFT JOIN (
+    SELECT DISTINCT ON (att.assignment_id)
+           att.assignment_id,
+           att.id          AS attempt_id,
+           att.finished_at AS attempt_finished_at,
+           (SELECT count(*) FROM answers ans WHERE ans.attempt_id = att.id)                    AS total,
+           (SELECT count(*) FROM answers ans WHERE ans.attempt_id = att.id AND ans.is_correct) AS correct
+    FROM attempts att
+    WHERE att.assignment_id IS NOT NULL AND att.finished_at IS NOT NULL
+    ORDER BY att.assignment_id, att.finished_at DESC
+) res ON res.assignment_id = a.id
 WHERE a.student_id = $1
 ORDER BY a.scheduled_at DESC
 `
 
 type ListAssignmentsWithTestForStudentRow struct {
-	ID          uuid.UUID  `json:"id"`
-	TestID      uuid.UUID  `json:"test_id"`
-	ScheduledAt time.Time  `json:"scheduled_at"`
-	NotifiedAt  *time.Time `json:"notified_at"`
-	Status      string     `json:"status"`
-	Title       string     `json:"title"`
-	Kind        string     `json:"kind"`
-	SubjectID   uuid.UUID  `json:"subject_id"`
-	TaskCount   int64      `json:"task_count"`
+	ID                uuid.UUID  `json:"id"`
+	TestID            uuid.UUID  `json:"test_id"`
+	ScheduledAt       time.Time  `json:"scheduled_at"`
+	NotifiedAt        *time.Time `json:"notified_at"`
+	Status            string     `json:"status"`
+	Title             string     `json:"title"`
+	Kind              string     `json:"kind"`
+	SubjectID         uuid.UUID  `json:"subject_id"`
+	TaskCount         int64      `json:"task_count"`
+	AttemptID         uuid.UUID  `json:"attempt_id"`
+	AttemptFinishedAt *time.Time `json:"attempt_finished_at"`
+	Total             int64      `json:"total"`
+	Correct           int64      `json:"correct"`
 }
 
-// Dashboard "Назначено тебе": assignment joined with its test + task count.
+// Dashboard "Назначено тебе" + the assigned-tests history: assignment joined with
+// its test, task count, and the result of the latest finished attempt for that
+// assignment (attempt id + correct/total), so the student can see whether, what,
+// and how each assigned test was solved. Result columns are NULL when the
+// assignment has no finished attempt yet (not solved).
+// sqlc doesn't infer NULL-ability for the LEFT-JOINed derived table's columns
+// (it only pointer-izes attempt_finished_at, which is nullable in the schema),
+// so COALESCE the id/counts to keep the scan safe for not-yet-solved rows;
+// attempt_finished_at stays the reliable "was it solved" signal (NULL = not).
 func (q *Queries) ListAssignmentsWithTestForStudent(ctx context.Context, studentID uuid.UUID) ([]ListAssignmentsWithTestForStudentRow, error) {
 	rows, err := q.db.Query(ctx, listAssignmentsWithTestForStudent, studentID)
 	if err != nil {
@@ -140,6 +167,10 @@ func (q *Queries) ListAssignmentsWithTestForStudent(ctx context.Context, student
 			&i.Kind,
 			&i.SubjectID,
 			&i.TaskCount,
+			&i.AttemptID,
+			&i.AttemptFinishedAt,
+			&i.Total,
+			&i.Correct,
 		); err != nil {
 			return nil, err
 		}
