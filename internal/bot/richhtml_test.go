@@ -63,18 +63,21 @@ func TestStatementToRichHTMLTables(t *testing.T) {
 func TestStatementToRichHTMLMediaBaseGate(t *testing.T) {
 	media := []MediaRef{{Key: "abc123", Kind: "image"}}
 
-	// Public origin → MinIO keys resolve through it and inline.
-	html, leftovers := statementToRichHTML("Условие.", media, "https://ege.example.com")
-	if !strings.Contains(html, `<img src="https://ege.example.com/api/media/abc123">`) {
-		t.Fatalf("figure must inline via public origin: %s", html)
-	}
-	if len(leftovers) != 0 {
-		t.Fatalf("no leftovers expected, got %+v", leftovers)
+	// A public media base (exposed MinIO bucket, or <web>/api/media) → MinIO
+	// keys resolve through it and inline.
+	for _, base := range []string{"https://ege.example.com/api/media", "http://203.0.113.5:9000/egeism-media/"} {
+		html, leftovers := statementToRichHTML("Условие.", media, base)
+		if !strings.Contains(html, `<img src="`+strings.TrimRight(base, "/")+`/abc123">`) {
+			t.Fatalf("base %q: figure must inline, got %s", base, html)
+		}
+		if len(leftovers) != 0 {
+			t.Fatalf("base %q: no leftovers expected, got %+v", base, leftovers)
+		}
 	}
 
 	// Local origins are unreachable for Telegram (verified live:
 	// RICH_MESSAGE_PHOTO_URL_INVALID fails the whole message) → never inline.
-	for _, base := range []string{"", "http://localhost:3000", "http://127.0.0.1:8080"} {
+	for _, base := range []string{"", "http://localhost:9000/egeism-media", "http://127.0.0.1:8080/api/media"} {
 		_, leftovers := statementToRichHTML("Условие.", media, base)
 		if len(leftovers) != 1 {
 			t.Fatalf("base %q: figure must stay a leftover, got %+v", base, leftovers)

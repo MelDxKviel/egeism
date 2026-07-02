@@ -91,18 +91,21 @@ type CommandMenu interface {
 
 // Bot holds the API client and per-user session state.
 type Bot struct {
-	api       *APIClient
-	mediaBase string      // public web origin for inlining figures in rich messages ("" = don't inline)
-	menu      CommandMenu // set by the transport; pushes per-role command menus
-	mu        sync.Mutex
-	sessions  map[int64]*session
+	api      *APIClient
+	webURL   string      // public web app URL for «решать на сайте» buttons ("" = omit)
+	mediaURL string      // public base for media keys (inline rich figures; "" = don't inline)
+	menu     CommandMenu // set by the transport; pushes per-role command menus
+	mu       sync.Mutex
+	sessions map[int64]*session
 }
 
-// New builds a Bot over an API client. mediaBase is the PUBLIC web origin
-// (WEB_URL) used to inline task figures into rich messages; leave empty (or
-// local) to send figures as separate photos instead.
-func New(api *APIClient, mediaBase string) *Bot {
-	return &Bot{api: api, mediaBase: mediaBase, sessions: make(map[int64]*session)}
+// New builds a Bot over an API client. webURL is the PUBLIC web app origin for
+// site buttons; mediaURL is the PUBLIC base under which media keys are directly
+// fetchable (e.g. an exposed MinIO bucket http://host:9000/egeism-media, or
+// webURL+"/api/media") — used to inline task figures into rich messages. Either
+// may be empty (or local) to disable that feature.
+func New(api *APIClient, webURL, mediaURL string) *Bot {
+	return &Bot{api: api, webURL: webURL, mediaURL: mediaURL, sessions: make(map[int64]*session)}
 }
 
 // ensureCommands pushes this chat's per-role command menu once, after the user's
@@ -520,14 +523,14 @@ func (b *Bot) taskReply(sess *session, chatID int64, t TaskView) Reply {
 	}
 	html += "\n\n<i>✍️ Отправь ответ сообщением.</i>"
 
-	richBody, leftovers := statementToRichHTML(t.Statement, t.Media, b.mediaBase)
+	richBody, leftovers := statementToRichHTML(t.Statement, t.Media, b.mediaURL)
 	rich := richHead + richBody + "<p><i>✍️ Отправь ответ сообщением.</i></p>"
 
 	// «Решать на сайте» rides on task messages when the web origin is public
 	// (Telegram rejects localhost URL buttons — verified: "Wrong HTTP URL").
 	var buttons [][]Button
-	if b.mediaBase != "" && !hostIsLocal(b.mediaBase) {
-		buttons = append(buttons, []Button{{Text: "🌐 Решать на сайте", URL: b.mediaBase}})
+	if b.webURL != "" && !hostIsLocal(b.webURL) {
+		buttons = append(buttons, []Button{{Text: "🌐 Решать на сайте", URL: b.webURL}})
 	}
 
 	return Reply{

@@ -210,9 +210,13 @@ extended HTML): pipe tables become **real `<table>` grids** (header rows before
 the `---` separator as `<th>`), the header is an `<h3>`, paragraphs are `<p>`,
 `⟦img:N⟧` inline formulas substitute their `alt` text. **Inline `<img>` accepts
 PUBLIC http(s) URLs only** (verified live: a localhost URL fails the whole call
-with `RICH_MESSAGE_PHOTO_URL_INVALID`; no file_id/attach://) — figures inline
-only when `WEB_URL` points at a real host (or the media key is an absolute
-public URL); otherwise they follow as photos/albums. Delivery degrades:
+with `RICH_MESSAGE_PHOTO_URL_INVALID`; file_id/attach:///data:/Telegram's own
+file URLs are all rejected, and no document rich block exists — attached .zip
+files can never inline). Figures inline when a public media base is configured:
+`MEDIA_PUBLIC_URL` (e.g. the anonymous-download MinIO bucket exposed directly —
+`http://<host>:9000/egeism-media` — a smaller surface than the whole web app),
+falling back to `WEB_URL/api/media`, or when the media key is an absolute public
+URL; otherwise figures follow as captioned photos/albums. Delivery degrades:
 `sendRichMessage` → caption bubble (statement as an HTML caption above the
 photo/album, ≤1024 chars) → classic text + album (`format.go`'s `<pre>` tables).
 The bot no longer filters on `bot_solvable`. Presentation lives in the bot

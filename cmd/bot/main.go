@@ -30,7 +30,14 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	b := bot.New(bot.NewAPIClient(apiBase), cfg.WebURL)
+	// Media embed base for rich messages: an explicitly exposed public media
+	// host (e.g. the MinIO bucket) wins; otherwise media route through the
+	// public web origin when one is configured.
+	mediaURL := cfg.MediaPublicURL
+	if mediaURL == "" && cfg.WebURL != "" {
+		mediaURL = cfg.WebURL + "/api/media"
+	}
+	b := bot.New(bot.NewAPIClient(apiBase), cfg.WebURL, mediaURL)
 	tg := bot.NewTelegram(cfg.TelegramToken, b)
 
 	if err := tg.Run(ctx); err != nil && ctx.Err() == nil {

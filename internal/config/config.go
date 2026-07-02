@@ -18,6 +18,11 @@ type Config struct {
 	JWTSecret           string
 	FetcherURL          string
 	WebURL              string // public URL of the web app (for bot "открыть сайт" buttons); empty = omit
+	// MediaPublicURL is a PUBLIC base under which task media keys are directly
+	// fetchable (e.g. an exposed MinIO bucket: http://host:9000/egeism-media, or
+	// <WebURL>/api/media). Used to inline figures into bot rich messages; empty
+	// falls back to WebURL+"/api/media" when WebURL is set.
+	MediaPublicURL string
 
 	MinIOEndpoint  string
 	MinIOAccessKey string
@@ -39,6 +44,7 @@ func Load() Config {
 		JWTSecret:           env("JWT_SECRET", "dev-insecure-change-me"),
 		FetcherURL:          env("FETCHER_URL", "http://localhost:8090"),
 		WebURL:              env("WEB_URL", ""),
+		MediaPublicURL:      env("MEDIA_PUBLIC_URL", ""),
 		MinIOEndpoint:       env("MINIO_ENDPOINT", "localhost:9000"),
 		MinIOAccessKey:      env("MINIO_ACCESS_KEY", "minioadmin"),
 		MinIOSecretKey:      env("MINIO_SECRET_KEY", "minioadmin"),

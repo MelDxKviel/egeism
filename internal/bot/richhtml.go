@@ -14,14 +14,17 @@ import (
 //
 // Media constraint (verified live): rich <img src> accepts PUBLIC http(s) URLs
 // only — a localhost/LAN URL fails the WHOLE message with
-// RICH_MESSAGE_PHOTO_URL_INVALID, and file_id/attach:// uploads are not
-// supported. So figures are inlined only when their URL is publicly reachable
-// (an absolute source URL, or mediaBase = WEB_URL pointing at a real host);
+// RICH_MESSAGE_PHOTO_URL_INVALID; file_id, attach:// uploads, data: URIs and
+// even Telegram's own file-storage URLs are all rejected. So figures are
+// inlined only when their URL is publicly reachable (an absolute source URL, or
+// mediaBase = MEDIA_PUBLIC_URL / WEB_URL+"/api/media" pointing at a real host);
 // everything else is returned as leftovers to send as photos/documents after.
 
 // publicMediaURL resolves a media key to a URL Telegram's servers can fetch, or
 // "" when there is none. Keys that are already absolute http(s) URLs (ingest
-// fallback) are used as-is; MinIO keys resolve through the public web origin.
+// fallback) are used as-is; MinIO keys are appended to mediaBase — a PUBLIC base
+// that serves keys directly, e.g. an exposed MinIO bucket
+// (http://host:9000/egeism-media) or the web origin's <WEB_URL>/api/media.
 func publicMediaURL(key, mediaBase string) string {
 	if strings.HasPrefix(key, "http://") || strings.HasPrefix(key, "https://") {
 		if hostIsLocal(key) {
@@ -32,7 +35,7 @@ func publicMediaURL(key, mediaBase string) string {
 	if mediaBase == "" || hostIsLocal(mediaBase) {
 		return ""
 	}
-	return strings.TrimRight(mediaBase, "/") + "/api/media/" + key
+	return strings.TrimRight(mediaBase, "/") + "/" + key
 }
 
 // hostIsLocal reports whether a URL points at a host Telegram cannot reach

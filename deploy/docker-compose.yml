@@ -19,6 +19,11 @@ x-app-env: &app-env
   # Public URL of the web app for the bot's «решать на сайте» buttons. Set a
   # real host in deploy/.env when exposed; empty = the button is omitted.
   WEB_URL: ${WEB_URL:-}
+  # PUBLIC base under which media keys are directly fetchable — enables inline
+  # figures in bot rich messages. The MinIO bucket is already anonymous-download,
+  # so exposing just port 9000 works: MEDIA_PUBLIC_URL=http://<host>:9000/egeism-media
+  # Empty = falls back to WEB_URL/api/media (when WEB_URL is public).
+  MEDIA_PUBLIC_URL: ${MEDIA_PUBLIC_URL:-}
   # Display timezone for bot/worker timestamps (zone DB is embedded in the
   # binaries via time/tzdata). Postgres stores UTC instants regardless.
   TZ: ${TZ:-Europe/Moscow}
