@@ -12,12 +12,15 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf16"
 )
 
-// Telegram is a minimal Bot API transport (long-poll getUpdates + send*). It is
-// intentionally small and dependency-free; swap for telego/telebot if the bot
-// grows inline keyboards, etc. Conversation logic lives in Bot; this layer also
-// owns the rich-message send (HTML text + fetched, white-flattened photos/files).
+// Telegram is a minimal Bot API transport (long-poll getUpdates + send*),
+// intentionally small and dependency-free. Conversation logic lives in Bot; this
+// layer owns the RICH-message send: a task with figures goes out as ONE bubble
+// (photo/album with the statement as an HTML caption shown above the media —
+// like the web card), tables stay aligned <pre> text, inline keyboards ride as
+// reply_markup, and attached files follow as documents.
 type Telegram struct {
 	token  string
 	http   *http.Client
@@ -129,30 +132,255 @@ func (t *Telegram) answerCallback(ctx context.Context, id string) {
 	}
 }
 
-// deliver renders one Reply: the HTML text (with its inline keyboard), then each
-// media as a photo (figures, flattened onto white) or a document (attached files).
+// deliver renders one Reply, best rendering first:
+//  1. Rich Message (sendRichMessage, Bot API 10.1): real tables/headings, and —
+//     with a public web origin — figures inlined in the text; leftovers follow.
+//  2. Caption bubble: statement as an HTML caption above the photo/album.
+//  3. Classic: parse_mode=HTML text, then an album of figures.
+//
+// Attached files always follow as documents.
 func (t *Telegram) deliver(ctx context.Context, r Reply) {
-	if strings.TrimSpace(r.HTML) != "" {
-		if err := t.sendMessageHTML(ctx, r.ChatID, r.HTML, r.Buttons); err != nil {
-			slog.Error("sendMessage", "err", err)
+	if rich := strings.TrimSpace(r.RichHTML); rich != "" {
+		if err := t.sendRich(ctx, r.ChatID, rich, r.Buttons); err != nil {
+			slog.Warn("sendRichMessage failed; falling back to classic", "err", err)
+		} else {
+			t.deliverMedia(ctx, r.ChatID, r.RichMedia)
+			return
 		}
 	}
-	for _, m := range r.Media {
+	t.deliverClassic(ctx, r)
+}
+
+// deliverMedia sends leftover media: figures as a photo/album, files as documents.
+func (t *Telegram) deliverMedia(ctx context.Context, chatID int64, media []MediaRef) {
+	photos, files := splitMedia(media)
+	blobs := t.fetchPhotos(ctx, photos)
+	switch {
+	case len(blobs) == 1:
+		if err := t.sendFile(ctx, chatID, "sendPhoto", "photo", "figure.jpg", blobs[0]); err != nil {
+			slog.Error("sendPhoto", "err", err)
+		}
+	case len(blobs) > 1:
+		if err := t.sendAlbum(ctx, chatID, blobs, ""); err != nil {
+			slog.Error("sendMediaGroup", "err", err)
+		}
+	}
+	for _, m := range files {
 		data, err := t.bot.api.FetchMedia(ctx, m.Key)
 		if err != nil {
 			slog.Error("fetch media", "key", m.Key, "err", err)
 			continue
 		}
-		if m.Kind == "file" {
-			if err := t.sendFile(ctx, r.ChatID, "sendDocument", "document", fileName(m), data); err != nil {
-				slog.Error("sendDocument", "err", err)
-			}
-			continue
-		}
-		if err := t.sendFile(ctx, r.ChatID, "sendPhoto", "photo", "figure.jpg", flattenToWhite(data)); err != nil {
-			slog.Error("sendPhoto", "err", err)
+		if err := t.sendFile(ctx, chatID, "sendDocument", "document", fileName(m), data); err != nil {
+			slog.Error("sendDocument", "err", err)
 		}
 	}
+}
+
+// sendRich posts a Rich Message: extended HTML (tables, headings, inline images
+// by public URL) parsed into blocks server-side, with an inline keyboard.
+func (t *Telegram) sendRich(ctx context.Context, chatID int64, richHTML string, buttons [][]Button) error {
+	payload := map[string]any{
+		"chat_id":      chatID,
+		"rich_message": map[string]any{"html": richHTML},
+	}
+	if markup := markupJSON(buttons); markup != "" {
+		payload["reply_markup"] = json.RawMessage(markup)
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	u := fmt.Sprintf("https://api.telegram.org/bot%s/sendRichMessage", t.token)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	return t.doExpectOK(req)
+}
+
+// deliverClassic is the pre-rich layout: caption bubble when the statement fits,
+// else text + album; files as documents.
+func (t *Telegram) deliverClassic(ctx context.Context, r Reply) {
+	photos, files := splitMedia(r.Media)
+	html := strings.TrimSpace(r.HTML)
+
+	blobs := t.fetchPhotos(ctx, photos)
+	rich := false
+	if html != "" && len(blobs) > 0 && captionFits(html) {
+		switch {
+		case len(blobs) == 1:
+			if err := t.sendPhotoCaption(ctx, r.ChatID, blobs[0], html, r.Buttons); err != nil {
+				slog.Error("sendPhoto rich", "err", err)
+			} else {
+				rich = true
+			}
+		case len(r.Buttons) == 0: // albums cannot carry reply_markup
+			if err := t.sendAlbum(ctx, r.ChatID, blobs, html); err != nil {
+				slog.Error("sendMediaGroup rich", "err", err)
+			} else {
+				rich = true
+			}
+		}
+	}
+
+	if !rich {
+		if html != "" {
+			if err := t.sendMessageHTML(ctx, r.ChatID, html, r.Buttons); err != nil {
+				slog.Error("sendMessage", "err", err)
+			}
+		}
+		switch {
+		case len(blobs) == 1:
+			if err := t.sendFile(ctx, r.ChatID, "sendPhoto", "photo", "figure.jpg", blobs[0]); err != nil {
+				slog.Error("sendPhoto", "err", err)
+			}
+		case len(blobs) > 1: // one album beats a burst of separate photo messages
+			if err := t.sendAlbum(ctx, r.ChatID, blobs, ""); err != nil {
+				slog.Error("sendMediaGroup", "err", err)
+			}
+		}
+	}
+
+	for _, m := range files {
+		data, err := t.bot.api.FetchMedia(ctx, m.Key)
+		if err != nil {
+			slog.Error("fetch media", "key", m.Key, "err", err)
+			continue
+		}
+		if err := t.sendFile(ctx, r.ChatID, "sendDocument", "document", fileName(m), data); err != nil {
+			slog.Error("sendDocument", "err", err)
+		}
+	}
+}
+
+// splitMedia separates figures (sent as photos) from attached files (documents).
+func splitMedia(media []MediaRef) (photos, files []MediaRef) {
+	for _, m := range media {
+		if m.Kind == "file" {
+			files = append(files, m)
+		} else {
+			photos = append(photos, m)
+		}
+	}
+	return photos, files
+}
+
+// captionLimit is Telegram's media-caption cap (1024 UTF-16 code units of
+// RENDERED text). The raw HTML length is the conservative gate — tags only
+// inflate it, so raw ≤ limit guarantees the visible text fits.
+const captionLimit = 1024
+
+func captionFits(html string) bool {
+	return len(utf16.Encode([]rune(html))) <= captionLimit
+}
+
+// fetchPhotos downloads figures and flattens them onto white (transparent ФИПИ
+// schemes must stay legible on dark chat themes). Failures are logged & skipped.
+func (t *Telegram) fetchPhotos(ctx context.Context, photos []MediaRef) [][]byte {
+	var out [][]byte
+	for _, m := range photos {
+		data, err := t.bot.api.FetchMedia(ctx, m.Key)
+		if err != nil {
+			slog.Error("fetch media", "key", m.Key, "err", err)
+			continue
+		}
+		out = append(out, flattenToWhite(data))
+	}
+	return out
+}
+
+// sendPhotoCaption sends ONE bubble: the figure with the statement as an HTML
+// caption rendered above it (show_caption_above_media), plus an inline keyboard.
+func (t *Telegram) sendPhotoCaption(ctx context.Context, chatID int64, photo []byte, captionHTML string, buttons [][]Button) error {
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	_ = mw.WriteField("chat_id", strconv.FormatInt(chatID, 10))
+	_ = mw.WriteField("caption", captionHTML)
+	_ = mw.WriteField("parse_mode", "HTML")
+	_ = mw.WriteField("show_caption_above_media", "true")
+	if markup := markupJSON(buttons); markup != "" {
+		_ = mw.WriteField("reply_markup", markup)
+	}
+	fw, err := mw.CreateFormFile("photo", "figure.jpg")
+	if err != nil {
+		return err
+	}
+	if _, err := fw.Write(photo); err != nil {
+		return err
+	}
+	if err := mw.Close(); err != nil {
+		return err
+	}
+	return t.postMultipart(ctx, "sendPhoto", &buf, mw.FormDataContentType())
+}
+
+// sendAlbum sends up to 10 figures as one media group; captionHTML (may be "")
+// rides on the first item, shown above the album. Figures beyond 10 follow as
+// plain photos (albums are capped by the Bot API).
+func (t *Telegram) sendAlbum(ctx context.Context, chatID int64, blobs [][]byte, captionHTML string) error {
+	group := blobs
+	var rest [][]byte
+	if len(group) > 10 {
+		group, rest = blobs[:10], blobs[10:]
+	}
+	type inputMedia struct {
+		Type         string `json:"type"`
+		Media        string `json:"media"`
+		Caption      string `json:"caption,omitempty"`
+		ParseMode    string `json:"parse_mode,omitempty"`
+		CaptionAbove bool   `json:"show_caption_above_media,omitempty"`
+	}
+	items := make([]inputMedia, len(group))
+	for i := range group {
+		items[i] = inputMedia{Type: "photo", Media: fmt.Sprintf("attach://p%d", i)}
+	}
+	if captionHTML != "" {
+		items[0].Caption = captionHTML
+		items[0].ParseMode = "HTML"
+		items[0].CaptionAbove = true
+	}
+	mediaJSON, err := json.Marshal(items)
+	if err != nil {
+		return err
+	}
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	_ = mw.WriteField("chat_id", strconv.FormatInt(chatID, 10))
+	_ = mw.WriteField("media", string(mediaJSON))
+	for i, b := range group {
+		fw, err := mw.CreateFormFile(fmt.Sprintf("p%d", i), fmt.Sprintf("figure%d.jpg", i))
+		if err != nil {
+			return err
+		}
+		if _, err := fw.Write(b); err != nil {
+			return err
+		}
+	}
+	if err := mw.Close(); err != nil {
+		return err
+	}
+	if err := t.postMultipart(ctx, "sendMediaGroup", &buf, mw.FormDataContentType()); err != nil {
+		return err
+	}
+	for _, b := range rest {
+		if err := t.sendFile(ctx, chatID, "sendPhoto", "photo", "figure.jpg", b); err != nil {
+			slog.Error("sendPhoto overflow", "err", err)
+		}
+	}
+	return nil
+}
+
+// postMultipart posts a prepared multipart body to a Bot API method.
+func (t *Telegram) postMultipart(ctx context.Context, method string, body *bytes.Buffer, contentType string) error {
+	u := fmt.Sprintf("https://api.telegram.org/bot%s/%s", t.token, method)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, body)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", contentType)
+	return t.doExpectOK(req)
 }
 
 func fileName(m MediaRef) string {

@@ -30,7 +30,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	b := bot.New(bot.NewAPIClient(apiBase))
+	b := bot.New(bot.NewAPIClient(apiBase), cfg.WebURL)
 	tg := bot.NewTelegram(cfg.TelegramToken, b)
 
 	if err := tg.Run(ctx); err != nil && ctx.Err() == nil {

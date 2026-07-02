@@ -198,15 +198,24 @@ are read and uploaded. The API serves them at public `GET /api/media/<key>`
 (keys are unguessable hashes). If a download fails, the source URL is kept as the
 key and `mediaUrl()` uses it directly (graceful fallback; a bad `data:` URI is
 dropped rather than kept as a giant key). The web renders images
-inline and files as download links (`MediaBlock`). The **bot now renders media
-tasks too, as Rich Messages** (it no longer filters on `bot_solvable`): the
-statement goes out as Telegram HTML (pipe tables → aligned monospace `<pre>`,
-`⟦img:N⟧` inline formulas → their `alt` text — mirrors `web/src/ui.tsx`), then
-block figures are sent as photos and attached files as documents. Presentation
-lives in the bot (`internal/bot/format.go`, `richmedia.go`), not the API — it is
-UI, not the frozen business logic. Transparent PNG figures are **flattened onto
-white** (`flattenToWhite`) before sending so they stay legible on Telegram's dark
-theme, exactly like the web's always-white figure container.
+inline and files as download links (`MediaBlock`).
+
+**Bot task rendering — REAL Rich Messages (Bot API 10.1, June 2026).** Tasks go
+out rich-first via `sendRichMessage` (`internal/bot/richhtml.go` builds the
+extended HTML): pipe tables become **real `<table>` grids** (header rows before
+the `---` separator as `<th>`), the header is an `<h3>`, paragraphs are `<p>`,
+`⟦img:N⟧` inline formulas substitute their `alt` text. **Inline `<img>` accepts
+PUBLIC http(s) URLs only** (verified live: a localhost URL fails the whole call
+with `RICH_MESSAGE_PHOTO_URL_INVALID`; no file_id/attach://) — figures inline
+only when `WEB_URL` points at a real host (or the media key is an absolute
+public URL); otherwise they follow as photos/albums. Delivery degrades:
+`sendRichMessage` → caption bubble (statement as an HTML caption above the
+photo/album, ≤1024 chars) → classic text + album (`format.go`'s `<pre>` tables).
+The bot no longer filters on `bot_solvable`. Presentation lives in the bot
+(`richhtml.go`, `format.go`, `richmedia.go`), not the API — it is UI, not the
+frozen business logic. Transparent PNG figures are **flattened onto white**
+(`flattenToWhite`) before sending so they stay legible on Telegram's dark theme,
+exactly like the web's always-white figure container.
 
 ## Run it
 

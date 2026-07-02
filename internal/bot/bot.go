@@ -35,14 +35,18 @@ type Button struct {
 	Data string
 }
 
-// Reply is an outbound message: an HTML text (parse_mode=HTML) with an optional
-// inline keyboard (one []Button per row), followed by any media (figures/files)
-// the transport fetches and sends. Any part may be empty.
+// Reply is an outbound message. RichHTML (when set) is the preferred rendering:
+// a Bot API 10.1 Rich Message with real tables/headings/inline images, with
+// RichMedia the attachments left over after inlining. HTML + Media are the
+// classic fallback (parse_mode=HTML text, then photos/files) used when the rich
+// send is rejected. Buttons ride on whichever message goes out.
 type Reply struct {
-	ChatID  int64
-	HTML    string
-	Buttons [][]Button
-	Media   []MediaRef
+	ChatID    int64
+	RichHTML  string
+	RichMedia []MediaRef
+	HTML      string
+	Buttons   [][]Button
+	Media     []MediaRef
 }
 
 // Solve modes: free practice pulls from the practice pool; an assigned test
@@ -79,14 +83,17 @@ type session struct {
 
 // Bot holds the API client and per-user session state.
 type Bot struct {
-	api      *APIClient
-	mu       sync.Mutex
-	sessions map[int64]*session
+	api       *APIClient
+	mediaBase string // public web origin for inlining figures in rich messages ("" = don't inline)
+	mu        sync.Mutex
+	sessions  map[int64]*session
 }
 
-// New builds a Bot over an API client.
-func New(api *APIClient) *Bot {
-	return &Bot{api: api, sessions: make(map[int64]*session)}
+// New builds a Bot over an API client. mediaBase is the PUBLIC web origin
+// (WEB_URL) used to inline task figures into rich messages; leave empty (or
+// local) to send figures as separate photos instead.
+func New(api *APIClient, mediaBase string) *Bot {
+	return &Bot{api: api, mediaBase: mediaBase, sessions: make(map[int64]*session)}
 }
 
 var subjectAliases = map[string]string{
@@ -465,24 +472,41 @@ func (b *Bot) submit(ctx context.Context, sess *session, chatID int64, raw strin
 	return b.html(chatID, sb.String(), [][]Button{{{Text: "➡️ Дальше", Data: "next"}}})
 }
 
-// taskReply builds the rich message for a task: a progress header, the statement
-// as Telegram HTML (aligned tables, inline formulas as text) plus the
-// figures/files to send after.
+// taskReply builds the message for a task, in two renderings:
+//   - Rich (preferred): real <table> grids, an <h3> header, paragraphs, and —
+//     when the web origin is public — figures inlined as <img>.
+//   - Classic (fallback): parse_mode=HTML text with aligned <pre> tables, then
+//     figures/files as separate messages.
 func (b *Bot) taskReply(sess *session, chatID int64, t TaskView) Reply {
-	var head string
+	var head, richHead string
 	if sess.mode == modeTest {
 		head = fmt.Sprintf("🎯 <b>%s</b> · %d/%d\n<b>Задание №%d</b>",
+			escapeHTML(sess.testTitle), sess.answered+1, sess.total, t.Number)
+		richHead = fmt.Sprintf("<h3>🎯 %s · %d/%d</h3><p><b>Задание №%d</b></p>",
 			escapeHTML(sess.testTitle), sess.answered+1, sess.total, t.Number)
 	} else {
 		head = fmt.Sprintf("%s <b>%s · №%d</b>",
 			subjectEmoji[sess.subject], subjectTitles[sess.subject], t.Number)
+		richHead = fmt.Sprintf("<h3>%s %s · №%d</h3>",
+			subjectEmoji[sess.subject], subjectTitles[sess.subject], t.Number)
 	}
+
 	html := head
 	if body := statementToHTML(t.Statement, t.Media); strings.TrimSpace(body) != "" {
 		html += "\n\n" + body
 	}
 	html += "\n\n<i>✍️ Отправь ответ сообщением.</i>"
-	return Reply{ChatID: chatID, HTML: html, Media: attachments(t.Media)}
+
+	richBody, leftovers := statementToRichHTML(t.Statement, t.Media, b.mediaBase)
+	rich := richHead + richBody + "<p><i>✍️ Отправь ответ сообщением.</i></p>"
+
+	return Reply{
+		ChatID:    chatID,
+		RichHTML:  rich,
+		RichMedia: leftovers,
+		HTML:      html,
+		Media:     attachments(t.Media),
+	}
 }
 
 // attachments selects media to send after the statement: block figures/tables,
