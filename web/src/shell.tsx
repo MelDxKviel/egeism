@@ -1,8 +1,10 @@
-import { ReactNode, useEffect, useState } from "react";
+import { ReactNode, useEffect, useRef, useState } from "react";
 import { useApp, View } from "./state";
 import { Icon, IconName } from "./icons";
-import { api, User } from "./api";
-import { Button, Modal, Spinner } from "./ui";
+import { api, User, NotificationItem, useNotifications, useSubjects, useInvalidate } from "./api";
+import { Button, Loading, Modal, Spinner, SUBJECT_TITLES, testTitle } from "./ui";
+import { requestSolve } from "./student";
+import { requestTestView } from "./teacher";
 
 function useIsMobile() {
   const [m, setM] = useState(window.innerWidth < 900);
@@ -88,6 +90,7 @@ export function Shell({ title, cta, children }: { title: string; cta?: ReactNode
             <div style={{ fontWeight: 700, fontSize: 18 }}>{title}</div>
             <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
               {cta}
+              <NotificationsBell />
               {isMobile && (
                 <>
                   <TelegramLink user={user} compact />
@@ -121,6 +124,143 @@ export function Shell({ title, cta, children }: { title: string; cta?: ReactNode
         </nav>
       )}
     </div>
+  );
+}
+
+// ---------- Notifications (the header bell) ----------
+
+// notifText builds the human line for one notification. assignment_created is
+// only ever delivered to the student, assignment_done to the teacher who
+// assigned, so kind alone decides the wording.
+function notifText(n: NotificationItem, subjectCode?: string): { title: string; sub: string } {
+  const when = (iso: string) =>
+    new Date(iso).toLocaleString("ru", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  const subj = subjectCode ? SUBJECT_TITLES[subjectCode] : undefined;
+  if (n.kind === "assignment_created") {
+    return {
+      title: `Тебе назначен тест «${testTitle(n.test_title)}»`,
+      sub: [subj, `на ${when(n.scheduled_at)}`].filter(Boolean).join(" · "),
+    };
+  }
+  return {
+    title: `${n.student_name} решил(а) тест «${testTitle(n.test_title)}»`,
+    sub: [subj, when(n.created_at)].filter(Boolean).join(" · "),
+  };
+}
+
+// NotificationsBell polls the in-app feed, shows the unread badge, and opens
+// the list in the shared themed Modal. Clicking a notification marks it read
+// and jumps to the test: the student straight into solving the assigned
+// variant, the teacher into the test view.
+function NotificationsBell() {
+  const { go, role, subject, user, showToast } = useApp();
+  const invalidate = useInvalidate();
+  const feed = useNotifications(user?.id ?? "");
+  const subjects = useSubjects();
+  const [open, setOpen] = useState(false);
+
+  const codeOf = (subjectId: string) => subjects.data?.find((s) => s.id === subjectId)?.code;
+
+  // Toast genuinely new notifications (not the initial load) and refresh the
+  // feeds they imply — a fresh assignment / a just-solved test.
+  const seen = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    const items = feed.data?.items;
+    if (!items) return;
+    if (seen.current === null) { seen.current = new Set(items.map((i) => i.id)); return; }
+    const fresh = items.filter((i) => !seen.current!.has(i.id) && !i.read_at);
+    items.forEach((i) => seen.current!.add(i.id));
+    if (fresh.length === 0) return;
+    invalidate("assignments");
+    invalidate("attempts");
+    showToast(`🔔 ${notifText(fresh[0], codeOf(fresh[0].subject_id)).title}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [feed.data]);
+
+  const markAll = () => api.markAllNotificationsRead().then(() => invalidate("notifications")).catch(() => {});
+
+  const openItem = (n: NotificationItem) => {
+    if (!n.read_at) api.markNotificationRead(n.id).then(() => invalidate("notifications")).catch(() => {});
+    if (n.kind === "assignment_created") {
+      if (n.assignment_status === "done") { showToast("Этот тест уже решён ✓"); return; }
+      requestSolve({
+        subject: codeOf(n.subject_id) ?? subject,
+        testId: n.test_id, assignmentId: n.assignment_id, title: testTitle(n.test_title),
+      });
+      setOpen(false);
+      go("solve");
+    } else {
+      requestTestView(n.test_id);
+      setOpen(false);
+      go("t-test");
+    }
+  };
+
+  const unread = feed.data?.unread ?? 0;
+  return (
+    <>
+      <button onClick={() => setOpen(true)} title="Уведомления" style={{
+        display: "flex", alignItems: "center", position: "relative",
+        background: "transparent", border: "1px solid var(--border)", borderRadius: 10, padding: 8, color: "var(--text-2)",
+      }}>
+        <Icon name="bell" size={17} />
+        {unread > 0 && (
+          <span className="mono" style={{
+            position: "absolute", top: -5, right: -5, minWidth: 16, height: 16, padding: "0 4px",
+            borderRadius: 999, background: "var(--bad)", color: "#fff", fontSize: 10, fontWeight: 700,
+            display: "flex", alignItems: "center", justifyContent: "center", boxSizing: "border-box",
+          }}>{unread > 9 ? "9+" : unread}</span>
+        )}
+      </button>
+      {open && (
+        <Modal onClose={() => setOpen(false)} maxWidth={480}
+          title={<><Icon name="bell" size={20} /> Уведомления</>}>
+          {feed.isLoading && <Loading label="Загружаем…" />}
+          {feed.data && feed.data.items.length === 0 && (
+            <div style={{ color: "var(--text-2)", fontSize: 14, padding: "4px 0 8px" }}>
+              Пока нет уведомлений. Здесь появится, когда {role === "teacher"
+                ? "ученик решит назначенный тест."
+                : "учитель назначит тебе тест."}
+            </div>
+          )}
+          {feed.data && feed.data.items.length > 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {unread > 0 && (
+                <button onClick={markAll} style={{
+                  alignSelf: "flex-end", background: "none", border: "none",
+                  color: "var(--accent-2)", fontSize: 13, padding: "0 0 2px",
+                }}>Прочитать все</button>
+              )}
+              {feed.data.items.map((n) => {
+                const { title, sub } = notifText(n, codeOf(n.subject_id));
+                const isUnread = !n.read_at;
+                return (
+                  <button key={n.id} onClick={() => openItem(n)} style={{
+                    display: "flex", gap: 10, alignItems: "flex-start", textAlign: "left", width: "100%",
+                    background: isUnread ? "var(--accent-soft)" : "var(--surface-2)",
+                    border: "none", borderRadius: 12, padding: "10px 12px", cursor: "pointer",
+                  }}>
+                    <span style={{ color: isUnread ? "var(--accent-2)" : "var(--text-3)", marginTop: 2 }}>
+                      <Icon name={n.kind === "assignment_created" ? "assign" : "check"} size={18} />
+                    </span>
+                    <span style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0, flex: 1 }}>
+                      <span style={{ fontWeight: isUnread ? 700 : 600, fontSize: 14, color: "var(--text)" }}>{title}</span>
+                      {sub && <span className="mono" style={{ fontSize: 11.5, color: "var(--text-3)" }}>{sub}</span>}
+                      <span style={{ fontSize: 12.5, color: "var(--accent-2)", display: "inline-flex", alignItems: "center", gap: 5 }}>
+                        {n.kind === "assignment_created" && n.assignment_status === "done"
+                          ? "уже решён ✓"
+                          : <>Перейти к тесту <Icon name="arrowRight" size={13} /></>}
+                      </span>
+                    </span>
+                    {isUnread && <span style={{ width: 8, height: 8, borderRadius: 999, background: "var(--accent)", marginTop: 5, flex: "none" }} />}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </Modal>
+      )}
+    </>
   );
 }
 

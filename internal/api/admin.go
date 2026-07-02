@@ -285,6 +285,11 @@ func (s *Server) handleCreateAssignment(w http.ResponseWriter, r *http.Request) 
 		writeStoreErr(w, err)
 		return
 	}
+	// The in-app bell always learns about the new assignment (the notify toggle
+	// governs Telegram only). Best-effort: the assignment itself already exists.
+	if err := s.store.CreateNotification(r.Context(), req.StudentID, domain.NotificationAssignmentCreated, assignment.ID); err != nil {
+		slog.Warn("create assignment notification failed", "assignment", assignment.ID, "err", err)
+	}
 	if req.Notify != nil && !*req.Notify {
 		// Teacher opted out: pre-stamp notified_at so neither the enqueued task
 		// nor the worker's due-assignment sweep ever messages the student.

@@ -127,6 +127,22 @@ assignment `scheduled → done` (shown as «решён ✓»). The assign form's
 в Telegram» toggle is real: `notify=false` pre-stamps `notified_at` so neither
 the queue nor the worker sweep ever messages the student.
 
+**In-app notifications (the header bell):** a `notifications` table (migration
+00004) records assignment events — `assignment_created` for the student when
+the teacher assigns (always, independent of the Telegram toggle), and
+`assignment_done` for the assigning teacher on the **first** scheduled→done
+finish only (re-finishing another attempt stays silent — `completeAssignment`
+in `internal/api/solve.go`). Rows reference only the assignment; titles/names
+join at read time, and `ON DELETE CASCADE` follows test deletion.
+`GET /api/notifications` returns `{unread, items}` (exact badge count + the
+enriched feed); `POST …/{id}/read` / `…/read-all` clear it (user-scoped:
+someone else's id → 404). The bell (`NotificationsBell`, `web/src/shell.tsx`)
+polls every 30s, badges the unread count, lists the feed in the shared Modal
+and toasts genuinely-new arrivals; a click marks read and jumps to the test —
+the student straight into solving the assigned variant (a done one shows «уже
+решён ✓»), the teacher into the test view. The query is keyed by user id so a
+logout→login on one browser never flashes another user's feed.
+
 ## Content ingest (§9) — hybrid FIPI + РЕШУ via a Python fetcher
 
 Decision history: datasets were rejected (no images/files); FIPI open bank has
@@ -261,7 +277,9 @@ stats + feeds endpoints, random-variant generator, bot conversation, scheduler
 (asynq), dataset ingest (file/URL, JSON/JSONL), score-forecast placeholder,
 docker stack incl. web, the full React frontend (all 11 screens wired), and
 real JWT auth (register/login per role, bot on tokens), and the media pipeline
-(MinIO upload/serve, images+files rendered in the web).
+(MinIO upload/serve, images+files rendered in the web), and in-app web
+notifications (the bell: assigned → student, solved → teacher, click-through
+to the test).
 TODO: run/validate the Python fetcher against live РЕШУ/FIPI (it's a template),
 Telegram deep-link handoff, PDF export, LLM-assisted answers + progressive hints
 (part-2), real ФИПИ primary→test score tables.
