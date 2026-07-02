@@ -12,10 +12,10 @@ const TITLES: Record<string, string> = {
 };
 
 export default function App() {
-  const { view, ready, user, toast } = useApp();
+  const { view, ready, user, toast, theme } = useApp();
 
   if (!ready) {
-    return <div className="app" style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+    return <div className="app" data-theme={theme} style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
       <Loading label="Загрузка…" />
     </div>;
   }

@@ -1,9 +1,8 @@
 import { ReactNode, useEffect, useState } from "react";
-import { createPortal } from "react-dom";
 import { useApp, View } from "./state";
 import { Icon, IconName } from "./icons";
 import { api, User } from "./api";
-import { Button, Spinner } from "./ui";
+import { Button, Modal, Spinner } from "./ui";
 
 function useIsMobile() {
   const [m, setM] = useState(window.innerWidth < 900);
@@ -155,6 +154,9 @@ function TelegramLink({ user, compact }: { user?: User | null; compact?: boolean
   );
 }
 
+// TelegramLinkModal renders through the shared themed Modal (ui.tsx). Its old
+// hand-rolled portal to <body> lost the .app/data-theme scope, so every design
+// token resolved to nothing — transparent panel, system font (the bug).
 function TelegramLinkModal({ linked, onClose }: { linked: boolean; onClose: () => void }) {
   const [data, setData] = useState<{ code: string; deep_link?: string } | null>(null);
   const [error, setError] = useState<string>();
@@ -163,52 +165,40 @@ function TelegramLinkModal({ linked, onClose }: { linked: boolean; onClose: () =
       .then((d) => setData(d))
       .catch((e) => setError(String((e as Error)?.message ?? e)));
   }, []);
-  return createPortal(
-    <div onClick={onClose} style={{
-      position: "fixed", inset: 0, zIndex: 2000, background: "rgba(0,0,0,.55)",
-      display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
-    }}>
-      <div onClick={(e) => e.stopPropagation()} style={{
-        background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 16,
-        padding: 24, width: "min(100%, 420px)", boxShadow: "var(--shadow)",
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-          <Icon name="bot" size={20} />
-          <div style={{ fontWeight: 700, fontSize: 17 }}>Привязать Telegram</div>
+  return (
+    <Modal onClose={onClose} maxWidth={420}
+      title={<><Icon name="bot" size={20} /> Привязать Telegram</>}>
+      {linked && (
+        <div style={{ color: "var(--text-2)", fontSize: 13, marginBottom: 12 }}>
+          Аккаунт уже привязан. Можно перепривязать новым кодом (например, другой Telegram).
         </div>
-        {linked && (
-          <div style={{ color: "var(--text-2)", fontSize: 13, marginBottom: 12 }}>
-            Аккаунт уже привязан. Можно перепривязать новым кодом (например, другой Telegram).
+      )}
+      {error && <div style={{ color: "var(--bad)", fontSize: 14, marginBottom: 12 }}>{error}</div>}
+      {!data && !error && <Spinner />}
+      {data && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ color: "var(--text-2)", fontSize: 14 }}>
+            Открой бота и подтверди привязку:
           </div>
-        )}
-        {error && <div style={{ color: "var(--bad)", fontSize: 14, marginBottom: 12 }}>{error}</div>}
-        {!data && !error && <Spinner />}
-        {data && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <div style={{ color: "var(--text-2)", fontSize: 14 }}>
-              Открой бота и подтверди привязку:
-            </div>
-            {data.deep_link && (
-              <a href={data.deep_link} target="_blank" rel="noreferrer">
-                <Button variant="primary" style={{ width: "100%" }}>Открыть бота</Button>
-              </a>
-            )}
-            <div style={{ color: "var(--text-2)", fontSize: 14 }}>
-              Или отправь боту команду:
-            </div>
-            <div className="mono" style={{
-              background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 10,
-              padding: "10px 12px", fontSize: 15, textAlign: "center", userSelect: "all",
-            }}>/link {data.code}</div>
-            <div className="mono" style={{ fontSize: 11, color: "var(--text-3)" }}>Код действует 15 минут.</div>
+          {data.deep_link && (
+            <a href={data.deep_link} target="_blank" rel="noreferrer">
+              <Button variant="primary" style={{ width: "100%" }}>Открыть бота</Button>
+            </a>
+          )}
+          <div style={{ color: "var(--text-2)", fontSize: 14 }}>
+            Или отправь боту команду:
           </div>
-        )}
-        <div style={{ marginTop: 16, display: "flex", justifyContent: "flex-end" }}>
-          <Button variant="ghost" onClick={onClose}>Закрыть</Button>
+          <div className="mono" style={{
+            background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 10,
+            padding: "10px 12px", fontSize: 15, textAlign: "center", userSelect: "all",
+          }}>/link {data.code}</div>
+          <div className="mono" style={{ fontSize: 11, color: "var(--text-3)" }}>Код действует 15 минут.</div>
         </div>
+      )}
+      <div style={{ marginTop: 16, display: "flex", justifyContent: "flex-end" }}>
+        <Button variant="ghost" onClick={onClose}>Закрыть</Button>
       </div>
-    </div>,
-    document.body,
+    </Modal>
   );
 }
 

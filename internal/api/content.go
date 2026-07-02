@@ -112,3 +112,24 @@ func (s *Server) handleGetTask(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, toTaskView(t))
 }
+
+// handleListTestTasks returns a test's tasks in order as student-safe views (no
+// answers) — what a student loads to solve an assigned variant. The full detail
+// with answers stays teacher-only (GET /api/admin/tests/{id}).
+func (s *Server) handleListTestTasks(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "testID"))
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid test id")
+		return
+	}
+	tasks, err := s.store.ListTestTasks(r.Context(), id)
+	if err != nil {
+		writeStoreErr(w, err)
+		return
+	}
+	views := make([]taskView, 0, len(tasks))
+	for _, t := range tasks {
+		views = append(views, toTaskView(t))
+	}
+	writeJSON(w, http.StatusOK, views)
+}

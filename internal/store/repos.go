@@ -529,6 +529,18 @@ func (s *Store) MarkAssignmentNotified(ctx context.Context, id uuid.UUID) (domai
 	return toDomainAssignment(a), nil
 }
 
+// SetAssignmentStatus moves an assignment through its lifecycle
+// (scheduled → done/missed).
+func (s *Store) SetAssignmentStatus(ctx context.Context, id uuid.UUID, status domain.AssignmentStatus) (domain.Assignment, error) {
+	a, err := s.q.SetAssignmentStatus(ctx, sqlc.SetAssignmentStatusParams{
+		ID: id, Status: string(status),
+	})
+	if err != nil {
+		return domain.Assignment{}, mapErr(err)
+	}
+	return toDomainAssignment(a), nil
+}
+
 // ListDueAssignments returns assignments due by t that were never notified.
 func (s *Store) ListDueAssignments(ctx context.Context, t time.Time) ([]domain.Assignment, error) {
 	rows, err := s.q.ListDueAssignments(ctx, t)

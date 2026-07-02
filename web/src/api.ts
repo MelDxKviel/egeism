@@ -1,5 +1,5 @@
-// API client + types + React Query hooks. Talks to the Go API; the acting user
-// is sent via the X-User-ID header (stage-1 placeholder auth).
+// API client + types + React Query hooks. Talks to the Go API; the session is
+// a JWT sent as `Authorization: Bearer` (see setToken / req below).
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 export type Role = "student" | "teacher";
@@ -132,6 +132,8 @@ export const api = {
     req<{ test_id: string; attempt_id: string }>("POST", "/api/practice", { subject }),
   practiceTasks: (subject: SubjectCode, limit: number) =>
     req<TaskView[]>("GET", `/api/practice/tasks?subject=${subject}&limit=${limit}`),
+  // Student-safe task list of a composed/assigned test (no answers).
+  testTasks: (testId: string) => req<TaskView[]>("GET", `/api/tests/${testId}/tasks`),
   startAttempt: (test_id: string, assignment_id?: string) =>
     req<Attempt>("POST", "/api/attempts", { test_id, assignment_id }),
   submit: (attemptId: string, task_id: string, raw_answer: string, time_spent_ms: number) =>
@@ -178,8 +180,8 @@ export const api = {
     req("POST", `/api/admin/tests/${testId}/items`, { task_id, position }),
   generateVariant: (subject: SubjectCode, kind: TestKind, opts: { number?: number; count?: number; title?: string } = {}) =>
     req<{ test: Test; task_count: number; source: string }>("POST", "/api/admin/tests/generate", { subject, kind, ...opts }),
-  createAssignment: (test_id: string, student_id: string, scheduled_at: string) =>
-    req("POST", "/api/admin/assignments", { test_id, student_id, scheduled_at }),
+  createAssignment: (test_id: string, student_id: string, scheduled_at: string, notify = true) =>
+    req("POST", "/api/admin/assignments", { test_id, student_id, scheduled_at, notify }),
 };
 
 // --- hooks ---

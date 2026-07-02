@@ -266,6 +266,9 @@ type createAssignmentReq struct {
 	TestID      uuid.UUID `json:"test_id"`
 	StudentID   uuid.UUID `json:"student_id"`
 	ScheduledAt time.Time `json:"scheduled_at"`
+	// Notify controls the Telegram notification (design §4.4 toggle). Absent =
+	// true, so older clients keep the previous always-notify behavior.
+	Notify *bool `json:"notify,omitempty"`
 }
 
 func (s *Server) handleCreateAssignment(w http.ResponseWriter, r *http.Request) {
@@ -280,6 +283,17 @@ func (s *Server) handleCreateAssignment(w http.ResponseWriter, r *http.Request) 
 	assignment, err := s.store.CreateAssignment(r.Context(), req.TestID, req.StudentID, teacher.ID, req.ScheduledAt)
 	if err != nil {
 		writeStoreErr(w, err)
+		return
+	}
+	if req.Notify != nil && !*req.Notify {
+		// Teacher opted out: pre-stamp notified_at so neither the enqueued task
+		// nor the worker's due-assignment sweep ever messages the student.
+		if a, err := s.store.MarkAssignmentNotified(r.Context(), assignment.ID); err == nil {
+			assignment = a
+		} else {
+			slog.Warn("mark assignment as opted-out failed", "assignment", assignment.ID, "err", err)
+		}
+		writeJSON(w, http.StatusCreated, assignment)
 		return
 	}
 	// Enqueue the Telegram notification for the scheduled time. If the queue is

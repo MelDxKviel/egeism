@@ -86,8 +86,8 @@ func (s *Server) fetchAndIngest(ctx context.Context, subject domain.SubjectCode,
 	return res, mode, err
 }
 
-// fetchResp is the ingest result plus which source was used ("real" РЕШУ or
-// "mock" demo), so the UI can tell the teacher where the tasks came from.
+// fetchResp is the ingest result plus the fetch mode reported by the fetcher
+// (always "real": openfipi/РЕШУ — there is no mock source).
 type fetchResp struct {
 	Fetched  int    `json:"fetched"`
 	Inserted int    `json:"inserted"`
@@ -124,13 +124,13 @@ func (s *Server) callFetcherByIDs(ctx context.Context, subject domain.SubjectCod
 }
 
 // callFetcher POSTs to the fetcher service and decodes the normalized tasks.
-// It also returns the source mode ("real"/"mock") from the X-Fetch-Mode header.
+// It also returns the fetch mode from the X-Fetch-Mode header (always "real").
 func (s *Server) callFetcher(ctx context.Context, subject domain.SubjectCode, limit, number int) ([]ingest.RawTask, string, error) {
 	body, _ := json.Marshal(map[string]any{
 		"subject": subject, "limit": limit, "number": number, "min_confidence": 0.5,
 	})
 	// Bounded so a hung fetcher doesn't spin the button forever; the fetcher
-	// itself fails fast to demo when the source is unreachable.
+	// itself returns [] under its own deadline when the source is unreachable.
 	ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, s.fetcherURL+"/fetch", bytes.NewReader(body))

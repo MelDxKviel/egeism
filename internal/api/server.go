@@ -80,6 +80,7 @@ func (s *Server) Router() http.Handler {
 			// Student solve flow (§6 WS-A).
 			r.Post("/practice", s.handleStartPractice)
 			r.Get("/practice/tasks", s.handlePracticeTasks)
+			r.Get("/tests/{testID}/tasks", s.handleListTestTasks) // student-safe: solve an assigned variant
 			r.Post("/attempts", s.handleStartAttempt)
 			r.Post("/attempts/{attemptID}/answers", s.handleSubmitAnswer)
 			r.Post("/attempts/{attemptID}/finish", s.handleFinishAttempt)

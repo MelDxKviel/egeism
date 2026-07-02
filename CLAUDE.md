@@ -97,6 +97,19 @@ login/register screen (`web/src/Login.tsx`) stores the JWT and sends it as
 proxies `/api` and `/health` to `:8080`. The random-variant generator
 (`POST /api/admin/tests/generate`) is the teacher's one-click test builder.
 
+**Dialogs:** the ONE portaled `Modal` lives in `web/src/ui.tsx` — it re-wraps its
+overlay in `.app` + `data-theme` because the design tokens are scoped there and a
+bare `createPortal` to `<body>` loses them (transparent panel, system font — the
+Telegram-link-modal bug). Every dialog must go through it.
+
+**Assignments actually get solved:** the dashboard card «Начать» starts the
+assigned variant itself — `GET /api/tests/{id}/tasks` (student-safe views, no
+answers) + `POST /api/attempts` with `assignment_id` (validated: the assignment
+must be the student's and match the test). Finishing the attempt flips the
+assignment `scheduled → done` (shown as «решён ✓»). The assign form's «Уведомить
+в Telegram» toggle is real: `notify=false` pre-stamps `notified_at` so neither
+the queue nor the worker sweep ever messages the student.
+
 ## Content ingest (§9) — hybrid FIPI + РЕШУ via a Python fetcher
 
 Decision history: datasets were rejected (no images/files); FIPI open bank has
@@ -186,6 +199,7 @@ make test           # all Go tests (checker safety net)
 ## Status / what's stubbed
 
 Done: Phase 0, checker + full test suite, student solve flow (M1 backbone),
+the assigned-test flow (assign → solve the exact variant → done + notify toggle),
 stats + feeds endpoints, random-variant generator, bot conversation, scheduler
 (asynq), dataset ingest (file/URL, JSON/JSONL), score-forecast placeholder,
 docker stack incl. web, the full React frontend (all 11 screens wired), and

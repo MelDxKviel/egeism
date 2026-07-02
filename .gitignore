@@ -19,6 +19,6 @@ __pycache__/
 *.pyc
 
 # excluded from the repo (per request): planning docs + designer front-end handoff
-/plan-claude-code.md
-/plan-claude-design.md
-/design_handoff_ege_platform/
+# /plan-claude-code.md
+# /plan-claude-design.md
+# /design_handoff_ege_platform/

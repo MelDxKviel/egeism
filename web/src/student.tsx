@@ -1,11 +1,10 @@
 import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import {
   api, SubjectCode, TaskView, DayAnswer, useForecast, useHeatmap, useWeakSpots,
-  useMastery, useMasterySeries, useAssignments, useAttempts,
+  useMastery, useMasterySeries, useAssignments, useAttempts, useInvalidate,
 } from "./api";
 import { useApp, useStudentId } from "./state";
-import { Card, Label, Pill, Button, Async, Empty, Loading, accColor, SUBJECT_TITLES, testTitle, MediaBlock, StatementView } from "./ui";
+import { Card, Label, Pill, Button, Async, Empty, Loading, Modal, accColor, SUBJECT_TITLES, testTitle, MediaBlock, StatementView } from "./ui";
 import { ScoreGauge, Heatmap, computeStreak, WeakSpotsList, Section, MasteryChart, Sparkline } from "./charts";
 import { AnswerInput } from "./answer";
 import { Icon } from "./icons";
@@ -17,9 +16,24 @@ export function StreakBadge({ children }: { children: ReactNode }) {
   </span>;
 }
 
-// Solve request handoff (set before navigating to the solve view).
-let solveRequest: { subject: SubjectCode; number?: number } | null = null;
-export function requestSolve(r: { subject: SubjectCode; number?: number }) { solveRequest = r; }
+// Solve request handoff (set before navigating to the solve view). Two modes:
+// free practice (subject [+ number] — tasks come from the practice pool) and an
+// assigned/composed test (testId — tasks are exactly the variant's items, and
+// assignmentId marks the assignment done on finish).
+export interface SolveRequest {
+  subject: SubjectCode;
+  number?: number;
+  testId?: string;
+  assignmentId?: string;
+  title?: string;
+}
+let solveRequest: SolveRequest | null = null;
+export function requestSolve(r: SolveRequest) { solveRequest = r; }
+
+// Assignment statuses come from the API in English; the UI speaks Russian.
+export const ASSIGNMENT_STATUS_RU: Record<string, string> = {
+  scheduled: "запланирован", done: "решён", missed: "пропущен",
+};
 
 const grid12 = { display: "grid", gap: "var(--gap)", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))" } as const;
 
@@ -73,14 +87,19 @@ export function Dashboard() {
             : (
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {list.map((a) => (
-                  <div key={a.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: 12, background: "var(--surface-2)", borderRadius: 12 }}>
+                  <div key={a.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: 12, background: "var(--surface-2)", borderRadius: 12 }}>
                     <div>
-                      <div style={{ fontWeight: 600 }}>{a.title}</div>
+                      <div style={{ fontWeight: 600 }}>{testTitle(a.title)}</div>
                       <div className="mono" style={{ color: "var(--text-3)", fontSize: 12 }}>
-                        {new Date(a.scheduled_at).toLocaleString("ru")} · {a.task_count} зад. · {a.status}
+                        {new Date(a.scheduled_at).toLocaleString("ru")} · {a.task_count} зад. · {ASSIGNMENT_STATUS_RU[a.status] || a.status}
                       </div>
                     </div>
-                    <Button variant="soft" onClick={startPractice}>Начать</Button>
+                    {a.status === "done"
+                      ? <Pill tone="accent">решён ✓</Pill>
+                      : <Button variant="soft" onClick={() => {
+                          requestSolve({ subject, testId: a.test_id, assignmentId: a.id, title: testTitle(a.title) });
+                          go("solve");
+                        }}>Начать</Button>}
                   </div>
                 ))}
               </div>
@@ -157,8 +176,26 @@ export function SubjectScreen() {
 
 // ---------- Solve session ----------
 interface Answered { taskId: string; number: number; correct: boolean; }
+
+// SessionTimer shows elapsed time since the session started (design §3.3: the
+// exam is timed). Per-task time is measured separately for time_spent_ms.
+function SessionTimer({ since }: { since: number }) {
+  const [, tick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => tick((n) => n + 1), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const sec = Math.max(0, Math.floor((Date.now() - since) / 1000));
+  const mm = String(Math.floor(sec / 60)).padStart(2, "0");
+  const ss = String(sec % 60).padStart(2, "0");
+  return <span className="mono" title="Время с начала решения" style={{ color: "var(--text-3)", fontSize: 13, display: "inline-flex", alignItems: "center", gap: 5 }}>
+    <Icon name="history" size={14} /> {mm}:{ss}
+  </span>;
+}
+
 export function Solve() {
   const { go, showToast } = useApp();
+  const invalidate = useInvalidate();
   const req = useRef(solveRequest).current;
   const [attemptId, setAttemptId] = useState("");
   const [tasks, setTasks] = useState<TaskView[]>([]);
@@ -169,22 +206,43 @@ export function Solve() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string>();
   const taskStart = useRef(Date.now());
+  const sessionStart = useRef(Date.now());
   const [finished, setFinished] = useState(false);
 
   useEffect(() => {
     if (!req) { setErr("Не задан предмет"); setLoading(false); return; }
     (async () => {
       try {
-        const { attempt_id } = await api.startPractice(req.subject);
-        // practiceTasks excludes tasks the student already mastered (solved
-        // correctly ≥2×), so they don't repeat. Drill pulls more, then filters.
-        let list = await api.practiceTasks(req.subject, req.number ? 60 : 20);
-        if (req.number) list = list.filter((t) => t.number === req.number);
-        if (list.length === 0) { setErr(req.number ? "Ты уже освоил все задания этого номера — молодец!" : "Пока нет новых заданий: либо всё освоено, либо банк пуст. Учитель может собрать вариант — он подтянет задания."); setLoading(false); return; }
-        setAttemptId(attempt_id); setTasks(list.slice(0, 15)); setLoading(false); taskStart.current = Date.now();
+        if (req.testId) {
+          // Assigned/composed variant: solve exactly the test's tasks; the
+          // attempt carries assignment_id so finishing marks it done.
+          const list = await api.testTasks(req.testId);
+          if (list.length === 0) { setErr("В этом тесте нет заданий."); setLoading(false); return; }
+          const att = await api.startAttempt(req.testId, req.assignmentId);
+          setAttemptId(att.id); setTasks(list);
+        } else {
+          const { attempt_id } = await api.startPractice(req.subject);
+          // practiceTasks excludes tasks the student already mastered (solved
+          // correctly ≥2×), so they don't repeat. Drill pulls more, then filters.
+          let list = await api.practiceTasks(req.subject, req.number ? 60 : 20);
+          if (req.number) list = list.filter((t) => t.number === req.number);
+          if (list.length === 0) { setErr(req.number ? "Ты уже освоил все задания этого номера — молодец!" : "Пока нет новых заданий: либо всё освоено, либо банк пуст. Учитель может собрать вариант — он подтянет задания."); setLoading(false); return; }
+          setAttemptId(attempt_id); setTasks(list.slice(0, 15));
+        }
+        setLoading(false);
+        taskStart.current = Date.now();
+        sessionStart.current = Date.now();
       } catch (e) { setErr(String((e as Error).message)); setLoading(false); }
     })();
   }, [req]);
+
+  const finishSession = () => {
+    api.finish(attemptId).catch(() => {});
+    // An assigned test just became "done" — refresh the dashboard feed.
+    if (req?.assignmentId) invalidate("assignments");
+    invalidate("attempts");
+    setFinished(true);
+  };
 
   if (loading) return <Loading label="Готовим задания…" />;
   if (err) return <Empty title="Не получилось" hint={err} action={<Button onClick={() => go("dashboard")}>На главную</Button>} />;
@@ -201,14 +259,18 @@ export function Solve() {
     } catch (e) { showToast(String((e as Error).message)); }
   };
   const next = () => {
-    if (idx >= tasks.length - 1) { api.finish(attemptId).catch(() => {}); setFinished(true); return; }
+    if (idx >= tasks.length - 1) { finishSession(); return; }
     setIdx(idx + 1); setDraft(""); setSubmitted(null); taskStart.current = Date.now();
   };
 
   return (
     <div style={{ maxWidth: 720, margin: "0 auto", display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <span className="mono" style={{ color: "var(--text-2)" }}>{idx + 1} / {tasks.length}</span>
+      {req?.title && <div style={{ fontWeight: 700, fontSize: 16 }}>{req.title}</div>}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+        <span className="mono" style={{ color: "var(--text-2)", display: "inline-flex", alignItems: "center", gap: 12 }}>
+          {idx + 1} / {tasks.length}
+          <SessionTimer since={sessionStart.current} />
+        </span>
         <div style={{ display: "flex", gap: 6 }}>
           {tasks.map((t, i) => {
             const a = done.find((x) => x.taskId === t.id);
@@ -218,7 +280,7 @@ export function Solve() {
             }} />;
           })}
         </div>
-        <Button variant="ghost" style={{ padding: "6px 12px", fontSize: 13 }} onClick={() => { api.finish(attemptId).catch(() => {}); setFinished(true); }}>Завершить</Button>
+        <Button variant="ghost" style={{ padding: "6px 12px", fontSize: 13 }} onClick={finishSession}>Завершить</Button>
       </div>
 
       <Card>
@@ -344,30 +406,6 @@ export function History() {
   );
 }
 
-// ---------- Modal ----------
-// maxWidth defaults to a compact dialog; pass a larger value (e.g. a near-full
-// "min(1200px, 96vw)") for content-heavy modals like the attempt review. The body
-// scrolls internally so the panel never exceeds the viewport.
-export function Modal({ title, children, onClose, maxWidth = 560 }:
-  { title: string; children: React.ReactNode; onClose: () => void; maxWidth?: number | string }) {
-  const { theme } = useApp();
-  // Portaled to <body> so the fixed backdrop covers the whole viewport — the page
-  // content lives inside a `.fade` wrapper whose transform animation makes it the
-  // containing block for position:fixed, which would otherwise clip the backdrop
-  // to the centered content column (same reason the MediaBlock lightbox portals).
-  // The overlay re-establishes the theme scope (`.app` + data-theme) because the
-  // design tokens (var(--surface)…) are defined there and would be undefined at
-  // <body> level, leaving the panel transparent.
-  return createPortal(
-    <div className="app" data-theme={theme} onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 16 }}>
-      <div onClick={(e) => e.stopPropagation()} className="fade" style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 18, padding: 24, maxWidth, width: "100%", maxHeight: "92vh", display: "flex", flexDirection: "column", boxShadow: "var(--shadow-lg)" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-          <div style={{ fontWeight: 700, fontSize: 16 }}>{title}</div>
-          <button onClick={onClose} title="Закрыть" style={{ display: "flex", alignItems: "center", background: "none", border: "none", color: "var(--text-3)", padding: 2 }}><Icon name="close" size={20} /></button>
-        </div>
-        <div className="scroll" style={{ overflowY: "auto", flex: 1, minHeight: 0 }}>{children}</div>
-      </div>
-    </div>,
-    document.body,
-  );
-}
+// Modal moved to ui.tsx (the shared kit) so every dialog — including ones used
+// outside student screens, e.g. the Telegram link modal in the shell — renders
+// through the one theme-scoped portal.

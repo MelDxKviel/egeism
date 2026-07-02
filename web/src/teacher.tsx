@@ -6,12 +6,17 @@ import {
   useAdminTasks, useTests, useTestDetail, useInvalidate,
 } from "./api";
 import { useApp, useStudentId } from "./state";
-import { Card, Label, Pill, Button, Async, Empty, Loading, accColor, SUBJECT_TITLES, testTitle, MediaBlock, StatementView } from "./ui";
+import { Card, Label, Pill, Button, Async, Empty, Loading, Modal, accColor, SUBJECT_TITLES, testTitle, MediaBlock, StatementView } from "./ui";
 import { ScoreGauge, computeStreak, WeakSpotsList, Section, MasteryChart } from "./charts";
-import { StreakBadge, Modal } from "./student";
+import { StreakBadge } from "./student";
 import { Icon } from "./icons";
 
 const SUBJECTS: SubjectCode[] = ["rus", "math", "inf", "soc"];
+// Which live source feeds a subject (per CLAUDE.md: openfipi serves информатика,
+// РЕШУ/sdamgia the rest). Shown in toasts so the teacher knows where tasks came from.
+const SOURCE_TITLE: Record<SubjectCode, string> = {
+  rus: "РЕШУ ЕГЭ", math: "РЕШУ ЕГЭ", soc: "РЕШУ ЕГЭ", inf: "открытый банк ФИПИ (openfipi)",
+};
 const grid = { display: "grid", gap: "var(--gap)", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))" } as const;
 
 // Builder prefill handoff (set before navigating to the builder). Lets the
@@ -185,8 +190,7 @@ export function Builder() {
     setBusy(true);
     try {
       const res = await api.generateVariant(subject, kind, kind === "drill" ? { number, count } : {});
-      const src = res.source === "mock" ? "демо-заглушки (РЕШУ недоступен)" : "РЕШУ";
-      showToast(`Вариант собран: ${res.task_count} задач · задания с «${src}» добавлены в банк`);
+      showToast(`Вариант собран: ${res.task_count} задач · задания с «${SOURCE_TITLE[subject]}» добавлены в банк`);
       invalidate("tests");
       invalidate("admin-tasks");
     } catch (e) { showToast(String((e as Error).message)); }
@@ -221,8 +225,8 @@ export function Builder() {
           </div>
         )}
         <div style={{ color: "var(--text-2)", fontSize: 14, marginBottom: 14 }}>
-          Сам подтянет нужные задания с источника (РЕШУ), сохранит их в банк и соберёт вариант.
-          То есть тесты наполняют банк, а не наоборот. Может занять несколько секунд.
+          Сам подтянет нужные задания с источника ({SOURCE_TITLE[subject]}), сохранит их в банк
+          и соберёт вариант. То есть тесты наполняют банк, а не наоборот. Может занять несколько секунд.
         </div>
         <Button onClick={generate} disabled={busy}>{busy ? "Собираю…" : "Собрать вариант"}</Button>
       </Section>
@@ -346,8 +350,8 @@ export function Assign() {
     if (!when) { showToast("Укажи время"); return; }
     setBusy(true);
     try {
-      await api.createAssignment(testId, sid, new Date(when).toISOString());
-      showToast(notify ? "Назначено · уведомление в Telegram запланировано" : "Назначено");
+      await api.createAssignment(testId, sid, new Date(when).toISOString(), notify);
+      showToast(notify ? "Назначено · уведомление в Telegram запланировано" : "Назначено · без уведомления");
     } catch (e) { showToast(String((e as Error).message)); }
     finally { setBusy(false); }
   };
@@ -454,7 +458,7 @@ function SourcePanel({ subject, onDone }: { subject: SubjectCode; onDone: () => 
     setBusy("fetch");
     try {
       const r = await api.fetchTasks(subject, count, active);
-      const src = r.source === "mock" ? "демо-заглушки (РЕШУ недоступен)" : "РЕШУ";
+      const src = SOURCE_TITLE[subject];
       if (r.inserted > 0) showToast(`Добавлено ${r.inserted} заданий с «${src}»${r.skipped ? ` (${r.skipped} уже были)` : ""}`);
       else if (r.skipped > 0) showToast(`Новых нет — все ${r.skipped} уже в банке`);
       else showToast(`Источник (${src}) не вернул заданий`);

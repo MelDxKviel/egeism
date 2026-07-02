@@ -1,6 +1,7 @@
 package api
 
 import (
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -25,6 +26,24 @@ func (s *Server) handleStartAttempt(w http.ResponseWriter, r *http.Request) {
 	if req.TestID == uuid.Nil {
 		writeErr(w, http.StatusBadRequest, "test_id is required")
 		return
+	}
+	// An attempt may claim an assignment only if that assignment is really this
+	// student's and really for this test — otherwise finishing the attempt would
+	// mark someone else's assignment done.
+	if req.AssignmentID != nil {
+		asg, err := s.store.GetAssignment(r.Context(), *req.AssignmentID)
+		if err != nil {
+			writeStoreErr(w, err)
+			return
+		}
+		if asg.StudentID != user.ID {
+			writeErr(w, http.StatusForbidden, "assignment does not belong to user")
+			return
+		}
+		if asg.TestID != req.TestID {
+			writeErr(w, http.StatusBadRequest, "assignment is for a different test")
+			return
+		}
 	}
 	att, err := s.store.StartAttempt(r.Context(), user.ID, req.TestID, req.AssignmentID)
 	if err != nil {
@@ -120,13 +139,43 @@ func (s *Server) handleFinishAttempt(w http.ResponseWriter, r *http.Request) {
 		writeStoreErr(w, err)
 		return
 	}
+	// Finishing an assigned test completes the assignment (scheduled → done), so
+	// the "Назначено тебе" feed and the teacher's overview reflect it. Best-effort:
+	// the finished attempt itself is already the source of truth.
+	if att.AssignmentID != nil {
+		if _, err := s.store.SetAssignmentStatus(r.Context(), *att.AssignmentID, domain.AssignmentDone); err != nil {
+			slog.Warn("mark assignment done failed", "assignment", *att.AssignmentID, "err", err)
+		}
+	}
 	writeJSON(w, http.StatusOK, finished)
+}
+
+// attemptReadable guards attempt reads: the owning student or any teacher (the
+// reviewer) may see an attempt's answers; other students may not.
+func (s *Server) attemptReadable(w http.ResponseWriter, r *http.Request, attemptID uuid.UUID) bool {
+	user, _ := userFrom(r.Context())
+	if user.Role == domain.RoleTeacher {
+		return true
+	}
+	att, err := s.store.GetAttempt(r.Context(), attemptID)
+	if err != nil {
+		writeStoreErr(w, err)
+		return false
+	}
+	if att.StudentID != user.ID {
+		writeErr(w, http.StatusForbidden, "attempt does not belong to user")
+		return false
+	}
+	return true
 }
 
 func (s *Server) handleListAttemptAnswers(w http.ResponseWriter, r *http.Request) {
 	attemptID, err := uuid.Parse(chi.URLParam(r, "attemptID"))
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, "invalid attempt id")
+		return
+	}
+	if !s.attemptReadable(w, r, attemptID) {
 		return
 	}
 	answers, err := s.store.ListAnswersForAttempt(r.Context(), attemptID)
@@ -161,6 +210,9 @@ func (s *Server) handleAttemptReview(w http.ResponseWriter, r *http.Request) {
 	attemptID, err := uuid.Parse(chi.URLParam(r, "attemptID"))
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, "invalid attempt id")
+		return
+	}
+	if !s.attemptReadable(w, r, attemptID) {
 		return
 	}
 	answers, err := s.store.ListAnswersForAttempt(r.Context(), attemptID)

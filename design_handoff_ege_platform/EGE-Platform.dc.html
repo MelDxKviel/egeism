@@ -1,0 +1,1242 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  button{font-family:inherit;color:inherit}
+  input,select,textarea{font-family:inherit}
+  ::selection{background:var(--accent-soft)}
+  .egeapp{
+    --bg:#F6F4F0; --bg-2:#EFEBE4; --surface:#FFFFFF; --surface-2:#FBFAF7;
+    --border:#E8E3DB; --border-2:#D8D2C7;
+    --text:#23221E; --text-2:#5F5B53; --text-3:#948F85;
+    --accent:#3E9284; --accent-2:#31735F; --accent-soft:#E4EFEC; --on-accent:#FFFFFF;
+    --bad:#C6563E; --bad-soft:#F4E3DD; --warn:#B8842F; --warn-soft:#F3E9D6;
+    --hm0:#ECE8E1; --hm1:#CFE7E0; --hm2:#9AD3C5; --hm3:#61B6A5; --hm4:#3E9284;
+    --shadow:0 1px 2px rgba(30,28,24,.04),0 12px 30px -16px rgba(30,28,24,.14);
+    --shadow-lg:0 1px 2px rgba(30,28,24,.05),0 24px 60px -24px rgba(30,28,24,.22);
+    --main-pad:32px; --main-pb:32px; --gap:20px;
+  }
+  .egeapp[data-theme="dark"]{
+    --bg:#121417; --bg-2:#0C0E11; --surface:#191C20; --surface-2:#20242A;
+    --border:#292D33; --border-2:#3A3F47;
+    --text:#EAECEE; --text-2:#A6ACB3; --text-3:#767C84;
+    --accent:#55B7A5; --accent-2:#6BC7B6; --accent-soft:#16302B; --on-accent:#06201B;
+    --bad:#E1745C; --bad-soft:#33201C; --warn:#D3A24E; --warn-soft:#2E2718;
+    --hm0:#20242A; --hm1:#274A43; --hm2:#356D61; --hm3:#449484; --hm4:#55B7A5;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 14px 34px -18px rgba(0,0,0,.7);
+    --shadow-lg:0 1px 2px rgba(0,0,0,.4),0 30px 70px -28px rgba(0,0,0,.8);
+  }
+  .egeapp[data-density="compact"]{ --main-pad:22px; --gap:14px; }
+  .egeapp[data-viewport="mobile"]{ --main-pad:16px; --main-pb:90px; }
+  .egeapp[data-frame="phone"]{ max-width:412px !important; margin:24px auto !important; height:840px !important; min-height:0 !important; border:1px solid var(--border-2); border-radius:34px; overflow:hidden; position:relative; box-shadow:var(--shadow-lg); }
+  .egeapp[data-frame="phone"] > div:first-of-type{ height:100% !important; min-height:0 !important; overflow-y:auto; overflow-x:hidden; }
+  .egeapp[data-frame="phone"] [data-bottomnav]{ position:absolute !important; }
+  .egeapp[data-viewport="mobile"] [data-grid="g12"]{ grid-template-columns:1fr !important; }
+  .egeapp[data-viewport="mobile"] [data-grid="g12"] > *{ grid-column:auto !important; }
+  @keyframes egeFade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  @keyframes egePop{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:none}}
+  @keyframes egeSpin{to{transform:rotate(360deg)}}
+  @keyframes egeShim{0%{background-position:-420px 0}100%{background-position:420px 0}}
+  @keyframes egeToast{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+  .egesk{background:linear-gradient(90deg,var(--bg-2) 25%,var(--surface-2) 37%,var(--bg-2) 63%);background-size:420px 100%;animation:egeShim 1.3s linear infinite;border-radius:8px}
+  .egescroll::-webkit-scrollbar{height:8px;width:8px}
+  .egescroll::-webkit-scrollbar-thumb{background:var(--border-2);border-radius:8px}
+</style>
+</helmet>
+
+<div class="egeapp" data-theme="{{ theme }}" data-density="{{ density }}" data-viewport="{{ viewport }}" data-frame="{{ frame }}" style="min-height:100vh;background:var(--bg);color:var(--text);font-family:Onest,system-ui,sans-serif;-webkit-font-smoothing:antialiased;font-feature-settings:'ss01','cv01'">
+  <div style="display:flex;min-height:100vh">
+
+    <sc-if value="{{ isDesktop }}" hint-placeholder-val="{{ true }}">
+      <aside style="width:246px;flex:none;position:sticky;top:0;height:100vh;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:22px 16px 18px">
+        <div style="display:flex;align-items:center;gap:11px;padding:0 6px 4px">
+          <div style="width:34px;height:34px;border-radius:10px;background:var(--accent);display:flex;align-items:center;justify-content:center;flex:none">
+            <svg width="16" height="16" viewBox="0 0 16 16"><path d="M8 2 L14 13 L2 13 Z" fill="var(--on-accent)"></path></svg>
+          </div>
+          <div style="display:flex;flex-direction:column;line-height:1.1">
+            <span style="font-weight:800;font-size:17px;letter-spacing:-.01em">Вектор</span>
+            <span style="font-size:11px;color:var(--text-3);font-family:'JetBrains Mono',monospace;letter-spacing:.02em">подготовка · ЕГЭ</span>
+          </div>
+        </div>
+
+        <nav style="display:flex;flex-direction:column;gap:3px;margin-top:20px">
+          <sc-for list="{{ navItems }}" as="it" hint-placeholder-count="4">
+            <button onClick="{{ it.onClick }}" style="{{ it.style }}" style-hover="background:var(--bg-2)">
+              <span style="{{ it.dotStyle }}"></span>
+              <span style="flex:1;text-align:left">{{ it.label }}</span>
+              <sc-if value="{{ it.badge }}" hint-placeholder-val="{{ false }}"><span style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;color:var(--accent);background:var(--accent-soft);padding:2px 7px;border-radius:999px">{{ it.badge }}</span></sc-if>
+            </button>
+          </sc-for>
+        </nav>
+
+        <div style="margin-top:auto;display:flex;flex-direction:column;gap:14px">
+          <div style="display:flex;background:var(--bg-2);border-radius:11px;padding:4px;gap:3px">
+            <button onClick="{{ setStudent }}" style="{{ roleStuStyle }}">Ученик</button>
+            <button onClick="{{ setTeacher }}" style="{{ roleTeaStyle }}">Учитель</button>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;padding:9px 6px;border-top:1px solid var(--border)">
+            <div style="width:32px;height:32px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex:none">{{ userInitial }}</div>
+            <div style="flex:1;min-width:0;line-height:1.15">
+              <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ userName }}</div>
+              <div style="font-size:11px;color:var(--text-3)">{{ userRoleLabel }}</div>
+            </div>
+            <button onClick="{{ toggleTheme }}" title="Тема" style="width:34px;height:34px;border-radius:9px;border:1px solid var(--border);background:var(--surface);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text-2)" style-hover="border-color:var(--border-2);color:var(--text)">
+              <span style="font-size:15px">{{ themeIcon }}</span>
+            </button>
+          </div>
+        </div>
+      </aside>
+    </sc-if>
+
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+      <header style="position:sticky;top:0;z-index:20;background:color-mix(in srgb, var(--bg) 82%, transparent);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:0 var(--main-pad);min-height:60px;display:flex;align-items:center;gap:14px">
+        <sc-if value="{{ isMobile }}" hint-placeholder-val="{{ false }}">
+          <div style="width:28px;height:28px;border-radius:8px;background:var(--accent);display:flex;align-items:center;justify-content:center;flex:none"><svg width="13" height="13" viewBox="0 0 16 16"><path d="M8 2 L14 13 L2 13 Z" fill="var(--on-accent)"></path></svg></div>
+        </sc-if>
+        <div style="display:flex;flex-direction:column;line-height:1.15;min-width:0">
+          <span style="font-size:11px;font-family:'JetBrains Mono',monospace;color:var(--text-3);letter-spacing:.04em;text-transform:uppercase">{{ crumb }}</span>
+          <span style="font-size:19px;font-weight:700;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ pageTitle }}</span>
+        </div>
+        <div style="flex:1"></div>
+        <sc-if value="{{ showPreviewToggle }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;background:var(--bg-2);border-radius:9px;padding:3px;gap:2px">
+            <button onClick="{{ setDesktop }}" title="Десктоп" style="{{ pvDeskStyle }}">☐</button>
+            <button onClick="{{ setMobile }}" title="Телефон" style="{{ pvMobStyle }}">▢</button>
+          </div>
+        </sc-if>
+        <sc-if value="{{ isMobile }}" hint-placeholder-val="{{ false }}">
+          <button onClick="{{ toggleTheme }}" style="width:38px;height:38px;border-radius:10px;border:1px solid var(--border);background:var(--surface);cursor:pointer;font-size:16px">{{ themeIcon }}</button>
+        </sc-if>
+        <sc-if value="{{ headerCta }}" hint-placeholder-val="{{ false }}">
+          <button onClick="{{ headerCtaAction }}" style="background:var(--accent);color:var(--on-accent);border:none;border-radius:11px;padding:11px 18px;font-weight:600;font-size:14px;cursor:pointer;white-space:nowrap;box-shadow:var(--shadow)" style-hover="background:var(--accent-2)">{{ headerCta }}</button>
+        </sc-if>
+      </header>
+
+      <main style="flex:1;padding:var(--main-pad);padding-bottom:var(--main-pb);width:100%;max-width:1200px;margin:0 auto">
+
+        <!-- ==================== УЧЕНИК · ДАШБОРД ==================== -->
+        <sc-if value="{{ vDash }}" hint-placeholder-val="{{ true }}">
+          <div style="animation:egeFade .3s ease both">
+
+            <!-- state demo switch -->
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:18px;flex-wrap:wrap">
+              <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em">состояние</span>
+              <div style="display:flex;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:3px;gap:2px">
+                <sc-for list="{{ stateTabs }}" as="s" hint-placeholder-count="4"><button onClick="{{ s.onClick }}" style="{{ s.style }}">{{ s.label }}</button></sc-for>
+              </div>
+            </div>
+
+            <!-- LOADING -->
+            <sc-if value="{{ isLoading }}" hint-placeholder-val="{{ false }}">
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:var(--gap)">
+                <div class="egesk" style="height:230px"></div>
+                <div class="egesk" style="height:230px"></div>
+                <div class="egesk" style="height:230px;grid-column:1/-1"></div>
+              </div>
+            </sc-if>
+
+            <!-- ERROR -->
+            <sc-if value="{{ isError }}" hint-placeholder-val="{{ false }}">
+              <div style="max-width:440px;margin:60px auto;text-align:center;background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:40px 32px;box-shadow:var(--shadow)">
+                <div style="width:54px;height:54px;border-radius:50%;background:var(--bad-soft);color:var(--bad);display:flex;align-items:center;justify-content:center;font-size:26px;margin:0 auto 16px">!</div>
+                <h3 style="margin:0 0 8px;font-size:19px">Не удалось загрузить данные</h3>
+                <p style="margin:0 0 22px;color:var(--text-2);font-size:14px;line-height:1.5">Проверь соединение — статистика подтянется, как только сервер ответит.</p>
+                <button onClick="{{ retry }}" style="background:var(--accent);color:var(--on-accent);border:none;border-radius:11px;padding:12px 22px;font-weight:600;cursor:pointer">Повторить</button>
+              </div>
+            </sc-if>
+
+            <!-- EMPTY -->
+            <sc-if value="{{ isEmpty }}" hint-placeholder-val="{{ false }}">
+              <div style="max-width:560px;margin:40px auto;text-align:center;background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:48px 36px;box-shadow:var(--shadow)">
+                <div style="width:64px;height:64px;border-radius:18px;background:var(--accent-soft);display:flex;align-items:center;justify-content:center;margin:0 auto 20px"><svg width="28" height="28" viewBox="0 0 16 16"><path d="M8 2 L14 13 L2 13 Z" fill="var(--accent)"></path></svg></div>
+                <h2 style="margin:0 0 10px;font-size:24px;letter-spacing:-.01em">Привет! Начнём подготовку 👋</h2>
+                <p style="margin:0 0 26px;color:var(--text-2);font-size:15px;line-height:1.6">Ты ещё не решал задачи. Реши первый мини-тест — и здесь появятся прогноз балла, тепловая карта активности и слабые места, над которыми стоит поработать.</p>
+                <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
+                  <button onClick="{{ quickSolve }}" style="background:var(--accent);color:var(--on-accent);border:none;border-radius:12px;padding:13px 24px;font-weight:600;font-size:15px;cursor:pointer;box-shadow:var(--shadow)">Решить первый тест</button>
+                  <button onClick="{{ goSubject }}" style="background:transparent;color:var(--text);border:1px solid var(--border-2);border-radius:12px;padding:13px 24px;font-weight:600;font-size:15px;cursor:pointer">Выбрать предмет</button>
+                </div>
+              </div>
+            </sc-if>
+
+            <!-- READY -->
+            <sc-if value="{{ isReady }}" hint-placeholder-val="{{ true }}">
+              <div data-grid="g12" style="display:grid;grid-template-columns:repeat(12,1fr);gap:var(--gap);align-items:start">
+
+                <!-- forecast -->
+                <section style="grid-column:span 5;min-width:0;background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:26px;box-shadow:var(--shadow);position:relative;overflow:hidden">
+                  <div style="position:absolute;inset:0;background:radial-gradient(120% 90% at 100% 0%, var(--accent-soft) 0%, transparent 55%);pointer-events:none"></div>
+                  <div style="position:relative">
+                    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+                      <span style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--text-3)">Прогноз балла · {{ subjLabel }}</span>
+                      <span style="font-size:12px;font-weight:600;color:var(--accent);background:var(--accent-soft);padding:4px 10px;border-radius:999px">▲ {{ fc.trend }} за 2 нед</span>
+                    </div>
+                    <div style="display:flex;align-items:baseline;gap:12px;margin-top:14px">
+                      <span style="font-size:88px;font-weight:800;line-height:.9;letter-spacing:-.03em">{{ fc.test_score }}</span>
+                      <span style="font-size:20px;color:var(--text-3);font-weight:600">/ 100</span>
+                    </div>
+                    <div style="height:8px;border-radius:999px;background:var(--bg-2);margin-top:18px;overflow:hidden"><div style="{{ fc.barStyle }}"></div></div>
+                    <div style="display:flex;justify-content:space-between;margin-top:9px;font-size:13px;color:var(--text-2)">
+                      <span><b style="color:var(--text)">{{ fc.primary_estimate }}</b> из {{ fc.primary_max }} первичных</span>
+                      <span>точность {{ fc.accPct }}%</span>
+                    </div>
+                    <p style="margin:16px 0 0;font-size:14px;line-height:1.55;color:var(--text-2)">{{ fc.note }}</p>
+                  </div>
+                </section>
+
+                <!-- weak spots -->
+                <section style="grid-column:span 7;min-width:0;background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:22px 24px;box-shadow:var(--shadow)">
+                  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+                    <h3 style="margin:0;font-size:16px;font-weight:700">Слабые места</h3>
+                    <span style="font-size:12px;color:var(--text-3)">худшие номера · {{ subjLabel }}</span>
+                  </div>
+                  <div style="display:flex;flex-direction:column">
+                    <sc-for list="{{ weak }}" as="w" hint-placeholder-count="4">
+                      <div style="display:flex;align-items:center;gap:14px;padding:12px 0;border-top:1px solid var(--border)">
+                        <div style="width:40px;height:40px;border-radius:11px;background:var(--bg-2);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;flex:none;font-family:'JetBrains Mono',monospace">{{ w.number }}</div>
+                        <div style="flex:1;min-width:0">
+                          <div style="font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ w.title }}</div>
+                          <div style="height:6px;border-radius:999px;background:var(--bg-2);margin-top:7px;overflow:hidden"><div style="{{ w.barStyle }}"></div></div>
+                        </div>
+                        <span style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;color:var(--bad);width:42px;text-align:right">{{ w.accPct }}%</span>
+                        <button onClick="{{ w.onDrill }}" style="background:var(--accent-soft);color:var(--accent-2);border:none;border-radius:9px;padding:9px 14px;font-weight:600;font-size:13px;cursor:pointer;white-space:nowrap;flex:none" style-hover="background:var(--accent);color:var(--on-accent)">Прокачать</button>
+                      </div>
+                    </sc-for>
+                  </div>
+                </section>
+
+                <!-- heatmap -->
+                <section style="grid-column:span 8;min-width:0;background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:22px 24px;box-shadow:var(--shadow)">
+                  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+                    <h3 style="margin:0;font-size:16px;font-weight:700">Активность</h3>
+                    <div style="display:flex;align-items:center;gap:8px;background:var(--accent-soft);padding:6px 12px;border-radius:999px">
+                      <span style="font-size:15px">🔥</span>
+                      <span style="font-weight:700;font-size:14px;color:var(--accent-2)">{{ streak }} дней подряд</span>
+                    </div>
+                  </div>
+                  <div class="egescroll" style="overflow-x:auto;padding-bottom:6px">
+                    <div style="display:grid;grid-auto-flow:column;grid-template-rows:repeat(7,12px);gap:3px;width:max-content">
+                      <sc-for list="{{ heatCells }}" as="c" hint-placeholder-count="140">
+                        <button onClick="{{ c.onClick }}" title="{{ c.title }}" style="{{ c.style }}"></button>
+                      </sc-for>
+                    </div>
+                  </div>
+                  <div style="display:flex;align-items:center;justify-content:flex-end;gap:6px;margin-top:12px;font-size:11px;color:var(--text-3);font-family:'JetBrains Mono',monospace">
+                    меньше
+                    <span style="width:11px;height:11px;border-radius:3px;background:var(--hm0)"></span>
+                    <span style="width:11px;height:11px;border-radius:3px;background:var(--hm1)"></span>
+                    <span style="width:11px;height:11px;border-radius:3px;background:var(--hm2)"></span>
+                    <span style="width:11px;height:11px;border-radius:3px;background:var(--hm3)"></span>
+                    <span style="width:11px;height:11px;border-radius:3px;background:var(--hm4)"></span>
+                    больше
+                  </div>
+                </section>
+
+                <!-- assigned -->
+                <section style="grid-column:span 4;min-width:0;background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:22px 24px;box-shadow:var(--shadow)">
+                  <h3 style="margin:0 0 4px;font-size:16px;font-weight:700">Назначено тебе</h3>
+                  <div style="display:flex;flex-direction:column;gap:12px;margin-top:14px">
+                    <sc-for list="{{ assigned }}" as="a" hint-placeholder-count="2">
+                      <div style="border:1px solid var(--border);border-radius:14px;padding:14px;background:var(--surface-2)">
+                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+                          <span style="{{ a.kindStyle }}">{{ a.kindLabel }}</span>
+                          <span style="{{ a.statusStyle }}">{{ a.status }}</span>
+                        </div>
+                        <div style="font-size:14px;font-weight:600;line-height:1.25;margin-bottom:4px">{{ a.title }}</div>
+                        <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text-3);margin-bottom:12px">🕑 {{ a.when }} · {{ a.count }} задач</div>
+                        <button onClick="{{ a.onStart }}" style="width:100%;background:var(--accent);color:var(--on-accent);border:none;border-radius:10px;padding:10px;font-weight:600;font-size:13px;cursor:pointer" style-hover="background:var(--accent-2)">Начать</button>
+                      </div>
+                    </sc-for>
+                  </div>
+                </section>
+
+              </div>
+            </sc-if>
+          </div>
+        </sc-if>
+
+        <!-- ==================== УЧЕНИК · ПРЕДМЕТ ==================== -->
+        <sc-if value="{{ vSubject }}" hint-placeholder-val="{{ false }}">
+          <div style="animation:egeFade .3s ease both">
+            <div class="egescroll" style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;margin-bottom:22px">
+              <sc-for list="{{ subjects }}" as="s" hint-placeholder-count="4">
+                <button onClick="{{ s.onClick }}" style="{{ s.style }}" style-hover="border-color:var(--border-2)">{{ s.title }}</button>
+              </sc-for>
+            </div>
+
+            <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:16px;flex-wrap:wrap">
+              <p style="margin:0;color:var(--text-2);font-size:14px;max-width:560px;line-height:1.5">Каждый номер — тип задания на экзамене. Цвет и процент показывают, насколько уверенно ты его решаешь сейчас. Нажми на номер, чтобы увидеть динамику и потренироваться.</p>
+              <button onClick="{{ quickSolve }}" style="background:var(--accent);color:var(--on-accent);border:none;border-radius:11px;padding:11px 18px;font-weight:600;font-size:14px;cursor:pointer;white-space:nowrap">Свободно решать</button>
+            </div>
+
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:12px">
+              <sc-for list="{{ numbers }}" as="n" hint-placeholder-count="12">
+                <button onClick="{{ n.onClick }}" style="{{ n.cardStyle }}" style-hover="border-color:var(--border-2);transform:translateY(-2px);box-shadow:var(--shadow)">
+                  <div style="display:flex;align-items:center;justify-content:space-between">
+                    <span style="font-family:'JetBrains Mono',monospace;font-weight:700;font-size:13px;color:var(--text-3)">№{{ n.number }}</span>
+                    <span style="width:9px;height:9px;border-radius:50%;background:{{ n.dot }}"></span>
+                  </div>
+                  <div style="font-size:12.5px;color:var(--text-2);line-height:1.3;margin:8px 0 12px;min-height:32px;text-align:left">{{ n.short }}</div>
+                  <svg viewBox="0 0 120 30" preserveAspectRatio="none" style="width:100%;height:26px;display:block"><polyline points="{{ n.spark }}" fill="none" stroke="{{ n.dot }}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline></svg>
+                  <div style="display:flex;align-items:baseline;justify-content:space-between;margin-top:8px">
+                    <span style="font-family:'JetBrains Mono',monospace;font-weight:700;font-size:18px">{{ n.accPct }}%</span>
+                    <span style="font-size:11px;color:var(--text-3)">{{ n.attempts }} попыток</span>
+                  </div>
+                </button>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- ==================== УЧЕНИК · РЕШЕНИЕ ==================== -->
+        <sc-if value="{{ vSolve }}" hint-placeholder-val="{{ false }}">
+          <div style="max-width:768px;margin:0 auto;animation:egeFade .3s ease both">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px">
+              <button onClick="{{ solve.onExit }}" style="background:transparent;border:1px solid var(--border);border-radius:10px;padding:9px 14px;font-weight:600;font-size:13px;cursor:pointer;color:var(--text-2)" style-hover="border-color:var(--border-2);color:var(--text)">← Выйти</button>
+              <div style="display:flex;align-items:center;gap:14px">
+                <span style="font-family:'JetBrains Mono',monospace;font-weight:700;font-size:14px;color:var(--text-2)">{{ solve.progressText }}</span>
+                <div style="display:flex;align-items:center;gap:7px;background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:7px 14px">
+                  <span style="font-size:14px">⏱</span><span style="{{ solve.timerStyle }}">{{ solve.timer }}</span>
+                </div>
+              </div>
+            </div>
+            <div style="height:6px;border-radius:999px;background:var(--bg-2);overflow:hidden;margin-bottom:20px"><div style="{{ solve.progressStyle }}"></div></div>
+
+            <div style="background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:26px;box-shadow:var(--shadow)">
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+                <span style="font-family:'JetBrains Mono',monospace;font-weight:700;font-size:13px;background:var(--bg-2);padding:5px 11px;border-radius:8px">№{{ solve.number }}</span>
+                <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em">{{ solve.kindHint }}</span>
+              </div>
+              <p style="margin:0;font-size:17px;line-height:1.6;white-space:pre-wrap">{{ solve.statement }}</p>
+              <sc-if value="{{ solve.hasMedia }}" hint-placeholder-val="{{ false }}">
+                <div style="margin-top:18px;border:1px dashed var(--border-2);border-radius:12px;height:120px;display:flex;align-items:center;justify-content:center;background:repeating-linear-gradient(45deg,var(--bg-2),var(--bg-2) 10px,transparent 10px,transparent 20px)">
+                  <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text-3);background:var(--surface);padding:6px 12px;border-radius:8px;border:1px solid var(--border)">🖼 {{ solve.mediaLabel }}</span>
+                </div>
+              </sc-if>
+            </div>
+
+            <!-- answer input -->
+            <div style="background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:22px;box-shadow:var(--shadow);margin-top:16px">
+              <sc-if value="{{ solve.isNum }}" hint-placeholder-val="{{ false }}">
+                <input value="{{ solve.draft }}" onChange="{{ solve.setDraft }}" inputmode="numeric" placeholder="Ответ — число" style="width:100%;font-family:'JetBrains Mono',monospace;font-size:24px;font-weight:600;padding:16px 18px;border:1.5px solid var(--border-2);border-radius:12px;background:var(--surface-2);color:var(--text);outline:none" style-focus="border-color:var(--accent)" />
+              </sc-if>
+              <sc-if value="{{ solve.isStr }}" hint-placeholder-val="{{ false }}">
+                <input value="{{ solve.draft }}" onChange="{{ solve.setDraft }}" placeholder="Ответ — слово или последовательность" style="width:100%;font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:600;padding:16px 18px;border:1.5px solid var(--border-2);border-radius:12px;background:var(--surface-2);color:var(--text);outline:none" style-focus="border-color:var(--accent)" />
+              </sc-if>
+              <sc-if value="{{ solve.isSet }}" hint-placeholder-val="{{ false }}">
+                <input value="{{ solve.draft }}" onChange="{{ solve.setDraft }}" inputmode="numeric" placeholder="Например: 12 15 18" style="width:100%;font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:600;padding:16px 18px;border:1.5px solid var(--border-2);border-radius:12px;background:var(--surface-2);color:var(--text);outline:none" style-focus="border-color:var(--accent)" />
+                <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+                  <sc-for list="{{ solve.setChips }}" as="c" hint-placeholder-count="3"><span style="font-family:'JetBrains Mono',monospace;font-weight:700;font-size:15px;background:var(--accent-soft);color:var(--accent-2);padding:6px 14px;border-radius:9px">{{ c }}</span></sc-for>
+                </div>
+              </sc-if>
+              <sc-if value="{{ solve.isSeq }}" hint-placeholder-val="{{ false }}">
+                <div style="min-height:56px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:12px;border:1.5px solid var(--border-2);border-radius:12px;background:var(--surface-2);margin-bottom:14px">
+                  <sc-for list="{{ solve.seqChips }}" as="c" hint-placeholder-count="4"><span style="font-family:'JetBrains Mono',monospace;font-weight:700;font-size:20px;width:42px;height:42px;display:flex;align-items:center;justify-content:center;background:var(--accent);color:var(--on-accent);border-radius:10px">{{ c.ch }}</span></sc-for>
+                  <sc-if value="{{ solve.canSubmit }}" hint-placeholder-val="{{ false }}"><span style="font-size:13px;color:var(--text-3)"></span></sc-if>
+                </div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap">
+                  <sc-for list="{{ solve.seqKeys }}" as="k" hint-placeholder-count="10"><button onClick="{{ k.onPush }}" style="flex:1;min-width:52px;font-family:'JetBrains Mono',monospace;font-weight:700;font-size:19px;padding:12px 0;border:1px solid var(--border);border-radius:10px;background:var(--surface);cursor:pointer" style-hover="border-color:var(--accent);color:var(--accent-2)">{{ k.k }}</button></sc-for>
+                  <button onClick="{{ solve.onSeqPop }}" style="flex:1;min-width:52px;font-size:18px;padding:12px 0;border:1px solid var(--border);border-radius:10px;background:var(--surface);cursor:pointer;color:var(--text-2)" style-hover="border-color:var(--bad);color:var(--bad)">⌫</button>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ solve.notSubmitted }}" hint-placeholder-val="{{ true }}">
+                <button onClick="{{ solve.onSubmit }}" style="{{ solve.submitStyle }}" style-hover="background:var(--accent-2)">Ответить</button>
+              </sc-if>
+            </div>
+
+            <!-- verdict + review -->
+            <sc-if value="{{ solve.isCorrect }}" hint-placeholder-val="{{ false }}">
+              <div style="margin-top:16px;background:var(--accent-soft);border:1px solid transparent;border-radius:16px;padding:20px 22px;display:flex;align-items:center;gap:14px;animation:egePop .25s ease both">
+                <div style="width:44px;height:44px;border-radius:50%;background:var(--accent);color:var(--on-accent);display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;flex:none">✓</div>
+                <div><div style="font-weight:700;font-size:17px;color:var(--accent-2)">Верно!</div><div style="font-size:14px;color:var(--text-2)">Так держать. Двигаемся дальше.</div></div>
+              </div>
+            </sc-if>
+            <sc-if value="{{ solve.isWrong }}" hint-placeholder-val="{{ false }}">
+              <div style="margin-top:16px;animation:egePop .25s ease both">
+                <div style="background:var(--bad-soft);border-radius:16px;padding:18px 22px;display:flex;align-items:center;gap:14px">
+                  <div style="width:44px;height:44px;border-radius:50%;background:var(--bad);color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;flex:none">✕</div>
+                  <div><div style="font-weight:700;font-size:17px;color:var(--bad)">Пока неверно</div><div style="font-size:14px;color:var(--text-2)">Не спеши смотреть ответ — попробуй с подсказкой.</div></div>
+                </div>
+                <sc-for list="{{ solve.hintShown }}" as="h" hint-placeholder-count="1">
+                  <div style="margin-top:12px;background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:12px;padding:14px 16px;display:flex;gap:12px">
+                    <span style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:var(--accent-2);flex:none">подсказка {{ h.i }}</span>
+                    <span style="font-size:14.5px;line-height:1.5">{{ h.h }}</span>
+                  </div>
+                </sc-for>
+                <sc-if value="{{ solve.canHint }}" hint-placeholder-val="{{ false }}">
+                  <button onClick="{{ solve.onReveal }}" style="margin-top:12px;background:transparent;border:1px dashed var(--border-2);border-radius:12px;padding:12px 18px;font-weight:600;font-size:14px;cursor:pointer;color:var(--accent-2);width:100%" style-hover="border-color:var(--accent);background:var(--accent-soft)">Показать подсказку · осталось {{ solve.hintLeft }}</button>
+                </sc-if>
+                <sc-if value="{{ solve.showSolution }}" hint-placeholder-val="{{ false }}">
+                  <div style="margin-top:14px;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px 20px">
+                    <div style="font-family:'JetBrains Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-3);margin-bottom:12px">Разбор решения</div>
+                    <div style="display:flex;flex-direction:column;gap:10px">
+                      <sc-for list="{{ solve.solutionSteps }}" as="st" hint-placeholder-count="3">
+                        <div style="display:flex;gap:12px;align-items:flex-start"><span style="width:22px;height:22px;border-radius:6px;background:var(--accent-soft);color:var(--accent-2);font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none">{{ st.i }}</span><span style="font-size:14.5px;line-height:1.5">{{ st.t }}</span></div>
+                      </sc-for>
+                    </div>
+                  </div>
+                </sc-if>
+              </div>
+            </sc-if>
+
+            <!-- task nav -->
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:14px;margin-top:22px">
+              <button onClick="{{ solve.onPrev }}" style="{{ solve.prevStyle }}">← Назад</button>
+              <div class="egescroll" style="display:flex;gap:7px;overflow-x:auto;padding:2px">
+                <sc-for list="{{ solve.dots }}" as="d" hint-placeholder-count="6"><button onClick="{{ d.onClick }}" style="{{ d.style }}">{{ d.n }}</button></sc-for>
+              </div>
+              <button onClick="{{ solve.onNext }}" style="background:var(--accent);color:var(--on-accent);border:none;border-radius:11px;padding:12px 20px;font-weight:600;font-size:14px;cursor:pointer;white-space:nowrap;flex:none" style-hover="background:var(--accent-2)">{{ solve.nextLabel }}</button>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- ==================== УЧЕНИК · ИТОГИ ==================== -->
+        <sc-if value="{{ vResults }}" hint-placeholder-val="{{ false }}">
+          <div style="max-width:760px;margin:0 auto;animation:egeFade .3s ease both">
+            <div style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:32px;box-shadow:var(--shadow);text-align:center;position:relative;overflow:hidden">
+              <div style="position:absolute;inset:0;background:radial-gradient(120% 80% at 50% 0%, var(--accent-soft) 0%, transparent 60%);pointer-events:none"></div>
+              <div style="position:relative">
+                <div style="font-family:'JetBrains Mono',monospace;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-3)">Тест завершён</div>
+                <h2 style="margin:6px 0 22px;font-size:24px;letter-spacing:-.01em">{{ results.gradeWord }}</h2>
+                <div style="display:inline-flex;{{ results.ringStyle }}">
+                  <div style="width:104px;height:104px;border-radius:50%;background:var(--surface);display:flex;flex-direction:column;align-items:center;justify-content:center">
+                    <span style="font-family:'JetBrains Mono',monospace;font-size:32px;font-weight:800;line-height:1">{{ results.pct }}%</span>
+                    <span style="font-size:12px;color:var(--text-3)">{{ results.correct }} из {{ results.total }}</span>
+                  </div>
+                </div>
+                <div style="display:flex;gap:26px;justify-content:center;margin-top:24px">
+                  <div><div style="font-family:'JetBrains Mono',monospace;font-size:24px;font-weight:700">{{ results.timeStr }}</div><div style="font-size:12px;color:var(--text-3)">время</div></div>
+                  <div style="width:1px;background:var(--border)"></div>
+                  <div><div style="font-family:'JetBrains Mono',monospace;font-size:24px;font-weight:700;color:var(--accent)">▲ {{ results.delta }}</div><div style="font-size:12px;color:var(--text-3)">к прогнозу</div></div>
+                  <div style="width:1px;background:var(--border)"></div>
+                  <div><div style="font-family:'JetBrains Mono',monospace;font-size:24px;font-weight:700">{{ results.answered }}/{{ results.total }}</div><div style="font-size:12px;color:var(--text-3)">отвечено</div></div>
+                </div>
+              </div>
+            </div>
+
+            <div style="background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:22px 24px;box-shadow:var(--shadow);margin-top:16px">
+              <h3 style="margin:0 0 14px;font-size:16px;font-weight:700">По задачам</h3>
+              <div style="display:flex;flex-direction:column">
+                <sc-for list="{{ results.breakdown }}" as="b" hint-placeholder-count="6">
+                  <div style="display:flex;align-items:center;gap:13px;padding:11px 0;border-top:1px solid var(--border)">
+                    <span style="font-family:'JetBrains Mono',monospace;font-weight:700;font-size:13px;color:var(--text-3);width:34px">№{{ b.number }}</span>
+                    <span style="flex:1;min-width:0;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ b.title }}</span>
+                    <span style="font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--text-3)">{{ b.raw }}</span>
+                    <span style="{{ b.markStyle }}">{{ b.mark }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+
+            <div style="display:flex;gap:12px;margin-top:20px;flex-wrap:wrap">
+              <button onClick="{{ results.onReview }}" style="flex:1;min-width:150px;background:transparent;border:1px solid var(--border-2);border-radius:12px;padding:14px;font-weight:600;font-size:15px;cursor:pointer" style-hover="border-color:var(--text-3)">Разбор ошибок</button>
+              <button onClick="{{ results.onAgain }}" style="flex:1;min-width:150px;background:transparent;border:1px solid var(--border-2);border-radius:12px;padding:14px;font-weight:600;font-size:15px;cursor:pointer" style-hover="border-color:var(--text-3)">Пройти ещё раз</button>
+              <button onClick="{{ results.onHome }}" style="flex:1;min-width:150px;background:var(--accent);color:var(--on-accent);border:none;border-radius:12px;padding:14px;font-weight:600;font-size:15px;cursor:pointer" style-hover="background:var(--accent-2)">На главную</button>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- ==================== УЧЕНИК · ИСТОРИЯ ==================== -->
+        <sc-if value="{{ vHistory }}" hint-placeholder-val="{{ false }}">
+          <div style="animation:egeFade .3s ease both">
+            <section style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:22px 24px;box-shadow:var(--shadow)">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+                <div><h3 style="margin:0;font-size:16px;font-weight:700">Карта активности</h3><p style="margin:4px 0 0;font-size:13px;color:var(--text-3)">Нажми на день, чтобы посмотреть, что решалось</p></div>
+                <div style="display:flex;align-items:center;gap:8px;background:var(--accent-soft);padding:6px 12px;border-radius:999px"><span style="font-size:15px">🔥</span><span style="font-weight:700;font-size:14px;color:var(--accent-2)">{{ streak }} дней подряд</span></div>
+              </div>
+              <div class="egescroll" style="overflow-x:auto;padding-bottom:6px">
+                <div style="display:grid;grid-auto-flow:column;grid-template-rows:repeat(7,13px);gap:3px;width:max-content">
+                  <sc-for list="{{ heatCells }}" as="c" hint-placeholder-count="140"><button onClick="{{ c.onClick }}" title="{{ c.title }}" style="{{ c.style }}"></button></sc-for>
+                </div>
+              </div>
+            </section>
+
+            <section style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:22px 24px;box-shadow:var(--shadow);margin-top:var(--gap)">
+              <h3 style="margin:0 0 6px;font-size:16px;font-weight:700">Недавние решения</h3>
+              <div style="display:flex;flex-direction:column">
+                <sc-for list="{{ history.recent }}" as="r" hint-placeholder-count="4">
+                  <div style="display:flex;align-items:center;gap:16px;padding:14px 0;border-top:1px solid var(--border)">
+                    <div style="flex:1;min-width:0">
+                      <div style="font-size:14.5px;font-weight:600">{{ r.title }}</div>
+                      <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text-3);margin-top:2px">{{ r.when }} · {{ r.subject }} · {{ r.timeStr }}</div>
+                    </div>
+                    <div style="width:140px;flex:none">
+                      <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-2);margin-bottom:5px"><span>{{ r.correct }}/{{ r.total }}</span><span style="font-weight:700">{{ r.pct }}%</span></div>
+                      <div style="height:6px;border-radius:999px;background:var(--bg-2);overflow:hidden"><div style="{{ r.barStyle }}"></div></div>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+            </section>
+          </div>
+        </sc-if>
+
+        <!-- ==================== УЧИТЕЛЬ · ДАШБОРД ==================== -->
+        <sc-if value="{{ vtDash }}" hint-placeholder-val="{{ false }}">
+          <div data-grid="g12" style="display:grid;grid-template-columns:repeat(12,1fr);gap:var(--gap);align-items:start;animation:egeFade .3s ease both">
+            <section style="grid-column:span 5;min-width:0;background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:24px;box-shadow:var(--shadow)">
+              <div style="display:flex;align-items:center;gap:14px;margin-bottom:20px">
+                <div style="width:48px;height:48px;border-radius:14px;background:var(--accent-soft);color:var(--accent-2);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:19px;flex:none">А</div>
+                <div><div style="font-size:18px;font-weight:700">{{ teacher.studentName }}</div><div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text-3)">{{ teacher.grade }}</div></div>
+              </div>
+              <div style="display:flex;align-items:baseline;gap:10px">
+                <span style="font-size:56px;font-weight:800;line-height:.9;letter-spacing:-.02em">{{ teacher.fcScore }}</span>
+                <span style="font-size:15px;color:var(--text-3)">/ 100 прогноз</span>
+                <span style="margin-left:auto;font-size:12px;font-weight:600;color:var(--accent);background:var(--accent-soft);padding:4px 10px;border-radius:999px">▲ {{ teacher.fcTrend }}</span>
+              </div>
+              <div style="height:7px;border-radius:999px;background:var(--bg-2);margin-top:14px;overflow:hidden"><div style="{{ teacher.fcBar }}"></div></div>
+              <div style="display:flex;gap:22px;margin-top:18px">
+                <div><div style="font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700">🔥 {{ teacher.streak }}</div><div style="font-size:12px;color:var(--text-3)">дней подряд</div></div>
+                <div><div style="font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700">{{ teacher.accPct }}%</div><div style="font-size:12px;color:var(--text-3)">точность</div></div>
+                <div><div style="font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700">{{ teacher.assignedCount }}</div><div style="font-size:12px;color:var(--text-3)">назначено</div></div>
+              </div>
+              <div style="display:flex;gap:10px;margin-top:22px;flex-wrap:wrap">
+                <button onClick="{{ teacher.onOpenStudent }}" style="flex:1;min-width:120px;background:var(--accent);color:var(--on-accent);border:none;border-radius:11px;padding:12px;font-weight:600;font-size:14px;cursor:pointer" style-hover="background:var(--accent-2)">Статистика</button>
+                <button onClick="{{ teacher.onAssign }}" style="flex:1;min-width:120px;background:transparent;border:1px solid var(--border-2);border-radius:11px;padding:12px;font-weight:600;font-size:14px;cursor:pointer" style-hover="border-color:var(--text-3)">Назначить тест</button>
+              </div>
+            </section>
+
+            <section style="grid-column:span 7;min-width:0;background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:22px 24px;box-shadow:var(--shadow)">
+              <h3 style="margin:0 0 6px;font-size:16px;font-weight:700">Свежие попытки</h3>
+              <div style="display:flex;flex-direction:column">
+                <sc-for list="{{ teacher.recent }}" as="r" hint-placeholder-count="4">
+                  <div style="display:flex;align-items:center;gap:16px;padding:13px 0;border-top:1px solid var(--border)">
+                    <div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600">{{ r.title }}</div><div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text-3);margin-top:2px">{{ r.when }} · {{ r.timeStr }}</div></div>
+                    <div style="width:120px;flex:none"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:5px"><span style="color:var(--text-2)">{{ r.correct }}/{{ r.total }}</span><span style="font-weight:700">{{ r.pct }}%</span></div><div style="height:6px;border-radius:999px;background:var(--bg-2);overflow:hidden"><div style="{{ r.barStyle }}"></div></div></div>
+                  </div>
+                </sc-for>
+              </div>
+            </section>
+
+            <section style="grid-column:span 12;min-width:0;background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:22px 24px;box-shadow:var(--shadow)">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><h3 style="margin:0;font-size:16px;font-weight:700">Слабые места ученика</h3><span style="font-size:12px;color:var(--text-3)">информатика</span></div>
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-top:14px">
+                <sc-for list="{{ teacher.weak }}" as="w" hint-placeholder-count="4">
+                  <div style="display:flex;align-items:center;gap:12px;padding:14px;border:1px solid var(--border);border-radius:14px;background:var(--surface-2)">
+                    <span style="width:38px;height:38px;border-radius:10px;background:var(--bad-soft);color:var(--bad);display:flex;align-items:center;justify-content:center;font-weight:700;font-family:'JetBrains Mono',monospace;flex:none">{{ w.number }}</span>
+                    <div style="flex:1;min-width:0"><div style="font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ w.title }}</div><div style="height:5px;border-radius:999px;background:var(--bg-2);margin-top:6px;overflow:hidden"><div style="{{ w.barStyle }}"></div></div></div>
+                    <button onClick="{{ w.onAssign }}" style="background:var(--accent-soft);color:var(--accent-2);border:none;border-radius:9px;padding:8px 12px;font-weight:600;font-size:12px;cursor:pointer;flex:none;white-space:nowrap" style-hover="background:var(--accent);color:var(--on-accent)">Дрилл</button>
+                  </div>
+                </sc-for>
+              </div>
+            </section>
+          </div>
+        </sc-if>
+
+        <!-- ==================== УЧИТЕЛЬ · СТАТИСТИКА УЧЕНИКА ==================== -->
+        <sc-if value="{{ vtStudent }}" hint-placeholder-val="{{ false }}">
+          <div style="animation:egeFade .3s ease both">
+            <div class="egescroll" style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;margin-bottom:20px">
+              <sc-for list="{{ subjects }}" as="s" hint-placeholder-count="4"><button onClick="{{ s.onClick }}" style="{{ s.style }}">{{ s.title }}</button></sc-for>
+            </div>
+            <section style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:24px;box-shadow:var(--shadow)">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:8px">
+                <div><h3 style="margin:0;font-size:16px;font-weight:700">Успешность по номерам</h3><p style="margin:4px 0 0;font-size:13px;color:var(--text-3)">{{ tstats.subjectLabel }} · нажми на столбец для динамики</p></div>
+                <div style="font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--text-2)">средняя точность <b style="color:var(--text)">{{ tstats.avg }}%</b></div>
+              </div>
+              <div class="egescroll" style="overflow-x:auto;padding-bottom:8px">
+                <div style="display:flex;align-items:flex-end;gap:4px;height:200px;min-width:640px;border-bottom:1px solid var(--border)">
+                  <sc-for list="{{ tstats.bars }}" as="b" hint-placeholder-count="27">
+                    <button onClick="{{ b.onClick }}" title="{{ b.title }}" style="flex:1;min-width:16px;height:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:5px;border:none;background:transparent;cursor:pointer;padding:0">
+                      <div style="width:100%;display:flex;align-items:flex-end;height:100%"><div style="{{ b.barStyle }}"></div></div>
+                    </button>
+                  </sc-for>
+                </div>
+                <div style="display:flex;gap:4px;min-width:640px;margin-top:6px">
+                  <sc-for list="{{ tstats.bars }}" as="b" hint-placeholder-count="27"><span style="flex:1;min-width:16px;text-align:center;font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--text-3)">{{ b.number }}</span></sc-for>
+                </div>
+              </div>
+            </section>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:var(--gap);margin-top:var(--gap)">
+              <section style="background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:22px 24px;box-shadow:var(--shadow)">
+                <h3 style="margin:0 0 6px;font-size:16px;font-weight:700">Слабые места</h3>
+                <div style="display:flex;flex-direction:column">
+                  <sc-for list="{{ tstats.weak }}" as="w" hint-placeholder-count="4">
+                    <div style="display:flex;align-items:center;gap:12px;padding:11px 0;border-top:1px solid var(--border)"><span style="font-family:'JetBrains Mono',monospace;font-weight:700;width:34px">№{{ w.number }}</span><div style="flex:1;min-width:0"><div style="font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ w.title }}</div><div style="height:5px;border-radius:999px;background:var(--bg-2);margin-top:6px;overflow:hidden"><div style="{{ w.barStyle }}"></div></div></div><span style="font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--bad)">{{ w.accPct }}%</span></div>
+                  </sc-for>
+                </div>
+              </section>
+              <section style="background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:22px 24px;box-shadow:var(--shadow)">
+                <h3 style="margin:0 0 6px;font-size:16px;font-weight:700">Дольше всего решает</h3>
+                <div style="display:flex;flex-direction:column">
+                  <sc-for list="{{ tstats.times }}" as="t" hint-placeholder-count="5">
+                    <div style="display:flex;align-items:center;gap:12px;padding:11px 0;border-top:1px solid var(--border)"><span style="font-family:'JetBrains Mono',monospace;font-weight:700;width:34px">№{{ t.number }}</span><span style="flex:1;min-width:0;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ t.title }}</span><span style="font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--warn)">{{ t.t }}</span></div>
+                  </sc-for>
+                </div>
+              </section>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- ==================== УЧИТЕЛЬ · КОНСТРУКТОР ==================== -->
+        <sc-if value="{{ vtBuilder }}" hint-placeholder-val="{{ false }}">
+          <div data-grid="g12" style="display:grid;grid-template-columns:repeat(12,1fr);gap:var(--gap);align-items:start;animation:egeFade .3s ease both">
+            <div style="grid-column:span 7;min-width:0;display:flex;flex-direction:column;gap:16px">
+              <div style="display:flex;gap:12px">
+                <button onClick="{{ builder.setClassic }}" style="{{ builder.classicStyle }}"><div style="font-weight:700;font-size:15px">Классический вариант</div><div style="font-size:12.5px;opacity:.85;margin-top:3px">Как на ЕГЭ — набор номеров по структуре</div></button>
+                <button onClick="{{ builder.setDrill }}" style="{{ builder.drillStyle }}"><div style="font-weight:700;font-size:15px">Дрилл</div><div style="font-size:12.5px;opacity:.85;margin-top:3px">N задач одного номера подряд</div></button>
+              </div>
+              <section style="background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:22px 24px;box-shadow:var(--shadow)">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px"><h3 style="margin:0;font-size:16px;font-weight:700">Задачи из банка</h3><span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text-3)">только одобренные</span></div>
+                <div style="display:flex;flex-direction:column;gap:10px">
+                  <sc-for list="{{ builder.pool }}" as="t" hint-placeholder-count="5">
+                    <button onClick="{{ t.onToggle }}" style="{{ t.cardStyle }}">
+                      <span style="{{ t.boxStyle }}">{{ t.check }}</span>
+                      <div style="flex:1;min-width:0"><div style="display:flex;align-items:center;gap:8px;margin-bottom:3px"><span style="font-family:'JetBrains Mono',monospace;font-weight:700;font-size:12px;color:var(--text-3)">№{{ t.number }}</span><span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text-3);background:var(--bg-2);padding:2px 7px;border-radius:6px">{{ t.kindLabel }}</span></div><div style="font-size:13.5px;line-height:1.45">{{ t.statement }}</div></div>
+                    </button>
+                  </sc-for>
+                </div>
+              </section>
+            </div>
+            <aside style="grid-column:span 5;min-width:0;position:sticky;top:76px;background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:22px 24px;box-shadow:var(--shadow)">
+              <h3 style="margin:0 0 2px;font-size:16px;font-weight:700">Предпросмотр</h3>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text-3);margin-bottom:16px">{{ builder.durationLabel }} · {{ builder.pickedCount }} задач</div>
+              <sc-if value="{{ builder.pickedCount }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;flex-direction:column;gap:8px">
+                  <sc-for list="{{ builder.picked }}" as="p" hint-placeholder-count="3">
+                    <div style="display:flex;align-items:center;gap:11px;padding:10px 12px;border:1px solid var(--border);border-radius:11px;background:var(--surface-2)"><span style="font-family:'JetBrains Mono',monospace;font-weight:700;font-size:12px;color:var(--text-3);flex:none">{{ p.pos }}.</span><span style="font-family:'JetBrains Mono',monospace;font-weight:700;font-size:12px;flex:none">№{{ p.number }}</span><span style="flex:1;min-width:0;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ p.statement }}</span><button onClick="{{ p.onRemove }}" style="border:none;background:transparent;cursor:pointer;color:var(--text-3);font-size:16px;flex:none" style-hover="color:var(--bad)">✕</button></div>
+                  </sc-for>
+                </div>
+              </sc-if>
+              <sc-if value="{{ builder.isEmpty }}" hint-placeholder-val="{{ true }}">
+                <div style="border:1px dashed var(--border-2);border-radius:12px;padding:28px 16px;text-align:center;color:var(--text-3);font-size:13.5px">Выбери задачи слева, чтобы собрать тест</div>
+              </sc-if>
+              <button onClick="{{ builder.onSave }}" style="width:100%;margin-top:16px;background:var(--accent);color:var(--on-accent);border:none;border-radius:12px;padding:14px;font-weight:600;font-size:15px;cursor:pointer" style-hover="background:var(--accent-2)">Сохранить тест</button>
+            </aside>
+          </div>
+        </sc-if>
+
+        <!-- ==================== УЧИТЕЛЬ · НАЗНАЧЕНИЕ ==================== -->
+        <sc-if value="{{ vtAssign }}" hint-placeholder-val="{{ false }}">
+          <div style="max-width:720px;margin:0 auto;display:flex;flex-direction:column;gap:16px;animation:egeFade .3s ease both">
+            <section style="background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:22px 24px;box-shadow:var(--shadow)">
+              <div style="font-family:'JetBrains Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-3);margin-bottom:12px">1 · Тест</div>
+              <div style="display:flex;flex-direction:column;gap:10px">
+                <sc-for list="{{ assignV.tests }}" as="t" hint-placeholder-count="2">
+                  <button onClick="{{ t.onSelect }}" style="{{ t.style }}"><span style="width:20px;height:20px;border-radius:50%;border:2px solid var(--accent);display:flex;align-items:center;justify-content:center;flex:none"><span style="width:10px;height:10px;border-radius:50%;background:{{ t.dot }}"></span></span><div style="flex:1;min-width:0;text-align:left"><div style="font-size:14.5px;font-weight:600">{{ t.title }}</div><div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text-3)">{{ t.kindLabel }} · {{ t.count }} задач</div></div></button>
+                </sc-for>
+              </div>
+            </section>
+            <section style="background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:22px 24px;box-shadow:var(--shadow)">
+              <div style="font-family:'JetBrains Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-3);margin-bottom:12px">2 · Ученик и время</div>
+              <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--border);border-radius:12px;background:var(--surface-2);margin-bottom:12px"><div style="width:34px;height:34px;border-radius:50%;background:var(--accent-soft);color:var(--accent-2);display:flex;align-items:center;justify-content:center;font-weight:700;flex:none">А</div><span style="font-weight:600;font-size:14.5px">{{ assignV.student }}</span></div>
+              <input type="datetime-local" value="{{ assignV.when }}" onChange="{{ assignV.setWhen }}" style="width:100%;font-family:'JetBrains Mono',monospace;font-size:15px;padding:13px 15px;border:1px solid var(--border-2);border-radius:12px;background:var(--surface-2);color:var(--text);outline:none" style-focus="border-color:var(--accent)" />
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-top:16px;padding:4px 2px"><div><div style="font-weight:600;font-size:14.5px">Уведомить в Telegram</div><div style="font-size:12.5px;color:var(--text-3)">Ученик получит ссылку в бот к началу</div></div><button onClick="{{ assignV.toggleNotify }}" style="{{ assignV.notifyTrackStyle }}"><span style="{{ assignV.notifyKnobStyle }}"></span></button></div>
+            </section>
+            <div style="display:flex;gap:12px;flex-wrap:wrap">
+              <button onClick="{{ assignV.onPdf }}" style="flex:1;min-width:160px;background:transparent;border:1px solid var(--border-2);border-radius:12px;padding:15px;font-weight:600;font-size:15px;cursor:pointer" style-hover="border-color:var(--text-3)">Экспорт в PDF-бланк</button>
+              <button onClick="{{ assignV.onSubmit }}" style="flex:2;min-width:200px;background:var(--accent);color:var(--on-accent);border:none;border-radius:12px;padding:15px;font-weight:700;font-size:15px;cursor:pointer" style-hover="background:var(--accent-2)">Назначить «{{ assignV.selTitle }}»</button>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- ==================== УЧИТЕЛЬ · БАНК ЗАДАЧ ==================== -->
+        <sc-if value="{{ vtBank }}" hint-placeholder-val="{{ false }}">
+          <div style="animation:egeFade .3s ease both">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px;flex-wrap:wrap">
+              <div style="display:flex;background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:4px;gap:2px;flex-wrap:wrap">
+                <sc-for list="{{ bankV.statusTabs }}" as="s" hint-placeholder-count="4"><button onClick="{{ s.onClick }}" style="{{ s.style }}">{{ s.label }}</button></sc-for>
+              </div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--text-3)"><b style="color:var(--warn)">{{ bankV.draftCount }}</b> черновиков ждут проверки · всего {{ bankV.count }}</div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:12px">
+              <sc-for list="{{ bankV.items }}" as="t" hint-placeholder-count="5">
+                <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px 22px;box-shadow:var(--shadow)">
+                  <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+                    <span style="font-family:'JetBrains Mono',monospace;font-weight:700;font-size:13px;background:var(--bg-2);padding:5px 11px;border-radius:8px">№{{ t.number }}</span>
+                    <span style="{{ t.statusStyle }}">{{ t.statusLabel }}</span>
+                    <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-3);background:var(--surface-2);border:1px solid var(--border);padding:3px 8px;border-radius:6px">{{ t.answerType }}</span>
+                    <sc-if value="{{ t.botSolvable }}" hint-placeholder-val="{{ false }}"><span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--accent-2)">🤖 бот решает</span></sc-if>
+                  </div>
+                  <p style="margin:0 0 14px;font-size:14.5px;line-height:1.55">{{ t.statement }}</p>
+                  <sc-if value="{{ t.hasMedia }}" hint-placeholder-val="{{ false }}"><div style="margin-bottom:14px;border:1px dashed var(--border-2);border-radius:10px;padding:12px;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text-3);background:repeating-linear-gradient(45deg,var(--bg-2),var(--bg-2) 8px,transparent 8px,transparent 16px)">🖼 {{ t.mediaLabel }}</div></sc-if>
+                  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding-top:14px;border-top:1px solid var(--border)">
+                    <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text-3)">Правильный ответ:</span>
+                    <sc-if value="{{ t.notEditing }}" hint-placeholder-val="{{ true }}">
+                      <span style="font-family:'JetBrains Mono',monospace;font-weight:700;font-size:15px;background:var(--accent-soft);color:var(--accent-2);padding:5px 12px;border-radius:8px">{{ t.answer }}</span>
+                      <button onClick="{{ t.onEdit }}" style="border:none;background:transparent;color:var(--text-3);cursor:pointer;font-size:13px;font-weight:600" style-hover="color:var(--accent-2)">✎ править</button>
+                    </sc-if>
+                    <sc-if value="{{ t.editing }}" hint-placeholder-val="{{ false }}">
+                      <input value="{{ t.editVal }}" onChange="{{ t.onEditChange }}" style="font-family:'JetBrains Mono',monospace;font-weight:700;font-size:15px;padding:6px 12px;border:1.5px solid var(--accent);border-radius:8px;background:var(--surface);color:var(--text);outline:none;width:160px" />
+                      <button onClick="{{ t.onSaveEdit }}" style="background:var(--accent);color:var(--on-accent);border:none;border-radius:8px;padding:7px 14px;font-weight:600;font-size:13px;cursor:pointer">Сохранить</button>
+                      <button onClick="{{ t.onCancelEdit }}" style="background:transparent;border:none;color:var(--text-3);cursor:pointer;font-size:13px">отмена</button>
+                    </sc-if>
+                    <div style="flex:1"></div>
+                    <div style="display:flex;gap:8px">
+                      <sc-if value="{{ t.notActive }}" hint-placeholder-val="{{ false }}"><button onClick="{{ t.onActive }}" style="background:var(--accent-soft);color:var(--accent-2);border:none;border-radius:9px;padding:9px 15px;font-weight:600;font-size:13px;cursor:pointer" style-hover="background:var(--accent);color:var(--on-accent)">✓ Одобрить</button></sc-if>
+                      <button onClick="{{ t.onReject }}" style="background:transparent;border:1px solid var(--border-2);color:var(--text-2);border-radius:9px;padding:9px 15px;font-weight:600;font-size:13px;cursor:pointer" style-hover="border-color:var(--bad);color:var(--bad)">Отклонить</button>
+                    </div>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- subject detail modal -->
+        <sc-if value="{{ hasDetail }}" hint-placeholder-val="{{ false }}">
+          <div onClick="{{ detail.onClose }}" style="position:fixed;inset:0;z-index:60;background:rgba(20,18,16,.44);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;padding:20px;animation:egeFade .2s ease both">
+            <div onClick="{{ stop }}" style="width:min(660px,96vw);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:26px;box-shadow:var(--shadow-lg);animation:egePop .22s ease both">
+              <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
+                <div style="display:flex;align-items:center;gap:12px">
+                  <span style="font-family:'JetBrains Mono',monospace;font-weight:700;font-size:15px;background:var(--bg-2);padding:7px 12px;border-radius:9px">№{{ detail.number }}</span>
+                  <h3 style="margin:0;font-size:19px;letter-spacing:-.01em">{{ detail.title }}</h3>
+                </div>
+                <button onClick="{{ detail.onClose }}" style="width:36px;height:36px;border-radius:10px;border:1px solid var(--border);background:var(--surface);cursor:pointer;font-size:16px;color:var(--text-2);flex:none">✕</button>
+              </div>
+              <div style="display:flex;gap:26px;margin:20px 0 8px">
+                <div><div style="font-family:'JetBrains Mono',monospace;font-size:28px;font-weight:800;color:{{ detail.color }}">{{ detail.accPct }}%</div><div style="font-size:12px;color:var(--text-3)">точность сейчас</div></div>
+                <div><div style="font-family:'JetBrains Mono',monospace;font-size:28px;font-weight:800">{{ detail.attempts }}</div><div style="font-size:12px;color:var(--text-3)">попыток</div></div>
+                <div><div style="font-family:'JetBrains Mono',monospace;font-size:28px;font-weight:800">{{ detail.avgTime }}</div><div style="font-size:12px;color:var(--text-3)">в среднем</div></div>
+              </div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-3);margin:16px 0 6px">Динамика · 10 недель</div>
+              <svg viewBox="0 0 560 190" style="width:100%;height:auto;display:block">
+                <line x1="22" y1="{{ detail.gTop }}" x2="538" y2="{{ detail.gTop }}" stroke="var(--border)" stroke-width="1" stroke-dasharray="3 4"></line>
+                <line x1="22" y1="{{ detail.gMid }}" x2="538" y2="{{ detail.gMid }}" stroke="var(--border)" stroke-width="1" stroke-dasharray="3 4"></line>
+                <line x1="22" y1="{{ detail.gBot }}" x2="538" y2="{{ detail.gBot }}" stroke="var(--border)" stroke-width="1"></line>
+                <path d="{{ detail.area }}" fill="var(--accent-soft)" opacity="0.7"></path>
+                <path d="{{ detail.line }}" fill="none" stroke="{{ detail.color }}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path>
+                <sc-for list="{{ detail.dots }}" as="d" hint-placeholder-count="10"><circle cx="{{ d.cx }}" cy="{{ d.cy }}" r="3.5" fill="var(--surface)" stroke="{{ detail.color }}" stroke-width="2"></circle></sc-for>
+              </svg>
+              <button onClick="{{ detail.onDrill }}" style="width:100%;margin-top:18px;background:var(--accent);color:var(--on-accent);border:none;border-radius:12px;padding:14px;font-weight:600;font-size:15px;cursor:pointer" style-hover="background:var(--accent-2)">Решать задачи №{{ detail.number }} →</button>
+            </div>
+          </div>
+        </sc-if>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- mobile bottom tabs -->
+  <sc-if value="{{ isMobile }}" hint-placeholder-val="{{ false }}">
+    <nav data-bottomnav style="position:fixed;left:0;right:0;bottom:0;z-index:40;height:66px;background:color-mix(in srgb, var(--surface) 92%, transparent);backdrop-filter:blur(14px);border-top:1px solid var(--border);display:flex;padding:6px 6px calc(6px + env(safe-area-inset-bottom))">
+      <sc-for list="{{ navItems }}" as="it" hint-placeholder-count="4">
+        <button onClick="{{ it.onClick }}" style="{{ it.tabStyle }}">
+          <span style="{{ it.tabDotStyle }}"></span>
+          <span style="font-size:10.5px;font-weight:600">{{ it.label }}</span>
+        </button>
+      </sc-for>
+    </nav>
+  </sc-if>
+
+  <!-- day drilldown modal -->
+  <sc-if value="{{ dayOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeDay }}" style="position:fixed;inset:0;z-index:60;background:rgba(20,18,16,.42);backdrop-filter:blur(3px);display:flex;align-items:flex-end;justify-content:center;padding:0;animation:egeFade .2s ease both">
+      <div onClick="{{ stop }}" style="{{ sheetStyle }}">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+          <div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text-3);text-transform:uppercase;letter-spacing:.04em">{{ day.weekday }}</div>
+            <h3 style="margin:2px 0 0;font-size:20px">{{ day.dateLabel }}</h3>
+          </div>
+          <button onClick="{{ closeDay }}" style="width:36px;height:36px;border-radius:10px;border:1px solid var(--border);background:var(--surface);cursor:pointer;font-size:16px;color:var(--text-2)">✕</button>
+        </div>
+        <div style="display:flex;gap:18px;margin:14px 0 18px">
+          <div><div style="font-family:'JetBrains Mono',monospace;font-size:26px;font-weight:700">{{ day.total }}</div><div style="font-size:12px;color:var(--text-3)">задач</div></div>
+          <div><div style="font-family:'JetBrains Mono',monospace;font-size:26px;font-weight:700;color:var(--accent)">{{ day.correct }}</div><div style="font-size:12px;color:var(--text-3)">верно</div></div>
+          <div><div style="font-family:'JetBrains Mono',monospace;font-size:26px;font-weight:700">{{ day.minutes }}м</div><div style="font-size:12px;color:var(--text-3)">за день</div></div>
+        </div>
+        <div class="egescroll" style="display:flex;flex-direction:column;gap:8px;max-height:min(46vh,360px);overflow-y:auto">
+          <sc-for list="{{ day.items }}" as="d" hint-placeholder-count="4">
+            <div style="display:flex;align-items:center;gap:12px;padding:11px 13px;border:1px solid var(--border);border-radius:12px;background:var(--surface-2)">
+              <span style="width:30px;height:30px;border-radius:8px;background:var(--bg-2);display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-weight:700;font-size:12px;flex:none">{{ d.number }}</span>
+              <span style="flex:1;min-width:0;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ d.title }}</span>
+              <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text-3)">{{ d.time }}</span>
+              <span style="{{ d.mark }}">{{ d.markIcon }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- toast -->
+  <sc-if value="{{ toast }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:80;background:var(--text);color:var(--bg);padding:13px 20px;border-radius:12px;font-size:14px;font-weight:500;box-shadow:var(--shadow-lg);animation:egeToast .25s ease both;max-width:90vw">{{ toast }}</div>
+  </sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:&quot;100%&quot;,&quot;height&quot;:840},&quot;startTheme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;tsType&quot;:&quot;'light'|'dark'&quot;,&quot;section&quot;:&quot;Старт&quot;},&quot;startRole&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;student&quot;,&quot;teacher&quot;],&quot;default&quot;:&quot;student&quot;,&quot;tsType&quot;:&quot;'student'|'teacher'&quot;,&quot;section&quot;:&quot;Старт&quot;},&quot;density&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;comfortable&quot;,&quot;compact&quot;],&quot;default&quot;:&quot;comfortable&quot;,&quot;tsType&quot;:&quot;'comfortable'|'compact'&quot;,&quot;section&quot;:&quot;Плотность&quot;}}">
+class Component extends DCLogic {
+  constructor(props){
+    super(props);
+    const data = this.buildData();
+    let saved = {};
+    try { saved = JSON.parse(localStorage.getItem('vektor_ui') || '{}'); } catch(e){}
+    this.state = {
+      role: saved.role || (props.startRole || 'student'),
+      theme: saved.theme || (props.startTheme || 'light'),
+      density: props.density || 'comfortable',
+      view: (saved.role === 'teacher') ? 't-dashboard' : 'dashboard',
+      subject: 'inf',
+      vw: 1280,
+      forceView: null,
+      loadState: 'ready',
+      openNumber: null,
+      dayOpen: null,
+      attempt: null,
+      draft: '',
+      submitted: null,
+      hintStep: 0,
+      builder: { kind:'classic', subject:'inf', picked:[] },
+      assign: { testId:'t-classic-a', when:'', notify:true },
+      bank: { subject:'all', number:'all', status:'all', editing:null, editVal:'' },
+      toast: null,
+      data,
+    };
+    this._tick = null;
+    this._toastT = null;
+  }
+
+  componentDidMount(){
+    const onResize = () => this.setState({ vw: window.innerWidth });
+    window.addEventListener('resize', onResize);
+    this._onResize = onResize;
+    this.setState({ vw: window.innerWidth });
+  }
+  componentWillUnmount(){
+    if(this._onResize) window.removeEventListener('resize', this._onResize);
+    this.stopTimer();
+  }
+
+  persist(patch){
+    try {
+      const cur = JSON.parse(localStorage.getItem('vektor_ui')||'{}');
+      localStorage.setItem('vektor_ui', JSON.stringify(Object.assign(cur, patch)));
+    } catch(e){}
+  }
+
+  // ---------- utils ----------
+  rng(seed){ let a = seed>>>0; return function(){ a|=0;a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+  mmss(sec){ sec=Math.max(0,Math.floor(sec)); const m=Math.floor(sec/60), s=sec%60; return m+':'+String(s).padStart(2,'0'); }
+  clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
+  accColor(acc){ if(acc>=78) return 'var(--accent)'; if(acc>=62) return 'var(--hm3)'; if(acc>=48) return 'var(--warn)'; return 'var(--bad)'; }
+  toast(msg){ clearTimeout(this._toastT); this.setState({toast:msg}); this._toastT=setTimeout(()=>this.setState({toast:null}), 2600); }
+
+  spark(vals, w, h){ // vals 0..1 -> polyline points
+    const n=vals.length, pad=3; const iw=w-pad*2, ih=h-pad*2;
+    return vals.map((v,i)=>{ const x=pad+(n<=1?0:iw*i/(n-1)); const y=pad+ih*(1-this.clamp(v,0,1)); return x.toFixed(1)+','+y.toFixed(1); }).join(' ');
+  }
+  lineChart(vals, w, h, pad){ // vals 0..1
+    const n=vals.length; const iw=w-pad*2, ih=h-pad*2;
+    const X=i=> pad+(n<=1?iw/2:iw*i/(n-1)); const Y=v=> pad+ih*(1-this.clamp(v,0,1));
+    let line=''; const dots=[];
+    vals.forEach((v,i)=>{ const x=X(i),y=Y(v); line+=(i?'L':'M')+x.toFixed(1)+' '+y.toFixed(1)+' '; dots.push({x:x.toFixed(1),y:y.toFixed(1),v:Math.round(v*100)}); });
+    const area = 'M'+X(0).toFixed(1)+' '+(pad+ih).toFixed(1)+' '+ vals.map((v,i)=>'L'+X(i).toFixed(1)+' '+Y(v).toFixed(1)).join(' ') +' L'+X(n-1).toFixed(1)+' '+(pad+ih).toFixed(1)+' Z';
+    return { line, area, dots, w, h, pad, baseY:(pad+ih).toFixed(1) };
+  }
+
+  // ---------- answer checker (mirrors §7 AnswerSchema) ----------
+  tok(raw, token){ const s=String(raw).trim(); if(token==='char') return s.replace(/\s+/g,'').split(''); return s.split(/[\s,;]+/).filter(Boolean); }
+  check(task, raw){
+    const a=task.answer; if(!a) return false; raw=String(raw);
+    if(a.type==='number'){ const x=parseFloat(raw.replace(',','.')); const y=parseFloat(a.correct[0]); if(isNaN(x)) return false; return Math.abs(x-y) <= (a.tolerance||0); }
+    if(a.type==='string'){ let s=raw.trim(), c=String(a.correct[0]); if(a.ci){s=s.toLowerCase();c=c.toLowerCase();} if(a.yo_fold){s=s.replace(/ё/g,'е');c=c.replace(/ё/g,'е');} return s===c; }
+    if(a.type==='sequence'){ const s=this.tok(raw,a.token||'char'), c=this.tok(a.correct[0],a.token||'char'); return s.length>0 && s.join('|')===c.join('|'); }
+    if(a.type==='set'){ const s=new Set(this.tok(raw,a.token||'split')), c=new Set(this.tok(a.correct[0],a.token||'split')); if(s.size!==c.size||s.size===0) return false; for(const v of c){ if(!s.has(v)) return false; } return true; }
+    return false;
+  }
+
+  // ---------- mock data (shapes mirror openapi.yaml) ----------
+  buildData(){
+    const subjects = [
+      { id:'s-rus', code:'rus', title:'Русский язык', count:27, maxPrimary:50, seed:11 },
+      { id:'s-math', code:'math', title:'Математика', count:12, maxPrimary:32, seed:22 },
+      { id:'s-inf', code:'inf', title:'Информатика', count:27, maxPrimary:29, seed:33 },
+      { id:'s-soc', code:'soc', title:'Обществознание', count:25, maxPrimary:57, seed:44 },
+    ];
+    const infTitles = {1:'Информационные модели, графы',2:'Таблицы истинности',3:'Реляционные базы данных',4:'Кодирование, условие Фано',5:'Анализ алгоритма',6:'Исполнитель, программа',7:'Кодирование звука и изображений',8:'Комбинаторика слов',9:'Обработка таблиц',10:'Поиск в текстовом документе',11:'Объём информации',12:'Исполнитель, циклы',13:'Сети, маски подсети',14:'Системы счисления',15:'Числовая прямая, делимость',16:'Рекурсивные алгоритмы',17:'Обработка массива чисел',18:'Динамическое программирование',19:'Теория игр',20:'Теория игр',21:'Теория игр',22:'Многопоточность',23:'Число программ / путей',24:'Обработка строки',25:'Поиск делителей',26:'Обработка данных из файла',27:'Обработка потока данных'};
+    const accInf = {1:92,2:74,3:87,4:81,5:79,6:85,7:70,8:76,9:83,10:90,11:68,12:64,13:72,14:82,15:61,16:52,17:41,18:49,19:66,20:63,21:57,22:55,23:38,24:47,25:44,26:51,27:45};
+    const notesBy = { rus:'Пиши сочинение каждую неделю — №27 тянет прогноз сильнее всего.', math:'Не теряй первичные на №1–8: там самый быстрый рост балла.', inf:'Стабильно растёшь. Добей №17 и №23 — это ближайшие +3 балла к прогнозу.', soc:'Термины и мини-план по обществу — регулярное повторение поднимает точность.' };
+    const perSubject = {};
+    subjects.forEach(sm=>{
+      const rnd = this.rng(sm.seed);
+      const numbers = {};
+      for(let n=1;n<=sm.count;n++){
+        const acc = sm.code==='inf' ? accInf[n] : (38 + Math.floor(rnd()*56));
+        const title = sm.code==='inf' ? infTitles[n] : ('Задание '+n);
+        const attempts = 4 + Math.floor(rnd()*27);
+        const avg = Math.round((70 - acc*0.45 + rnd()*30)*1000);
+        const start = this.clamp(acc/100 - (0.14+rnd()*0.18), 0.12, 0.95);
+        const series=[]; for(let i=0;i<10;i++){ const t=i/9; series.push(this.clamp(start+(acc/100-start)*t + (rnd()-0.5)*0.10, 0.05, 1)); }
+        numbers[n]={ number:n, title, accuracy:acc, attempts, avg_time_ms:avg, series };
+      }
+      const numList = Object.values(numbers).sort((a,b)=>a.number-b.number);
+      const weak = numList.filter(x=>x.attempts>=3).slice().sort((a,b)=>a.accuracy-b.accuracy).slice(0,4);
+      const avgAcc = numList.reduce((s,n)=>s+n.accuracy,0)/numList.length;
+      const primary = Math.round(sm.maxPrimary*avgAcc/100);
+      const testScore = sm.code==='inf' ? 72 : Math.round(this.clamp(42 + avgAcc*0.52, 30, 96));
+      const forecast = { subject:sm.title, accuracy:+(avgAcc/100).toFixed(2), primary_estimate:primary, primary_max:sm.maxPrimary, test_score:testScore, trend:2+Math.floor(rnd()*5), note:notesBy[sm.code] };
+      perSubject[sm.code] = { numbers, numList, weak, forecast };
+    });
+
+    // heatmap: 371 days
+    const heat=[]; const today=new Date(2026,6,1); const rh=this.rng(77);
+    for(let i=370;i>=0;i--){
+      const d=new Date(today); d.setDate(d.getDate()-i);
+      const dow=d.getDay(); const recent = i<12;
+      let total=0; const roll=rh();
+      if(recent){ total = 3+Math.floor(rh()*10); }
+      else if(dow===0||dow===6){ total = roll<0.5?0:Math.floor(rh()*6); }
+      else { total = roll<0.28?0:1+Math.floor(rh()*11); }
+      const correct = Math.round(total*(0.55+rh()*0.4));
+      heat.push({ date:d, total, correct });
+    }
+    let streak=0; for(let i=heat.length-1;i>=0;i--){ if(heat[i].total>0) streak++; else break; }
+
+    // authored tasks
+    const T = {};
+    const mk=(id,number,kind,statement,ans,solution,hints,media)=>{ T[id]={ id, subject_id:'s-inf', number, statement, media:media||[], status:'active', answer_kind:kind, bot_solvable:true, answer:ans, solution, hints }; };
+    mk('t1',4,'string','Для кодирования букв А, Б, В, Г используют двоичные коды: А — 0, Б — 10, В — 110, Г — 111. Закодируйте сообщение ГБА и запишите полученную двоичную последовательность.',
+      {type:'string',correct:['111100'],ci:true},
+      ['Г → 111','Б → 10','А → 0','Соединяем слева направо: 111·10·0','Ответ: 111100'],
+      ['Замените каждую букву её кодом по таблице.','Порядок букв сохраняется: Г, затем Б, затем А.','Соедините коды без пробелов: 111 10 0.']);
+    mk('t2',5,'number','На вход автомата подаётся натуральное число N. Автомат складывает первую и последнюю цифры N, а результат приписывает к N справа. Какое число получится для N = 179?',
+      {type:'number',correct:['17910'],tolerance:0},
+      ['Первая цифра 179 — это 1','Последняя цифра — 9','Сумма 1 + 9 = 10','Приписываем 10 справа: 179 → 17910'],
+      ['Найдите первую и последнюю цифры числа 179.','Сложите их между собой.','Полученное число допишите в конец 179 (не прибавляйте ко всему числу).'],
+      [{key:'auto-5',kind:'image',alt:'Схема работы автомата'}]);
+    mk('t3',8,'number','Сколько пятибуквенных слов можно составить из букв К, О, Т (буквы могут повторяться), если слово не должно начинаться с буквы Т?',
+      {type:'number',correct:['162'],tolerance:0},
+      ['Всего слов длины 5 из 3 букв: 3⁵ = 243','Слов, начинающихся с Т: 3⁴ = 81','243 − 81 = 162'],
+      ['Сначала посчитайте все слова без ограничений: 3⁵.','Отдельно посчитайте «плохие» слова, начинающиеся с Т.','Вычтите плохие из всех.']);
+    mk('t3b',8,'number','Сколько четырёхбуквенных слов можно составить из букв А, Б, В (с повторениями), если слово не должно начинаться с буквы А?',
+      {type:'number',correct:['54'],tolerance:0},
+      ['Всего: 3⁴ = 81','Начинаются с А: 3³ = 27','81 − 27 = 54'],
+      ['Посчитайте все слова длины 4: 3⁴.','Плохие начинаются с А: 3³.','Вычтите.']);
+    mk('t3c',8,'number','Сколько трёхбуквенных слов из букв К, О, Т, Ы можно составить так, чтобы слово начиналось и заканчивалось гласной (О или Ы), а в середине стояла любая из четырёх букв?',
+      {type:'number',correct:['16'],tolerance:0},
+      ['Первая буква — гласная: 2 варианта','Средняя — любая из 4','Последняя — гласная: 2 варианта','2 · 4 · 2 = 16'],
+      ['Гласные здесь — О и Ы (2 штуки).','Перемножьте число вариантов на каждой позиции.','2 · 4 · 2.']);
+    mk('t4',16,'number','Значение выражения 8⁷ + 4⁵ − 2 записали в двоичной системе счисления. Сколько единиц содержится в этой записи?',
+      {type:'number',correct:['10'],tolerance:0},
+      ['8⁷ = 2²¹, 4⁵ = 2¹⁰','Выражение = 2²¹ + (2¹⁰ − 2)','2¹⁰ − 2 = 1111111110₂ — девять единиц','Старший разряд 2²¹ добавляет ещё одну','Итого 9 + 1 = 10'],
+      ['Приведите степени к основанию 2.','«−2» удобно вычесть из 2¹⁰: посмотрите на 2¹⁰ − 2.','Отдельно стоит старший бит 2²¹.']);
+    mk('t5',11,'sequence','Расставьте объёмы памяти в порядке возрастания и запишите их номера подряд: 1) 1024 КБ; 2) 2 МБ; 3) 1 ГБ; 4) 512 КБ.',
+      {type:'sequence',correct:['4123'],token:'char'},
+      ['512 КБ = 0,5 МБ (№4)','1024 КБ = 1 МБ (№1)','2 МБ (№2)','1 ГБ = 1024 МБ (№3)','Возрастание: 4, 1, 2, 3'],
+      ['Приведите всё к одной единице, например к мегабайтам.','1 ГБ = 1024 МБ, 1024 КБ = 1 МБ.','Отсортируйте и выпишите номера подряд.']);
+    mk('t6',15,'set','Выпишите все натуральные числа от 10 до 20 включительно, которые делятся на 3. Порядок не важен, числа через пробел.',
+      {type:'set',correct:['12 15 18'],token:'split'},
+      ['Делятся на 3: 12, 15, 18','9 и 21 — вне диапазона [10; 20]'],
+      ['Проверьте делимость на 3 для чисел 10…20.','Признак: сумма цифр делится на 3.','Их ровно три.']);
+
+    const tests = [
+      { id:'t-classic-a', kind:'classic', subject:'inf', title:'Информатика · Вариант A', taskIds:['t1','t2','t3','t4','t5','t6'], durationMin:45 },
+      { id:'t-drill-8', kind:'drill', subject:'inf', number:8, title:'Дрилл · №8 Комбинаторика', taskIds:['t3','t3b','t3c'], durationMin:15 },
+    ];
+    const assignments = [
+      { id:'a1', testId:'t-classic-a', title:'Информатика · Вариант A', kind:'classic', subject:'inf', when:'сегодня 18:00', status:'запланировано', count:6, notify:true },
+      { id:'a2', testId:'t-drill-8', title:'Дрилл · №8 Комбинаторика', kind:'drill', subject:'inf', when:'завтра 17:30', status:'запланировано', count:3, notify:true },
+    ];
+    const recent = [
+      { id:'r1', when:'сегодня, 14:20', title:'Свободное решение', subject:'Информатика', correct:7, total:9, timeStr:'18:40' },
+      { id:'r2', when:'вчера, 19:05', title:'Дрилл · №17', subject:'Информатика', correct:4, total:8, timeStr:'26:10' },
+      { id:'r3', when:'29 июня, 17:40', title:'Вариант A', subject:'Информатика', correct:19, total:27, timeStr:'1:52:00' },
+      { id:'r4', when:'28 июня, 16:00', title:'Дрилл · №8', subject:'Информатика', correct:3, total:3, timeStr:'09:12' },
+    ];
+    // task bank (curation): active + drafts from ingest
+    const bank = [
+      Object.assign({}, T.t1, {status:'active'}),
+      Object.assign({}, T.t2, {status:'active'}),
+      Object.assign({}, T.t3, {status:'active'}),
+      { id:'b7', subject_id:'s-inf', number:3, statement:'В фрагменте базы данных представлены сведения о родственных отношениях. Определите ID предполагаемого деда для человека с ID 42.', media:[{key:'auto-db',kind:'table',alt:'Таблица «Родство»'}], status:'draft', answer_kind:'number', bot_solvable:true, answer:{type:'number',correct:['17'],tolerance:0}, solution:['По таблице связей…'], hints:[] },
+      { id:'b8', subject_id:'s-inf', number:7, statement:'Аналоговый звуковой сигнал дискретизировали с частотой 48 кГц и разрешением 16 бит. Определите размер (в Мбайт) 2 минут стереозаписи.', media:[], status:'draft', answer_kind:'number', bot_solvable:true, answer:{type:'number',correct:['21.97'],tolerance:0.5}, solution:[], hints:[] },
+      { id:'b9', subject_id:'s-inf', number:9, statement:'Откройте файл электронной таблицы. Сколько строк содержат числа, сумма которых больше среднего по столбцу B?', media:[{key:'auto-xls',kind:'file',alt:'Файл 9.xlsx'}], status:'rejected', answer_kind:'number', bot_solvable:false, answer:{type:'number',correct:['128'],tolerance:0}, solution:[], hints:[] },
+      Object.assign({}, T.t4, {status:'active'}),
+      Object.assign({}, T.t5, {status:'active'}),
+      { id:'b12', subject_id:'s-inf', number:2, statement:'Логическая функция F задаётся выражением (x ∧ ¬y) ∨ (¬x ∧ z). Дан фрагмент таблицы истинности. В каком порядке идут столбцы x, y, z?', media:[{key:'auto-tt',kind:'table',alt:'Фрагмент таблицы истинности'}], status:'draft', answer_kind:'sequence', bot_solvable:true, answer:{type:'sequence',correct:['zyx'],token:'char'}, solution:[], hints:[] },
+    ];
+
+    return { subjects, perSubject, heat, streak, tasks:T, tests, assignments, recent, bank, infTitles };
+  }
+
+  // ---------- navigation / role / theme ----------
+  go(view){ this.setState({ view, openNumber:null }); }
+  setRole(role){ const view = role==='teacher'?'t-dashboard':'dashboard'; this.setState({ role, view, openNumber:null, attempt:null }); this.persist({role}); }
+  toggleTheme(){ const theme = this.state.theme==='light'?'dark':'light'; this.setState({theme}); this.persist({theme}); }
+
+  // ---------- solve flow ----------
+  buildAttempt(test){
+    return { testId:test.id, title:test.title, kind:test.kind, subject:test.subject, taskIds:test.taskIds.slice(), idx:0, answers:{}, secondsLeft:test.durationMin*60, total:test.taskIds.length, startedAt:Date.now() };
+  }
+  startTest(testId){ const t=this.state.data.tests.find(x=>x.id===testId); if(!t) return; this.setState({ attempt:this.buildAttempt(t), view:'solve', draft:'', submitted:null, hintStep:0, dayOpen:null }); this.startTimer(); }
+  startDrill(number){
+    const d=this.state.data; const ids=Object.values(d.tasks).filter(t=>t.number===number).map(t=>t.id);
+    const pick = ids.length?ids:['t3','t3b','t3c'];
+    const test={ id:'drill-'+number, kind:'drill', subject:d.subject, number, title:'Дрилл · №'+number, taskIds:pick, durationMin:15 };
+    this.setState({ attempt:this.buildAttempt(test), view:'solve', draft:'', submitted:null, hintStep:0, dayOpen:null }); this.startTimer();
+  }
+  startPractice(){ this.startTest('t-classic-a'); }
+  startTimer(){ this.stopTimer(); this._tick=setInterval(()=>{ this.setState(s=>{ if(!s.attempt) return {}; const sl=s.attempt.secondsLeft-1; if(sl<=0){ this.stopTimer(); return { attempt:Object.assign({}, s.attempt, {secondsLeft:0}), view:'results' }; } return { attempt:Object.assign({}, s.attempt, {secondsLeft:sl}) }; }); },1000); }
+  stopTimer(){ if(this._tick){ clearInterval(this._tick); this._tick=null; } }
+  curTask(){ const a=this.state.attempt; if(!a) return null; return this.state.data.tasks[a.taskIds[a.idx]]; }
+  setDraft(v){ this.setState({draft:v}); }
+  seqPush(ch){ this.setState(s=>({ draft:(s.draft||'')+ch })); }
+  seqPop(){ this.setState(s=>({ draft:(s.draft||'').slice(0,-1) })); }
+  submitAnswer(){
+    const a=this.state.attempt; const task=this.curTask(); if(!a||!task) return;
+    const raw=this.state.draft; if(String(raw).trim()==='') { this.toast('Введите ответ'); return; }
+    const ok=this.check(task, raw);
+    const answers=Object.assign({}, a.answers); answers[task.id]={ raw, correct:ok, timeMs:0 };
+    this.setState({ attempt:Object.assign({}, a, {answers}), submitted:{ is_correct:ok, solution: ok?[]:task.solution }, hintStep:0 });
+  }
+  revealHint(){ this.setState(s=>({ hintStep: Math.min(s.hintStep+1, (this.curTask().hints||[]).length) })); }
+  gotoTask(i){ const a=this.state.attempt; if(!a) return; const id=a.taskIds[i]; const prev=a.answers[id]; this.setState({ attempt:Object.assign({},a,{idx:i}), draft: prev?prev.raw:'', submitted: prev?{is_correct:prev.correct, solution: prev.correct?[]:this.state.data.tasks[id].solution}:null, hintStep:0 }); }
+  nextTask(){ const a=this.state.attempt; if(!a) return; if(a.idx>=a.total-1){ this.finishAttempt(); return; } this.gotoTask(a.idx+1); }
+  prevTask(){ const a=this.state.attempt; if(!a||a.idx<=0) return; this.gotoTask(a.idx-1); }
+  finishAttempt(){ this.stopTimer(); this.setState({ view:'results' }); }
+  reviewAttempt(){ this.setState({ view:'solve' }); this.gotoTask(0); }
+  exitAttempt(){ this.stopTimer(); this.setState({ attempt:null, view:'dashboard', submitted:null, draft:'' }); }
+
+  // ---------- heatmap day ----------
+  openDay(cell){
+    if(cell.total===0){ this.toast('В этот день задач не было'); return; }
+    const rd=this.rng(cell.date.getTime()/86400000|0);
+    const items=[]; const titles=this.state.data.infTitles;
+    for(let i=0;i<Math.min(cell.total,8);i++){ const n=1+Math.floor(rd()*27); const correct=i<cell.correct; const sec=25+Math.floor(rd()*300); items.push({ number:n, title:titles[n]||('Задание №'+n), correct, time:this.mmss(sec) }); }
+    const wd=['воскресенье','понедельник','вторник','среда','четверг','пятница','суббота'][cell.date.getDay()];
+    const mn=['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'][cell.date.getMonth()];
+    this.setState({ dayOpen:{ total:cell.total, correct:cell.correct, minutes:8+Math.floor(rd()*40), items, weekday:wd, dateLabel:cell.date.getDate()+' '+mn } });
+  }
+  closeDay(){ this.setState({dayOpen:null}); }
+
+  // ---------- builder / assign / bank ----------
+  builderSet(patch){ this.setState(s=>({ builder:Object.assign({}, s.builder, patch) })); }
+  builderToggle(id){ this.setState(s=>{ const p=s.builder.picked.slice(); const i=p.indexOf(id); if(i>=0)p.splice(i,1); else p.push(id); return { builder:Object.assign({}, s.builder, {picked:p}) }; }); }
+  builderSave(){ const b=this.state.builder; if(!b.picked.length){ this.toast('Добавьте хотя бы одну задачу'); return; } const id='new-'+Date.now(); const title=(b.kind==='classic'?'Вариант':'Дрилл')+' · черновик'; const test={ id, kind:b.kind, subject:b.subject, title, taskIds:b.picked.slice(), durationMin:b.kind==='classic'?45:15 }; this.setState(s=>({ data:Object.assign({}, s.data, {tests:s.data.tests.concat([test])}), builder:{kind:b.kind,subject:b.subject,picked:[]} })); this.toast('Тест сохранён ('+test.taskIds.length+' задач)'); }
+  assignSet(patch){ this.setState(s=>({ assign:Object.assign({}, s.assign, patch) })); }
+  assignSubmit(){ const a=this.state.assign; const t=this.state.data.tests.find(x=>x.id===a.testId); if(!t){ this.toast('Выберите тест'); return; } const asg={ id:'as-'+Date.now(), testId:t.id, title:t.title, kind:t.kind, subject:t.subject, when:a.when||'без времени', status:'запланировано', count:t.taskIds.length, notify:a.notify }; this.setState(s=>({ data:Object.assign({}, s.data, {assignments:[asg].concat(s.data.assignments)}) })); this.toast(a.notify?'Назначено · уведомление в Telegram отправлено':'Назначено'); }
+  bankSet(patch){ this.setState(s=>({ bank:Object.assign({}, s.bank, patch) })); }
+  bankStartEdit(id, val){ this.setState(s=>({ bank:Object.assign({}, s.bank, {editing:id, editVal:val}) })); }
+  bankSaveEdit(id){ const v=this.state.bank.editVal; this.setState(s=>{ const bank2=s.data.bank.map(t=> t.id===id ? Object.assign({}, t, {answer:Object.assign({}, t.answer, {correct:[v]})}) : t); return { data:Object.assign({}, s.data, {bank:bank2}), bank:Object.assign({}, s.bank, {editing:null,editVal:''}) }; }); this.toast('Ответ обновлён'); }
+  bankStatus(id, status){ this.setState(s=>{ const bank2=s.data.bank.map(t=> t.id===id?Object.assign({}, t, {status}):t); return { data:Object.assign({}, s.data, {bank:bank2}) }; }); this.toast(status==='active'?'Одобрено — задача в бою':status==='rejected'?'Отклонено':'Возвращено в черновики'); }
+
+  stop(e){ if(e&&e.stopPropagation) e.stopPropagation(); }
+
+  // ---------- render ----------
+  renderVals(){
+    const S=this.state, D=S.data;
+    const isMobile = S.forceView ? S.forceView==='mobile' : S.vw<900;
+    const isDesktop = !isMobile;
+    const role=S.role, view=S.view;
+    const isStudent = role==='student';
+    const subj = D.subjects.find(x=>x.code===S.subject) || D.subjects[2];
+    const P = D.perSubject[S.subject] || D.perSubject.inf;
+    const INF = D.perSubject.inf;
+
+    // nav
+    const navDef = isStudent
+      ? [ {id:'dashboard',label:'Обзор',shape:'ring'}, {id:'subject',label:'Предметы',shape:'bars'}, {id:'history',label:'История',shape:'diamond'} ]
+      : [ {id:'t-dashboard',label:'Обзор',shape:'ring'}, {id:'t-student',label:'Ученик',shape:'dot'}, {id:'t-builder',label:'Конструктор',shape:'square'}, {id:'t-assign',label:'Назначить',shape:'diamond'}, {id:'t-bank',label:'Банк задач',shape:'bars'} ];
+    const shapeSvg=(shape,active)=>{ const c=active?'var(--accent)':'var(--text-3)'; if(shape==='ring') return 'width:8px;height:8px;border-radius:50%;border:2px solid '+c+';background:transparent;flex:none'; if(shape==='dot') return 'width:9px;height:9px;border-radius:50%;background:'+c+';flex:none'; if(shape==='square') return 'width:9px;height:9px;border-radius:2px;border:2px solid '+c+';flex:none'; if(shape==='diamond') return 'width:9px;height:9px;background:'+c+';transform:rotate(45deg);flex:none'; return 'width:11px;height:8px;flex:none;background:linear-gradient(var(--_x),'+c+' 0 2px,transparent 2px 4px,'+c+' 4px 6px,transparent 6px 8px,'+c+' 8px 10px)'.replace('var(--_x)','180deg'); };
+    const navItems = navDef.map(n=>{ const active=view===n.id || (n.id==='subject'&&['solve','review','results'].includes(view)); return {
+      label:n.label, badge: n.id==='t-bank' ? String(D.bank.filter(t=>t.status==='draft').length) : (n.id==='dashboard'? String(D.assignments.length): ''),
+      onClick:()=>this.go(n.id),
+      style:'display:flex;align-items:center;gap:11px;padding:10px 12px;border:none;border-radius:11px;cursor:pointer;font-size:14.5px;font-weight:'+(active?'700':'500')+';background:'+(active?'var(--accent-soft)':'transparent')+';color:'+(active?'var(--accent-2)':'var(--text-2)')+';width:100%',
+      dotStyle:shapeSvg(n.shape,active),
+      tabStyle:'flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;justify-content:center;border:none;background:transparent;cursor:pointer;color:'+(active?'var(--accent-2)':'var(--text-3)')+';padding-top:6px',
+      tabDotStyle:shapeSvg(n.shape,active),
+    }; });
+
+    // titles
+    const titleMap = { dashboard:'Обзор', subject:'Предметы', history:'История', solve: S.attempt?S.attempt.title:'Решение', review:'Разбор', results:'Итоги теста', 't-dashboard':'Обзор ученика', 't-student':'Статистика · '+ 'Аня', 't-builder':'Конструктор тестов', 't-assign':'Назначить тест', 't-bank':'Банк задач' };
+    const crumbMap = { dashboard:'Ученик', subject:'Ученик', history:'Ученик', solve:'Тест идёт', review:'Тест', results:'Тест завершён', 't-dashboard':'Учитель', 't-student':'Учитель', 't-builder':'Учитель', 't-assign':'Учитель', 't-bank':'Учитель · курация' };
+
+    // header CTA
+    let headerCta='', headerCtaAction=()=>{};
+    if(view==='dashboard'){ headerCta='Решать'; headerCtaAction=()=>this.startPractice(); }
+    else if(view==='subject'){ headerCta=''; }
+    else if(view==='t-builder'){ headerCta='Сохранить тест'; headerCtaAction=()=>this.builderSave(); }
+    else if(view==='t-assign'){ headerCta=''; }
+
+    const R = {
+      theme:S.theme, density:S.density, viewport:isMobile?'mobile':'desktop',
+      isMobile, isDesktop,
+      navItems,
+      crumb:crumbMap[view]||'', pageTitle:titleMap[view]||'',
+      userName: isStudent?'Аня Соколова':'Марина П.', userInitial:isStudent?'А':'М', userRoleLabel:isStudent?'ученик · 11 класс':'учитель',
+      themeIcon: S.theme==='light'?'☾':'☀',
+      roleStuStyle:'flex:1;border:none;border-radius:8px;padding:8px;font-size:13px;font-weight:600;cursor:pointer;background:'+(isStudent?'var(--surface)':'transparent')+';color:'+(isStudent?'var(--text)':'var(--text-3)')+';box-shadow:'+(isStudent?'var(--shadow)':'none'),
+      roleTeaStyle:'flex:1;border:none;border-radius:8px;padding:8px;font-size:13px;font-weight:600;cursor:pointer;background:'+(!isStudent?'var(--surface)':'transparent')+';color:'+(!isStudent?'var(--text)':'var(--text-3)')+';box-shadow:'+(!isStudent?'var(--shadow)':'none'),
+      setStudent:()=>this.setRole('student'), setTeacher:()=>this.setRole('teacher'),
+      toggleTheme:()=>this.toggleTheme(),
+      headerCta, headerCtaAction,
+      showPreviewToggle:true, frame:(S.forceView==='mobile'?'phone':'off'),
+      pvDeskStyle:'border:none;border-radius:7px;padding:6px 10px;font-size:13px;cursor:pointer;background:'+(!isMobile?'var(--surface)':'transparent')+';color:'+(!isMobile?'var(--text)':'var(--text-3)')+';box-shadow:'+(!isMobile?'var(--shadow)':'none'),
+      pvMobStyle:'border:none;border-radius:7px;padding:6px 10px;font-size:13px;cursor:pointer;background:'+(isMobile&&S.forceView?'var(--surface)':'transparent')+';color:'+(isMobile&&S.forceView?'var(--text)':'var(--text-3)')+';box-shadow:'+(isMobile&&S.forceView?'var(--shadow)':'none'),
+      setDesktop:()=>this.setState({forceView:'desktop'}), setMobile:()=>this.setState({forceView:'mobile'}),
+      subjLabel:subj.title, quickSolve:()=>this.startPractice(), goSubject:()=>this.go('subject'),
+      toast:S.toast, stop:(e)=>this.stop(e),
+      // view flags
+      vDash: view==='dashboard', vSubject: view==='subject', vHistory: view==='history',
+      vSolve: view==='solve', vReview: view==='review', vResults: view==='results',
+      vtDash: view==='t-dashboard', vtStudent: view==='t-student', vtBuilder: view==='t-builder', vtAssign: view==='t-assign', vtBank: view==='t-bank',
+    };
+
+    // state demo (dashboard)
+    R.isLoading=S.loadState==='loading'; R.isError=S.loadState==='error'; R.isEmpty=S.loadState==='empty'; R.isReady=S.loadState==='ready';
+    R.retry=()=>this.setState({loadState:'ready'});
+    const stTabs=[['ready','Данные'],['empty','Пусто'],['loading','Загрузка'],['error','Ошибка']];
+    R.stateTabs=stTabs.map(([k,l])=>({ label:l, onClick:()=>this.setState({loadState:k}), style:'border:none;border-radius:7px;padding:6px 11px;font-size:12px;font-weight:600;cursor:pointer;background:'+(S.loadState===k?'var(--accent-soft)':'transparent')+';color:'+(S.loadState===k?'var(--accent-2)':'var(--text-3)') }));
+
+    // forecast
+    const fc=P.forecast;
+    R.fc={ test_score:fc.test_score, primary_estimate:fc.primary_estimate, primary_max:fc.primary_max, trend:fc.trend, accPct:Math.round(fc.accuracy*100), note:fc.note, barStyle:'height:100%;width:'+fc.test_score+'%;background:var(--accent);border-radius:999px' };
+    R.streak=D.streak;
+
+    // weak spots
+    R.weak=P.weak.map(w=>({ number:w.number, title:w.title, accPct:w.accuracy, onDrill:()=>this.startDrill(w.number), barStyle:'height:100%;width:'+w.accuracy+'%;background:var(--bad);border-radius:999px' }));
+
+    // heatmap cells
+    R.heatCells=D.heat.map(c=>{ const lvl = c.total===0?0:c.total<=2?1:c.total<=5?2:c.total<=9?3:4; const mn=['янв','фев','мар','апр','мая','июн','июл','авг','сен','окт','ноя','дек'][c.date.getMonth()]; return {
+      style:'width:12px;height:12px;border-radius:3px;border:none;padding:0;cursor:pointer;background:var(--hm'+lvl+')',
+      title:c.date.getDate()+' '+mn+': '+c.total+' задач, '+c.correct+' верно',
+      onClick:()=>this.openDay(c) }; });
+
+    // assigned cards
+    const kindBadge=(kind)=>({ kindLabel: kind==='classic'?'Вариант':'Дрилл', kindStyle:'font-size:11px;font-weight:700;color:'+(kind==='classic'?'var(--accent-2)':'var(--warn)')+';background:'+(kind==='classic'?'var(--accent-soft)':'var(--warn-soft)')+';padding:3px 9px;border-radius:999px;text-transform:uppercase;letter-spacing:.03em' });
+    R.assigned=D.assignments.slice(0,3).map(a=>{ const kb=kindBadge(a.kind); return Object.assign({ title:a.title, when:a.when, count:a.count, status:a.status, statusStyle:'font-size:11px;color:var(--text-3);background:var(--bg-2);padding:3px 9px;border-radius:999px', onStart:()=>this.startTest(a.testId) }, kb); });
+
+    // subjects switcher
+    R.subjects=D.subjects.map(s=>({ title:s.title, onClick:()=>this.setState({subject:s.code, openNumber:null}), style:'border:1px solid '+(s.code===S.subject?'transparent':'var(--border)')+';background:'+(s.code===S.subject?'var(--accent)':'var(--surface)')+';color:'+(s.code===S.subject?'var(--on-accent)':'var(--text-2)')+';border-radius:11px;padding:10px 18px;font-weight:600;font-size:14px;cursor:pointer;white-space:nowrap;flex:none' }));
+
+    // number grid
+    R.numbers=P.numList.map(n=>{ const col=this.accColor(n.accuracy); return {
+      number:n.number, short:n.title, accPct:n.accuracy, attempts:n.attempts, dot:col,
+      spark:this.spark(n.series.slice(-8), 120, 30),
+      cardStyle:'text-align:left;border:1px solid var(--border);background:var(--surface);border-radius:14px;padding:13px 14px;cursor:pointer;transition:transform .12s ease,box-shadow .12s ease,border-color .12s ease;display:flex;flex-direction:column',
+      onClick:()=>this.setState({openNumber:n.number}) }; });
+
+    // ---------- subject detail (mastery chart) ----------
+    R.hasDetail = !!S.openNumber;
+    if(S.openNumber){
+      const n=P.numbers[S.openNumber]; const lc=this.lineChart(n.series,560,190,22); const col=this.accColor(n.accuracy);
+      R.detail={ number:n.number, title:n.title, accPct:n.accuracy, attempts:n.attempts, avgTime:this.mmss(n.avg_time_ms/1000),
+        color:col, line:lc.line, area:lc.area, baseY:lc.baseY,
+        dots:lc.dots.map(d=>({cx:d.x,cy:d.y})),
+        gTop:'22', gMid:'95', gBot:'168',
+        firstV:Math.round(n.series[0]*100), lastV:n.accuracy,
+        onDrill:()=>this.startDrill(n.number), onClose:()=>this.setState({openNumber:null}) };
+    }
+
+    // ---------- solve ----------
+    const A=S.attempt;
+    const dotStyle=(st)=>{ const b='width:34px;height:34px;border-radius:9px;cursor:pointer;font-family:\'JetBrains Mono\',monospace;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none;border:1px solid var(--border);'; if(st==='cur') return b+'background:var(--accent);color:var(--on-accent);border-color:transparent'; if(st==='ok') return b+'background:var(--accent-soft);color:var(--accent-2);border-color:transparent'; if(st==='no') return b+'background:var(--bad-soft);color:var(--bad);border-color:transparent'; return b+'background:var(--surface);color:var(--text-3)'; };
+    if(A){
+      const task=this.state.data.tasks[A.taskIds[A.idx]]; const sub=S.submitted; const kind=task.answer_kind;
+      const media=(task.media&&task.media[0])||null;
+      R.solve={ title:A.title, progressText:(A.idx+1)+' / '+A.total, progressStyle:`height:100%;width:${((A.idx+1)/A.total*100).toFixed(1)}%;background:var(--accent);border-radius:999px;transition:width .3s ease`,
+        timer:this.mmss(A.secondsLeft), timerStyle:`font-family:'JetBrains Mono',monospace;font-weight:700;font-size:15px;color:${A.secondsLeft<60?'var(--bad)':'var(--text)'}`,
+        number:task.number, statement:task.statement,
+        hasMedia:!!media, mediaLabel:media?media.alt:'', mediaKind:media?media.kind:'',
+        isNum:kind==='number', isStr:kind==='string', isSeq:kind==='sequence', isSet:kind==='set',
+        kindHint: kind==='number'?'Введите число':kind==='string'?'Введите слово или последовательность символов':kind==='sequence'?'Соберите последовательность цифр':'Введите числа через пробел, порядок не важен',
+        draft:S.draft, setDraft:(e)=>this.setDraft(e.target.value),
+        seqChips:(kind==='sequence'?String(S.draft||'').split(''):[]).map((ch,i)=>({ch,i})),
+        setChips:(kind==='set'?this.tok(S.draft,'split'):[]),
+        seqKeys:['1','2','3','4','5','6','7','8','9','0'].map(k=>({ k, onPush:()=>this.seqPush(k) })), onSeqPop:()=>this.seqPop(),
+        notSubmitted:!sub,
+        submitStyle:`margin-top:16px;width:100%;background:var(--accent);color:var(--on-accent);border:none;border-radius:12px;padding:15px;font-weight:700;font-size:16px;cursor:pointer`,
+        prevStyle:`background:transparent;border:1px solid var(--border);border-radius:11px;padding:12px 18px;font-weight:600;font-size:14px;cursor:pointer;white-space:nowrap;flex:none;color:var(--text-2);opacity:${A.idx<=0?'.4':'1'};pointer-events:${A.idx<=0?'none':'auto'}`,
+        submitted:!!sub, isCorrect:!!(sub&&sub.is_correct), isWrong:!!(sub&&!sub.is_correct),
+        solutionSteps:((sub&&!sub.is_correct)?task.solution:[]).map((t,i)=>({t,i:i+1})),
+        hintShown:(task.hints||[]).slice(0,S.hintStep).map((h,i)=>({h,i:i+1})),
+        canHint:!!(sub&&!sub.is_correct&&S.hintStep<(task.hints||[]).length),
+        hintLeft:(task.hints||[]).length-S.hintStep, hasHints:(task.hints||[]).length>0,
+        showSolution:!!(sub&&!sub.is_correct&&S.hintStep>=(task.hints||[]).length),
+        dots:A.taskIds.map((id,i)=>{ const a=A.answers[id]; const st=i===A.idx?'cur':(a?(a.correct?'ok':'no'):'todo'); return {n:this.state.data.tasks[id].number, style:dotStyle(st), onClick:()=>this.gotoTask(i)}; }),
+        isLast:A.idx>=A.total-1, isFirst:A.idx<=0, nextLabel:(A.idx>=A.total-1)?'Завершить':'Дальше →',
+        onSubmit:()=>this.submitAnswer(), onNext:()=>this.nextTask(), onPrev:()=>this.prevTask(), onReveal:()=>this.revealHint(), onFinish:()=>this.finishAttempt(), onExit:()=>this.exitAttempt(),
+        canSubmit:String(S.draft||'').trim().length>0 };
+    }
+
+    // ---------- results ----------
+    if(A){
+      const ids=A.taskIds, total=A.total; const correct=ids.filter(id=>A.answers[id]&&A.answers[id].correct).length;
+      const answered=ids.filter(id=>A.answers[id]).length; const pct=Math.round(correct/total*100);
+      const used=A.startedAt?Math.max(0,Math.round((Date.now()-A.startedAt)/1000)):0;
+      R.results={ correct, total, answered, pct, timeStr:this.mmss(used),
+        ringStyle:`width:132px;height:132px;border-radius:50%;background:conic-gradient(var(--accent) ${pct*3.6}deg, var(--bg-2) 0);display:flex;align-items:center;justify-content:center`,
+        gradeWord: pct>=85?'Отличный результат':pct>=65?'Хороший темп':pct>=45?'Есть над чем поработать':'Разберём ошибки вместе',
+        delta: pct>=70?'+2':(pct>=50?'+1':'0'), deltaGood:pct>=50,
+        breakdown:ids.map(id=>{ const t=this.state.data.tasks[id]; const a=A.answers[id]; const st=a?(a.correct?'ok':'no'):'skip'; return { number:t.number, title:t.title, mark:st==='ok'?'✓':(st==='no'?'✕':'—'), markStyle:`width:26px;height:26px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex:none;background:${st==='ok'?'var(--accent-soft)':st==='no'?'var(--bad-soft)':'var(--bg-2)'};color:${st==='ok'?'var(--accent-2)':st==='no'?'var(--bad)':'var(--text-3)'}`, raw:a?String(a.raw):'—' }; }),
+        onReview:()=>this.reviewAttempt(), onAgain:()=>this.startTest(A.testId), onHome:()=>this.exitAttempt() };
+    }
+
+    // ---------- history ----------
+    const recMap=(r)=>({ when:r.when, title:r.title, subject:r.subject, correct:r.correct, total:r.total, timeStr:r.timeStr, pct:Math.round(r.correct/r.total*100), barStyle:`height:100%;width:${Math.round(r.correct/r.total*100)}%;background:var(--accent);border-radius:999px` });
+    R.history={ recent:D.recent.map(recMap) };
+
+    // ---------- teacher: dashboard ----------
+    R.teacher={ studentName:'Аня Соколова', grade:'11 класс · информатика',
+      fcScore:INF.forecast.test_score, fcTrend:INF.forecast.trend, accPct:Math.round(INF.forecast.accuracy*100), streak:D.streak,
+      fcBar:`height:100%;width:${INF.forecast.test_score}%;background:var(--accent);border-radius:999px`,
+      assignedCount:D.assignments.length,
+      recent:D.recent.map(recMap),
+      assigned:D.assignments.slice(0,3).map(a=>({ title:a.title, when:a.when, status:a.status, count:a.count, kindLabel:a.kind==='classic'?'Вариант':'Дрилл', kindStyle:`font-size:11px;font-weight:700;color:${a.kind==='classic'?'var(--accent-2)':'var(--warn)'};background:${a.kind==='classic'?'var(--accent-soft)':'var(--warn-soft)'};padding:3px 9px;border-radius:999px` })),
+      weak:INF.weak.map(w=>({ number:w.number, title:w.title, accPct:w.accuracy, barStyle:`height:100%;width:${w.accuracy}%;background:var(--bad);border-radius:999px`, onAssign:()=>{ this.assignSet({testId:'t-drill-8'}); this.go('t-assign'); } })),
+      onOpenStudent:()=>this.go('t-student'), onAssign:()=>this.go('t-assign'), onBuild:()=>this.go('t-builder') };
+
+    // ---------- teacher: student stats ----------
+    const bars=P.numList; const maxAcc=100;
+    R.tstats={ subjectLabel:subj.title,
+      bars:bars.map(n=>({ number:n.number, acc:n.accuracy, barStyle:`width:100%;height:${Math.max(4,n.accuracy)}%;background:${this.accColor(n.accuracy)};border-radius:4px 4px 0 0;transition:height .3s ease`, title:'№'+n.number+' · '+n.title+' — '+n.accuracy+'%', onClick:()=>this.setState({openNumber:n.number}) })),
+      avg:Math.round(bars.reduce((s,n)=>s+n.accuracy,0)/bars.length),
+      weak:P.weak.map(w=>({ number:w.number, title:w.title, accPct:w.accuracy, barStyle:`height:100%;width:${w.accuracy}%;background:var(--bad);border-radius:999px` })),
+      times:P.numList.slice().sort((a,b)=>b.avg_time_ms-a.avg_time_ms).slice(0,5).map(n=>({ number:n.number, title:n.title, t:this.mmss(n.avg_time_ms/1000) })) };
+
+    // ---------- teacher: builder ----------
+    const b=S.builder; const activeBank=D.bank.filter(t=>t.status==='active');
+    R.builder={ isClassic:b.kind==='classic', isDrill:b.kind==='drill',
+      setClassic:()=>this.builderSet({kind:'classic',picked:[]}), setDrill:()=>this.builderSet({kind:'drill',picked:[]}),
+      classicStyle:`flex:1;border:1px solid ${b.kind==='classic'?'transparent':'var(--border)'};background:${b.kind==='classic'?'var(--accent)':'var(--surface)'};color:${b.kind==='classic'?'var(--on-accent)':'var(--text-2)'};border-radius:11px;padding:14px;cursor:pointer;text-align:left`,
+      drillStyle:`flex:1;border:1px solid ${b.kind==='drill'?'transparent':'var(--border)'};background:${b.kind==='drill'?'var(--accent)':'var(--surface)'};color:${b.kind==='drill'?'var(--on-accent)':'var(--text-2)'};border-radius:11px;padding:14px;cursor:pointer;text-align:left`,
+      pool:activeBank.map(t=>{ const picked=b.picked.includes(t.id); return { id:t.id, number:t.number, statement:t.statement, picked, cardStyle:`display:flex;align-items:flex-start;gap:12px;padding:13px 14px;border:1px solid ${picked?'var(--accent)':'var(--border)'};background:${picked?'var(--accent-soft)':'var(--surface)'};border-radius:12px;cursor:pointer;text-align:left;width:100%`, boxStyle:`width:22px;height:22px;border-radius:6px;border:2px solid ${picked?'var(--accent)':'var(--border-2)'};background:${picked?'var(--accent)':'transparent'};color:var(--on-accent);display:flex;align-items:center;justify-content:center;flex:none;font-size:13px`, check:picked?'✓':'', onToggle:()=>this.builderToggle(t.id), kindLabel:t.answer_kind }; }),
+      picked:b.picked.map((id,i)=>{ const t=D.bank.find(x=>x.id===id)||D.tasks[id]; return { pos:i+1, number:t.number, statement:t.statement, onRemove:()=>this.builderToggle(id) }; }),
+      pickedCount:b.picked.length, isEmpty:b.picked.length===0, onSave:()=>this.builderSave(),
+      durationLabel:b.kind==='classic'?'45 мин · структура экзамена':'15 мин · один номер' };
+
+    // ---------- teacher: assign ----------
+    const asn=S.assign; const selT=D.tests.find(t=>t.id===asn.testId);
+    R.assignV={ tests:D.tests.map(t=>({ id:t.id, title:t.title, count:t.taskIds.length, kindLabel:t.kind==='classic'?'Вариант':'Дрилл', selected:t.id===asn.testId, dot:(t.id===asn.testId?'var(--accent)':'transparent'), onSelect:()=>this.assignSet({testId:t.id}), style:`display:flex;align-items:center;gap:12px;padding:13px 15px;border:1px solid ${t.id===asn.testId?'var(--accent)':'var(--border)'};background:${t.id===asn.testId?'var(--accent-soft)':'var(--surface)'};border-radius:12px;cursor:pointer;width:100%;text-align:left` })),
+      student:'Аня Соколова', when:asn.when, setWhen:(e)=>this.assignSet({when:e.target.value}),
+      notify:asn.notify, toggleNotify:()=>this.assignSet({notify:!asn.notify}),
+      notifyTrackStyle:`width:44px;height:26px;border-radius:999px;position:relative;transition:background .2s;cursor:pointer;flex:none;background:${asn.notify?'var(--accent)':'var(--border-2)'}`,
+      notifyKnobStyle:`position:absolute;top:3px;left:${asn.notify?'21px':'3px'};width:20px;height:20px;border-radius:50%;background:#fff;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,.3)`,
+      selTitle:selT?selT.title:'—', selCount:selT?selT.taskIds.length:0,
+      onSubmit:()=>this.assignSubmit(), onPdf:()=>this.toast('Готовим PDF-бланк для печати…') };
+
+    // ---------- teacher: bank ----------
+    const bk=S.bank; let list=D.bank.slice();
+    if(bk.status!=='all') list=list.filter(t=>t.status===bk.status);
+    if(bk.number!=='all') list=list.filter(t=>String(t.number)===String(bk.number));
+    const stLabel=(s)=>s==='active'?'в бою':s==='draft'?'черновик':'отклонено';
+    const stStyle=(s)=>`font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;padding:3px 9px;border-radius:999px;background:${s==='active'?'var(--accent-soft)':s==='draft'?'var(--warn-soft)':'var(--bad-soft)'};color:${s==='active'?'var(--accent-2)':s==='draft'?'var(--warn)':'var(--bad)'}`;
+    const stTabs2=[['all','Все'],['draft','Черновики'],['active','В бою'],['rejected','Отклонённые']];
+    R.bankV={ count:list.length, draftCount:D.bank.filter(t=>t.status==='draft').length,
+      statusTabs:stTabs2.map(([k,l])=>({ label:l, onClick:()=>this.bankSet({status:k}), style:`border:none;border-radius:8px;padding:8px 13px;font-size:13px;font-weight:600;cursor:pointer;background:${bk.status===k?'var(--accent-soft)':'transparent'};color:${bk.status===k?'var(--accent-2)':'var(--text-3)'}` })),
+      items:list.map(t=>{ const editing=bk.editing===t.id; const media=(t.media&&t.media[0])||null; return { id:t.id, number:t.number, statement:t.statement, status:t.status, statusLabel:stLabel(t.status), statusStyle:stStyle(t.status),
+        answerType:t.answer_kind, answer:(t.answer&&t.answer.correct)?t.answer.correct.join(' '):'—', botSolvable:t.bot_solvable,
+        hasMedia:!!media, mediaLabel:media?media.alt:'',
+        editing, notEditing:!editing, editVal:bk.editVal, onEdit:()=>this.bankStartEdit(t.id,(t.answer&&t.answer.correct?t.answer.correct.join(' '):'')), onEditChange:(e)=>this.bankSet({editVal:e.target.value}), onSaveEdit:()=>this.bankSaveEdit(t.id), onCancelEdit:()=>this.bankSet({editing:null,editVal:''}),
+        isActive:t.status==='active', notActive:t.status!=='active', onActive:()=>this.bankStatus(t.id,'active'), onReject:()=>this.bankStatus(t.id,'rejected'), onDraft:()=>this.bankStatus(t.id,'draft') }; }) };
+
+    return R;
+  }
+}
+</script>
+</body>
+</html>
