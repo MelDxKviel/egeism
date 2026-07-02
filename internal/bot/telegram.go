@@ -178,13 +178,31 @@ func (t *Telegram) deliverMedia(ctx context.Context, chatID int64, media []Media
 }
 
 // sendRich posts a Rich Message: extended HTML (tables, headings, inline images
-// by public URL) parsed into blocks server-side, with an inline keyboard.
+// by public URL) parsed into blocks server-side, with an inline keyboard. The
+// keyboard degrades (full → callback-only → none) so a rejected button URL
+// doesn't cost the rich rendering.
 func (t *Telegram) sendRich(ctx context.Context, chatID int64, richHTML string, buttons [][]Button) error {
+	attempts := []string{markupJSON(buttons), markupJSON(callbackOnlyRows(buttons)), ""}
+	seen := map[string]bool{}
+	var lastErr error
+	for _, markup := range attempts {
+		if seen[markup] {
+			continue
+		}
+		seen[markup] = true
+		if lastErr = t.postRich(ctx, chatID, richHTML, markup); lastErr == nil {
+			return nil
+		}
+	}
+	return lastErr
+}
+
+func (t *Telegram) postRich(ctx context.Context, chatID int64, richHTML, markup string) error {
 	payload := map[string]any{
 		"chat_id":      chatID,
 		"rich_message": map[string]any{"html": richHTML},
 	}
-	if markup := markupJSON(buttons); markup != "" {
+	if markup != "" {
 		payload["reply_markup"] = json.RawMessage(markup)
 	}
 	body, err := json.Marshal(payload)
@@ -198,6 +216,23 @@ func (t *Telegram) sendRich(ctx context.Context, chatID int64, richHTML string, 
 	}
 	req.Header.Set("Content-Type", "application/json")
 	return t.doExpectOK(req)
+}
+
+// callbackOnlyRows strips URL buttons, keeping callback ones.
+func callbackOnlyRows(rows [][]Button) [][]Button {
+	var out [][]Button
+	for _, row := range rows {
+		var r []Button
+		for _, b := range row {
+			if b.Data != "" {
+				r = append(r, b)
+			}
+		}
+		if len(r) > 0 {
+			out = append(out, r)
+		}
+	}
+	return out
 }
 
 // deliverClassic is the pre-rich layout: caption bubble when the statement fits,

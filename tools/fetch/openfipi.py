@@ -247,6 +247,22 @@ def _table_to_markdown(table):
 
     if not grid:
         return None
+    # Collapse the decorative «Номер пункта» banner row and rowspan-label column
+    # of ФИПИ matrices: they carry zero information but cost two tall rows and
+    # the widest column, making the grid unreadable on a phone (both in the bot
+    # and on the site). What stays is the compact corner matrix: an empty corner,
+    # column numbers across, row numbers down.
+    def _only_label(cells):
+        vals = {c.strip().lower() for c in cells if c.strip()}
+        return vals == {"номер пункта"}
+    grid = [r for r in grid if not _only_label(r)]
+    if grid:
+        w = max(len(r) for r in grid)
+        drop = {j for j in range(w) if _only_label([r[j] for r in grid if j < len(r)])}
+        if drop:
+            grid = [[c for j, c in enumerate(r) if j not in drop] for r in grid]
+    if not grid:
+        return None
     width = max(len(r) for r in grid)
     longest = max((len(c) for r in grid for c in r), default=0)
     # A data table has several columns of short values; a wrapper table is one

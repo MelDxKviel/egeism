@@ -118,28 +118,29 @@ MATRIX_HTML = """
 """
 
 
-def test_openfipi_matrix_spans_align_and_trailing_column_trimmed():
+def test_openfipi_matrix_collapses_to_compact_corner_grid():
     table = BeautifulSoup(MATRIX_HTML, "html.parser").find("table")
     md = OF._table_to_markdown(table)
     assert md is not None
     lines = md.strip().splitlines()
     rows = [[c.strip() for c in ln.strip().strip("|").split("|")] for ln in lines]
-    banner, header, data1, data2 = rows[0], rows[2], rows[3], rows[4]  # rows[1] = --- rule
+    header, data1, data2 = rows[0], rows[2], rows[3]  # rows[1] = --- rule
 
-    # Merged corner expands to two leading header columns; 1..8 line up after them.
-    assert banner[2] == "Номер пункта"
-    assert header[2:10] == ["1", "2", "3", "4", "5", "6", "7", "8"]
+    # The decorative «Номер пункта» banner row and label column are collapsed:
+    # what remains is the compact corner matrix (empty corner + column numbers).
+    assert "Номер пункта" not in {c for r in rows for c in r}
+    assert header[0] == "" and header[1:9] == ["1", "2", "3", "4", "5", "6", "7", "8"]
 
-    # Row П1: label + index, values under their own column headers.
-    assert data1[0] == "Номер пункта" and data1[1] == "1"
+    # Row П1: index in the first cell, values under their own column headers.
+    assert data1[0] == "1"
     assert data1[header.index("2")] == "8"
     assert data1[header.index("7")] == "1"
     assert data1[header.index("8")] == "3"
 
-    # Row П2 sits under the rowspan label (blank first cell) and stays symmetric.
-    assert data2[0] == "" and data2[1] == "2"
+    # Row П2 stays symmetric with П1.
+    assert data2[0] == "2"
     assert data2[header.index("1")] == "8"
     assert data2[header.index("5")] == "74"
 
-    # The stray all-empty trailing column is trimmed: a clean 10-wide rectangle.
-    assert all(len(r) == 10 for r in rows)
+    # Trailing empty column trimmed: a clean 9-wide rectangle (corner + 8).
+    assert all(len(r) == 9 for r in rows)

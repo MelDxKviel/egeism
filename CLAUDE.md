@@ -147,9 +147,13 @@ goes live without a human approving it in the bank.
   site's POST form (`type = number-1`), random order so repeat pulls grow the
   bank. Statements keep tables **legible** — a leaf table becomes `a | b | c`
   rows (the web renders `statement` with `white-space: pre-wrap`), so truth
-  tables/DB headers don't collapse; icon-sized base64 junk (the download arrow,
-  the "Forbidden" stub) is dropped, real FIPI images/inline-base64 are kept.
-  Answers are crowdsourced → curate before going live (all `draft`).
+  tables/DB headers don't collapse; colspan/rowspan expand to a rectangle; the
+  decorative «Номер пункта» banner row + label column of distance matrices are
+  **collapsed to a compact corner grid** (they cost half a phone screen for zero
+  information — the renderers mark both axes as headers instead); icon-sized
+  base64 junk (the download arrow, the "Forbidden" stub) is dropped, real FIPI
+  images/inline-base64 are kept. Answers are crowdsourced → curate before going
+  live (all `draft`).
 - **rus / math / soc → `fetch.py`** — the `sdamgia` (РЕШУ) path (FIPI-origin
   tasks + answers). РЕШУ is ~seconds per request, so `fetch.py` fetches
   **concurrently** (a `ThreadPoolExecutor`, `FETCH_WORKERS`=6) and **round-robins

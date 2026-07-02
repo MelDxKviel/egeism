@@ -126,15 +126,18 @@ func tableRichHTML(rows []string, media []MediaRef) string {
 	if sepAt > 0 {
 		headerRows = sepAt
 	}
+	// A corner matrix (empty top-left header cell) labels rows in its first
+	// column — render those as <th> too, so both axes read as headers.
+	rowLabels := headerRows > 0 && len(parsed) > 0 && len(parsed[0]) > 0 && parsed[0][0] == ""
 	var b strings.Builder
 	b.WriteString("<table bordered striped>")
 	for ri, cells := range parsed {
 		b.WriteString("<tr>")
-		tag := "td"
-		if ri < headerRows {
-			tag = "th"
-		}
-		for _, c := range cells {
+		for ci, c := range cells {
+			tag := "td"
+			if ri < headerRows || (rowLabels && ci == 0) {
+				tag = "th"
+			}
 			b.WriteString("<" + tag + ` align="center">`)
 			b.WriteString(escapeHTML(c))
 			b.WriteString("</" + tag + ">")

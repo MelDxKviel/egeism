@@ -500,11 +500,19 @@ func (b *Bot) taskReply(sess *session, chatID int64, t TaskView) Reply {
 	richBody, leftovers := statementToRichHTML(t.Statement, t.Media, b.mediaBase)
 	rich := richHead + richBody + "<p><i>✍️ Отправь ответ сообщением.</i></p>"
 
+	// «Решать на сайте» rides on task messages when the web origin is public
+	// (Telegram rejects localhost URL buttons — verified: "Wrong HTTP URL").
+	var buttons [][]Button
+	if b.mediaBase != "" && !hostIsLocal(b.mediaBase) {
+		buttons = append(buttons, []Button{{Text: "🌐 Решать на сайте", URL: b.mediaBase}})
+	}
+
 	return Reply{
 		ChatID:    chatID,
 		RichHTML:  rich,
 		RichMedia: leftovers,
 		HTML:      html,
+		Buttons:   buttons,
 		Media:     attachments(t.Media),
 	}
 }

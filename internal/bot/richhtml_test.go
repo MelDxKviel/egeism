@@ -5,14 +5,14 @@ import (
 	"testing"
 )
 
-// The load-bearing statement shape: paragraphs around a pipe table (the ФИПИ
-// distance matrix emitted by the fetcher) plus a block figure and a file.
+// The load-bearing statement shape: paragraphs around a pipe table (the compact
+// corner matrix the fetcher emits after collapsing the «Номер пункта»
+// decorations) plus a block figure and a file.
 const matrixStatement = `На рисунке схема дорог, в таблице — протяжённость (км).
-| | | Номер пункта | | |
-| --- | --- | --- | --- | --- |
-| | | 1 | 2 | 3 |
-| Номер пункта | 1 | | 8 & 9 | |
-| | 2 | 8 | | 74 |
+| | 1 | 2 | 3 |
+| --- | --- | --- | --- |
+| 1 | | 8 & 9 | |
+| 2 | 8 | | 74 |
 Определите, какова протяжённость дороги из пункта A в пункт B.`
 
 func richMedia() []MediaRef {
@@ -26,13 +26,18 @@ func richMedia() []MediaRef {
 func TestStatementToRichHTMLTables(t *testing.T) {
 	html, leftovers := statementToRichHTML(matrixStatement, richMedia(), "")
 
-	// A REAL table, not a <pre>: bordered+striped grid, header rows (before ---)
-	// as <th>, data as <td>, cells centered like the web's .stmt-table.
-	if !strings.Contains(html, `<table bordered striped><tr><th align="center"></th><th align="center"></th><th align="center">Номер пункта</th>`) {
+	// A REAL table, not a <pre>: bordered+striped grid, the header row (before
+	// ---) as <th>, cells centered like the web's .stmt-table.
+	if !strings.Contains(html, `<table bordered striped><tr><th align="center"></th><th align="center">1</th>`) {
 		t.Fatalf("table header not rendered as bordered/centered <th>: %s", html)
 	}
 	if !strings.Contains(html, `<td align="center">8 &amp; 9</td>`) {
 		t.Fatalf("cell content not escaped/rendered: %s", html)
+	}
+	// Corner matrix (empty top-left header): row indices in the first column
+	// render as <th> so both axes read as headers.
+	if !strings.Contains(html, `<tr><th align="center">1</th><td align="center"></td><td align="center">8 &amp; 9</td>`) {
+		t.Fatalf("row-label column not rendered as <th>: %s", html)
 	}
 	if strings.Contains(html, "<pre>") {
 		t.Fatalf("rich rendering must not fall back to <pre>: %s", html)

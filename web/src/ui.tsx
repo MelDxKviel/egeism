@@ -151,6 +151,9 @@ export function StatementView({ text, media, style }: { text?: string; media?: M
       const sep = rows.findIndex(isSep);
       const header = sep > 0 ? rows.slice(0, sep).map(cellsOf) : [];
       const body = (sep >= 0 ? rows.slice(sep + 1) : rows).map(cellsOf);
+      // A corner matrix (empty top-left header cell) labels rows in its first
+      // column — render those as <th> too, so both axes read as headers.
+      const rowLabels = header.length > 0 && header[0][0] === "";
       blocks.push(
         <div key={blocks.length} style={{ overflowX: "auto", margin: "10px 0" }}>
           <table className="stmt-table">
@@ -160,7 +163,9 @@ export function StatementView({ text, media, style }: { text?: string; media?: M
               ))}</thead>
             )}
             <tbody>{body.map((r, ri) => (
-              <tr key={ri}>{r.map((c, ci) => <td key={ci}>{c ? renderInline(c, media) : " "}</td>)}</tr>
+              <tr key={ri}>{r.map((c, ci) => rowLabels && ci === 0
+                ? <th key={ci}>{c ? renderInline(c, media) : " "}</th>
+                : <td key={ci}>{c ? renderInline(c, media) : " "}</td>)}</tr>
             ))}</tbody>
           </table>
         </div>,
