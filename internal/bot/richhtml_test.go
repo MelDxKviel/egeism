@@ -26,11 +26,12 @@ func richMedia() []MediaRef {
 func TestStatementToRichHTMLTables(t *testing.T) {
 	html, leftovers := statementToRichHTML(matrixStatement, richMedia(), "")
 
-	// A REAL table, not a <pre>: header rows (before ---) as <th>, data as <td>.
-	if !strings.Contains(html, "<table><tr><th></th><th></th><th>Номер пункта</th>") {
-		t.Fatalf("table header not rendered as <th>: %s", html)
+	// A REAL table, not a <pre>: bordered+striped grid, header rows (before ---)
+	// as <th>, data as <td>, cells centered like the web's .stmt-table.
+	if !strings.Contains(html, `<table bordered striped><tr><th align="center"></th><th align="center"></th><th align="center">Номер пункта</th>`) {
+		t.Fatalf("table header not rendered as bordered/centered <th>: %s", html)
 	}
-	if !strings.Contains(html, "<td>8 &amp; 9</td>") {
+	if !strings.Contains(html, `<td align="center">8 &amp; 9</td>`) {
 		t.Fatalf("cell content not escaped/rendered: %s", html)
 	}
 	if strings.Contains(html, "<pre>") {

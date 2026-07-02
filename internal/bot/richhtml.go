@@ -104,7 +104,10 @@ func statementToRichHTML(text string, media []MediaRef, mediaBase string) (strin
 }
 
 // tableRichHTML renders pipe-table rows as a real rich <table>: rows above the
-// `---` separator become header cells (<th>), the rest are <td>.
+// `---` separator become header cells (<th>), the rest are <td>. Attribute
+// mapping pinned against the live API: `bordered striped` on <table> set
+// is_bordered/is_striped (a bare `class` is ignored), `align="center"` sets the
+// cell alignment — mirrors the web's .stmt-table (bordered grid, centered).
 func tableRichHTML(rows []string, media []MediaRef) string {
 	parsed := make([][]string, 0, len(rows))
 	sepAt := -1
@@ -124,7 +127,7 @@ func tableRichHTML(rows []string, media []MediaRef) string {
 		headerRows = sepAt
 	}
 	var b strings.Builder
-	b.WriteString("<table>")
+	b.WriteString("<table bordered striped>")
 	for ri, cells := range parsed {
 		b.WriteString("<tr>")
 		tag := "td"
@@ -132,7 +135,7 @@ func tableRichHTML(rows []string, media []MediaRef) string {
 			tag = "th"
 		}
 		for _, c := range cells {
-			b.WriteString("<" + tag + ">")
+			b.WriteString("<" + tag + ` align="center">`)
 			b.WriteString(escapeHTML(c))
 			b.WriteString("</" + tag + ">")
 		}
