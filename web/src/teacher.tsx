@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid } from "recharts";
 import {
-  api, SubjectCode, TestKind, Task, TaskStatus, AnswerSchema, AttemptSummary, AttemptReviewItem, uploadTasks,
+  api, SubjectCode, TestKind, Task, TaskStatus, AnswerSchema, AttemptSummary, AttemptReviewItem, uploadTasks, downloadTestPDF,
   useForecast, useHeatmap, useWeakSpots, useMastery, useMasterySeries, useAttempts,
   useAdminTasks, useTests, useTestDetail, useInvalidate,
 } from "./api";
@@ -273,6 +273,35 @@ function EditableTitle({ id, title }: { id: string; title: string }) {
   );
 }
 
+// PdfExportButtons downloads the printable variant: a clean copy for the
+// student and one with the answer-key page for the teacher.
+function PdfExportButtons({ id, title }: { id: string; title: string }) {
+  const { showToast } = useApp();
+  const [busy, setBusy] = useState(false);
+  const dl = async (answers: boolean) => {
+    setBusy(true);
+    try { await downloadTestPDF(id, testTitle(title), answers); }
+    catch (e) { showToast(String((e as Error).message)); }
+    finally { setBusy(false); }
+  };
+  const style = {
+    display: "inline-flex", alignItems: "center", gap: 7,
+    background: "transparent", border: "1px solid var(--border-2)",
+    borderRadius: 10, padding: "8px 14px", fontSize: 14, color: "var(--text-2)",
+    opacity: busy ? 0.6 : 1,
+  } as const;
+  return (
+    <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
+      <button disabled={busy} onClick={() => dl(false)} style={style}>
+        <Icon name="download" size={16} /> PDF для ученика
+      </button>
+      <button disabled={busy} onClick={() => dl(true)} style={style}>
+        <Icon name="download" size={16} /> PDF с ответами
+      </button>
+    </div>
+  );
+}
+
 // TestDetailPage is a standalone page showing a composed test's tasks WITH the
 // correct answers, so the teacher can review a variant before assigning.
 export function TestDetailPage() {
@@ -290,6 +319,7 @@ export function TestDetailPage() {
           <Card>
             <EditableTitle id={d.test.id} title={d.test.title} />
             <div className="mono" style={{ color: "var(--text-3)", fontSize: 13, marginTop: 4 }}>{d.test.kind} · {d.tasks.length} задач</div>
+            {d.tasks.length > 0 && <PdfExportButtons id={d.test.id} title={d.test.title} />}
           </Card>
           {d.tasks.length === 0 ? <Empty title="В тесте пока нет заданий" /> : (
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>

@@ -129,6 +129,31 @@ export async function uploadTasks(file: File, opts: { provider?: string; active?
   return res.json();
 }
 
+// downloadTestPDF fetches the printable variant PDF and hands it to the browser
+// as a download. Kept separate from req() because the response is a blob, and
+// from a plain <a href> because the endpoint needs the Bearer header.
+// answers=true appends the teacher's answer-key page — never give that file to
+// a student.
+export async function downloadTestPDF(id: string, title: string, answers: boolean): Promise<void> {
+  const headers: Record<string, string> = {};
+  if (currentToken) headers["Authorization"] = `Bearer ${currentToken}`;
+  const res = await fetch(`${API_BASE}/api/admin/tests/${id}/export.pdf${answers ? "?answers=1" : ""}`, { headers });
+  if (!res.ok) {
+    let msg = `${res.status}`;
+    try { msg = (await res.json()).error || msg; } catch { /* ignore */ }
+    throw new ApiError(res.status, msg);
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${title}${answers ? " (с ответами)" : ""}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 export interface AuthResult { token: string; user: User; }
 
 export const api = {

@@ -11,7 +11,8 @@ export type IconName =
   | "moon" | "sun" | "logout" | "logo"        // shell chrome
   | "flame" | "paperclip" | "bot" | "image" | "check"  // inline markers
   | "close" | "arrowRight" | "arrowLeft" | "trash" | "pencil"  // affordances
-  | "bell";  // notifications
+  | "bell"   // notifications
+  | "download";  // PDF export
 
 const PATHS: Record<IconName, ReactNode> = {
   dashboard: (
@@ -129,6 +130,13 @@ const PATHS: Record<IconName, ReactNode> = {
     </>
   ),
   close: <path d="M18 6 6 18M6 6l12 12" />,
+  download: (
+    <>
+      <path d="M12 4v11" />
+      <path d="M7 10.5 12 15l5-4.5" />
+      <path d="M4.5 19.5h15" />
+    </>
+  ),
   arrowRight: <path d="M4 12h15M13 5.5l6.5 6.5-6.5 6.5" />,
   arrowLeft: <path d="M20 12H5M11 18.5 4.5 12 11 5.5" />,
 };
