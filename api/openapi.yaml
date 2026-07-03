@@ -564,6 +564,22 @@ paths:
       responses:
         '200': { description: test + tasks }
 
+  /api/admin/tests/{testID}/export.pdf:
+    get:
+      summary: Export a composed test as a printable PDF (teacher)
+      description: >
+        Renders the variant for print: statements with tables/images, an answer
+        blank per task. `answers=1` appends the answer-key page — the teacher's
+        copy; without it the file is safe to hand to a student.
+      parameters:
+        - { name: testID, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: answers, in: query, schema: { type: string, enum: ["1"] } }
+      responses:
+        '200':
+          description: the PDF
+          content:
+            application/pdf: {}
+
   /api/admin/tests/generate:
     post:
       summary: Auto-build a random variant from the active bank (classic|drill)

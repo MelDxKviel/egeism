@@ -33,6 +33,7 @@ internal/bot         Telegram bot (thin API client) + minimal transport
 internal/scheduler   asynq tasks/handlers (notifications, streak nudges)
 internal/scoring     score forecast (placeholder tables — see §11 M5)
 internal/media       MinIO storage + serving for task images/files
+internal/pdf         printable variant export (embedded DejaVu for Cyrillic)
 internal/ingest      content pipeline (isolated adapter, §9)
 tools/fetch          Python hybrid fetcher (source → normalized JSONL)
 migrations           goose SQL + embed for the migrate binary
@@ -279,7 +280,11 @@ docker stack incl. web, the full React frontend (all 11 screens wired), and
 real JWT auth (register/login per role, bot on tokens), and the media pipeline
 (MinIO upload/serve, images+files rendered in the web), and in-app web
 notifications (the bell: assigned → student, solved → teacher, click-through
-to the test).
+to the test), and PDF export of composed variants
+(`GET /api/admin/tests/{id}/export.pdf`, `?answers=1` appends the key page;
+`internal/pdf` renders statements, pipe-table grids and MinIO images with
+embedded DejaVu; web buttons «PDF для ученика» / «PDF с ответами» on the test
+detail page — never hand the answers file to a student).
 TODO: run/validate the Python fetcher against live РЕШУ/FIPI (it's a template),
-Telegram deep-link handoff, PDF export, LLM-assisted answers + progressive hints
+Telegram deep-link handoff, LLM-assisted answers + progressive hints
 (part-2), real ФИПИ primary→test score tables.

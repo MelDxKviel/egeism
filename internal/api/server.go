@@ -121,6 +121,7 @@ func (s *Server) Router() http.Handler {
 			r.Patch("/admin/tasks/{taskID}/status", s.handleSetTaskStatus)
 			r.Get("/admin/tests", s.handleListTests)
 			r.Get("/admin/tests/{testID}", s.handleGetTestDetail)
+			r.Get("/admin/tests/{testID}/export.pdf", s.handleExportTestPDF)
 			r.Post("/admin/tests", s.handleCreateTest)
 			r.Patch("/admin/tests/{testID}", s.handleRenameTest)
 			r.Delete("/admin/tests/{testID}", s.handleDeleteTest)
