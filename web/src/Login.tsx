@@ -1,26 +1,13 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useApp } from "./state";
-import { Role, api } from "./api";
 import { Button, Label } from "./ui";
 import { Icon } from "./icons";
 
-// Login / registration screen. Role is chosen at registration and tied to the
-// account — there is no role toggle; the logged-in account decides student vs
-// teacher UI. Registration can be disabled server-side (prod): the tab is then
-// hidden and the API rejects signup regardless.
+// Login screen. Self-registration is gone: accounts are created by the admin
+// (admin panel) or by a teacher (student accounts), so this is login-only. The
+// account's role decides the UI — student, teacher or admin.
 export function Login() {
-  const { theme, login, register } = useApp();
-  const [mode, setMode] = useState<"login" | "register">("login");
-  // Whether self-service signup is open (from GET /api/config). Assume closed
-  // until known, so the register tab never flashes when it's disabled.
-  const [canRegister, setCanRegister] = useState(false);
-  useEffect(() => {
-    api.config()
-      .then((c) => setCanRegister(c.allow_registration))
-      .catch(() => setCanRegister(false));
-  }, []);
-  const [role, setRole] = useState<Role>("student");
-  const [name, setName] = useState("");
+  const { theme, login } = useApp();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -30,10 +17,10 @@ export function Login() {
     e.preventDefault();
     setErr(undefined); setBusy(true);
     try {
-      if (mode === "login") await login(username, password);
-      else await register(role, username, password, name);
+      await login(username, password);
     } catch (e) {
-      setErr(mode === "login" ? "Неверный логин или пароль" : String((e as Error).message));
+      const msg = String((e as Error).message ?? e);
+      setErr(msg.includes("отключён") ? msg : "Неверный логин или пароль");
     } finally { setBusy(false); }
   };
 
@@ -53,55 +40,22 @@ export function Login() {
           </div>
         </div>
 
-        {canRegister && (
-          <div style={{ display: "flex", gap: 6, background: "var(--bg-2)", borderRadius: 10, padding: 3, marginBottom: 20 }}>
-            <Tab active={mode === "login"} onClick={() => setMode("login")}>Вход</Tab>
-            <Tab active={mode === "register"} onClick={() => setMode("register")}>Регистрация</Tab>
-          </div>
-        )}
-
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          {mode === "register" && (
-            <>
-              <div>
-                <Label>Кто ты</Label>
-                <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
-                  <RolePick active={role === "student"} onClick={() => setRole("student")}>Ученик</RolePick>
-                  <RolePick active={role === "teacher"} onClick={() => setRole("teacher")}>Учитель</RolePick>
-                </div>
-              </div>
-              <label><Label>Имя</Label>
-                <input value={name} onChange={(e) => setName(e.target.value)} placeholder="как тебя зовут" style={{ width: "100%", marginTop: 6 }} /></label>
-            </>
-          )}
           <label><Label>Логин</Label>
             <input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" style={{ width: "100%", marginTop: 6 }} /></label>
           <label><Label>Пароль</Label>
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete={mode === "login" ? "current-password" : "new-password"} style={{ width: "100%", marginTop: 6 }} /></label>
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" style={{ width: "100%", marginTop: 6 }} /></label>
 
           {err && <div style={{ color: "var(--bad)", fontSize: 13 }}>{err}</div>}
 
           <Button type="submit" disabled={busy} style={{ width: "100%", padding: "12px 0" }}>
-            {busy ? "…" : mode === "login" ? "Войти" : "Создать аккаунт"}
+            {busy ? "…" : "Войти"}
           </Button>
+          <div style={{ color: "var(--text-3)", fontSize: 12.5, textAlign: "center" }}>
+            Аккаунты выдаёт администратор или учитель.
+          </div>
         </div>
       </form>
     </div>
   );
-}
-
-function Tab({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
-  return <button type="button" onClick={onClick} style={{
-    flex: 1, border: "none", borderRadius: 8, padding: "8px 0", fontSize: 14, fontWeight: 600,
-    background: active ? "var(--surface)" : "transparent", color: active ? "var(--text)" : "var(--text-3)",
-    boxShadow: active ? "var(--shadow)" : "none",
-  }}>{children}</button>;
-}
-function RolePick({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
-  return <button type="button" onClick={onClick} style={{
-    flex: 1, borderRadius: 10, padding: "9px 0", fontSize: 14, fontWeight: 600,
-    border: "1px solid " + (active ? "var(--accent)" : "var(--border-2)"),
-    background: active ? "var(--accent-soft)" : "transparent",
-    color: active ? "var(--accent-2)" : "var(--text-2)",
-  }}>{children}</button>;
 }

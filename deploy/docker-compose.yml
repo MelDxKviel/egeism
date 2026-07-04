@@ -15,6 +15,9 @@ x-app-env: &app-env
   TELEGRAM_TOKEN: ${TELEGRAM_TOKEN:-}
   TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-}
   JWT_SECRET: ${JWT_SECRET:-dev-insecure-change-me}
+  # Dev bootstrap admin (no self-registration anymore): admin / admin.
+  ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+  ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin}
   FETCHER_URL: http://fetcher:8090
   # Public URL of the web app for the bot's «решать на сайте» buttons. Set a
   # real host in deploy/.env when exposed; empty = the button is omitted.

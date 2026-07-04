@@ -13,6 +13,10 @@ type Role string
 const (
 	RoleStudent Role = "student"
 	RoleTeacher Role = "teacher"
+	// RoleAdmin manages accounts (create/activate/deactivate/delete, change
+	// roles) and watches platform-wide stats. Self-registration is gone: only
+	// an admin (any role) or a teacher (students) creates users.
+	RoleAdmin Role = "admin"
 )
 
 // SubjectCode identifies one of the four supported subjects.
@@ -61,7 +65,25 @@ type User struct {
 	TelegramID *int64    `json:"telegram_id,omitempty"`
 	Username   *string   `json:"username,omitempty"`
 	Name       string    `json:"name"`
-	CreatedAt  time.Time `json:"created_at"`
+	// Subject scopes a teacher to one exam subject; nil on a teacher means
+	// "сверхучитель" (may work with any subject). Always nil for other roles.
+	Subject *SubjectCode `json:"subject,omitempty"`
+	// IsActive gates every authenticated action: a deactivated account keeps
+	// its history but can't log in (web, bot) until an admin re-enables it.
+	IsActive  bool      `json:"is_active"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// Class is a teacher's group of students. Students may also stay classless
+// (репетитор case); membership lives in class_members.
+type Class struct {
+	ID        uuid.UUID `json:"id"`
+	TeacherID uuid.UUID `json:"teacher_id"`
+	Name      string    `json:"name"`
+	CreatedAt time.Time `json:"created_at"`
+	// Enriched at read time (list queries); zero-valued on bare rows.
+	MemberCount int64  `json:"member_count"`
+	TeacherName string `json:"teacher_name,omitempty"`
 }
 
 // Enrollment links a teacher to a student (m2m, one row for now).
@@ -92,8 +114,8 @@ type Media struct {
 
 // Source records where a task came from, for ingest dedup and provenance.
 type Source struct {
-	Provider string `json:"provider"`         // e.g. "fipi", "sdamgia", "dataset"
-	ExternID string `json:"extern_id"`        // stable id at the provider
+	Provider string `json:"provider"`  // e.g. "fipi", "sdamgia", "dataset"
+	ExternID string `json:"extern_id"` // stable id at the provider
 	URL      string `json:"url,omitempty"`
 }
 

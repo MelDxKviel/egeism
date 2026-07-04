@@ -24,7 +24,8 @@ var httpImageClient = &http.Client{Timeout: 10 * time.Second}
 // GET /api/admin/tests/{testID}/export.pdf. `?answers=1` appends the answer-key
 // page (the teacher's copy); without it the file is safe to hand to a student.
 func (s *Server) handleExportTestPDF(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.requireTeacher(w, r); !ok {
+	teacher, ok := s.requireTeacher(w, r)
+	if !ok {
 		return
 	}
 	id, err := uuid.Parse(chi.URLParam(r, "testID"))
@@ -32,9 +33,8 @@ func (s *Server) handleExportTestPDF(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "invalid test id")
 		return
 	}
-	test, err := s.store.GetTest(r.Context(), id)
-	if err != nil {
-		writeStoreErr(w, err)
+	test, ok := s.testInScope(w, r, teacher, id)
+	if !ok {
 		return
 	}
 	tasks, err := s.store.ListTestTasks(r.Context(), id)

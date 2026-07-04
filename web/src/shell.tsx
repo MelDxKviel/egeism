@@ -20,18 +20,26 @@ const STUDENT_NAV: { v: View; label: string; icon: IconName }[] = [
   { v: "dashboard", label: "Дашборд", icon: "dashboard" },
   { v: "subject", label: "Предмет", icon: "target" },
   { v: "history", label: "История", icon: "history" },
+  { v: "profile", label: "Профиль", icon: "user" },
 ];
 const TEACHER_NAV: { v: View; label: string; icon: IconName }[] = [
-  { v: "t-dashboard", label: "Обзор", icon: "overview" },
+  { v: "t-dashboard", label: "Ученики", icon: "overview" },
   { v: "t-builder", label: "Тесты", icon: "tests" },
   { v: "t-assign", label: "Назначить", icon: "assign" },
   { v: "t-bank", label: "Банк", icon: "bank" },
+  { v: "profile", label: "Профиль", icon: "user" },
 ];
+const ADMIN_NAV: { v: View; label: string; icon: IconName }[] = [
+  { v: "a-stats", label: "Обзор", icon: "overview" },
+  { v: "a-users", label: "Пользователи", icon: "user" },
+  { v: "profile", label: "Профиль", icon: "user" },
+];
+const ROLE_RU: Record<string, string> = { teacher: "учитель", student: "ученик", admin: "админ" };
 
 export function Shell({ title, cta, children }: { title: string; cta?: ReactNode; children: ReactNode }) {
   const { theme, role, view, user, go, logout, setTheme } = useApp();
   const isMobile = useIsMobile();
-  const nav = role === "teacher" ? TEACHER_NAV : STUDENT_NAV;
+  const nav = role === "admin" ? ADMIN_NAV : role === "teacher" ? TEACHER_NAV : STUDENT_NAV;
 
   return (
     <div className="app" data-theme={theme} style={{ minHeight: "100vh" }}>
@@ -60,7 +68,7 @@ export function Shell({ title, cta, children }: { title: string; cta?: ReactNode
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 4px" }}>
                 <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.2, minWidth: 0 }}>
                   <span style={{ fontWeight: 600, fontSize: 14, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.name}</span>
-                  <span className="mono" style={{ fontSize: 11, color: "var(--text-3)" }}>{role === "teacher" ? "учитель" : "ученик"}</span>
+                  <span className="mono" style={{ fontSize: 11, color: "var(--text-3)" }}>{ROLE_RU[role || "student"]}</span>
                 </div>
                 <button onClick={logout} title="Выйти" style={{
                   display: "flex", alignItems: "center", justifyContent: "center",
@@ -218,9 +226,9 @@ function NotificationsBell() {
           {feed.isLoading && <Loading label="Загружаем…" />}
           {feed.data && feed.data.items.length === 0 && (
             <div style={{ color: "var(--text-2)", fontSize: 14, padding: "4px 0 8px" }}>
-              Пока нет уведомлений. Здесь появится, когда {role === "teacher"
-                ? "ученик решит назначенный тест."
-                : "учитель назначит тебе тест."}
+              Пока нет уведомлений.{role === "teacher"
+                ? " Здесь появится, когда ученик решит назначенный тест."
+                : role === "student" ? " Здесь появится, когда учитель назначит тебе тест." : ""}
             </div>
           )}
           {feed.data && feed.data.items.length > 0 && (

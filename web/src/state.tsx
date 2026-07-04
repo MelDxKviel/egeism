@@ -1,9 +1,11 @@
 import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from "react";
-import { Role, SubjectCode, User, api, setToken, clearToken, hasToken, useStudents } from "./api";
+import { Role, SubjectCode, User, api, setToken, clearToken, hasToken } from "./api";
 
 export type View =
   | "dashboard" | "subject" | "solve" | "results" | "history"
-  | "t-dashboard" | "t-builder" | "t-assign" | "t-bank" | "t-test";
+  | "t-dashboard" | "t-class" | "t-student" | "t-builder" | "t-assign" | "t-bank" | "t-test"
+  | "a-stats" | "a-users"
+  | "profile";
 
 interface AppState {
   theme: "light" | "dark";
@@ -18,7 +20,6 @@ interface AppState {
   go: (v: View) => void;
   showToast: (m: string) => void;
   login: (username: string, password: string) => Promise<void>;
-  register: (role: Role, username: string, password: string, name: string) => Promise<void>;
   logout: () => void;
 }
 
@@ -29,21 +30,30 @@ export const useApp = () => {
   return c;
 };
 
-const homeView = (r: Role): View => (r === "teacher" ? "t-dashboard" : "dashboard");
+const homeView = (r: Role): View =>
+  r === "admin" ? "a-stats" : r === "teacher" ? "t-dashboard" : "dashboard";
 
-// Nav tabs that are safe to restore after a reload (solve/results are excluded —
-// their in-progress attempt state doesn't survive a refresh).
+// Nav tabs that are safe to restore after a reload (solve/results and the
+// detail pages are excluded — their handoff state doesn't survive a refresh).
 const RESTORABLE: Record<Role, View[]> = {
-  student: ["dashboard", "subject", "history"],
-  teacher: ["t-dashboard", "t-builder", "t-assign", "t-bank"],
+  student: ["dashboard", "subject", "history", "profile"],
+  teacher: ["t-dashboard", "t-builder", "t-assign", "t-bank", "profile"],
+  admin: ["a-stats", "a-users", "profile"],
 };
-const TAB_VIEWS: View[] = [...RESTORABLE.student, ...RESTORABLE.teacher];
+const TAB_VIEWS: View[] = [...new Set([...RESTORABLE.student, ...RESTORABLE.teacher, ...RESTORABLE.admin])];
 
 // restoreView returns the saved tab if it's valid for the role, else the home.
 function restoreView(role: Role): View {
   const saved = localStorage.getItem("egeism.view") as View | null;
-  if (saved && RESTORABLE[role].includes(saved)) return saved;
+  if (saved && RESTORABLE[role]?.includes(saved)) return saved;
   return homeView(role);
+}
+
+// initialSubject respects a subject-scoped teacher: their one subject wins over
+// whatever an earlier account left in localStorage.
+function initialSubject(u: User): SubjectCode {
+  if (u.role === "teacher" && u.subject) return u.subject;
+  return (localStorage.getItem("egeism.subject") as SubjectCode) || "math";
 }
 
 export function AppProvider({ children }: { children: ReactNode }) {
@@ -65,6 +75,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const me = await api.me();
         if (cancelled) return;
         setUser(me);
+        setSubjectS(initialSubject(me));
         setView(restoreView(me.role));
       } catch {
         clearToken();
@@ -88,31 +99,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const applyAuth = (res: { token: string; user: User }) => {
     setToken(res.token);
     setUser(res.user);
+    setSubjectS(initialSubject(res.user));
     const v = homeView(res.user.role);
     setView(v);
     localStorage.setItem("egeism.view", v);
   };
   const login = async (username: string, password: string) => { applyAuth(await api.login(username, password)); };
-  const register = async (role: Role, username: string, password: string, name: string) => {
-    applyAuth(await api.register(role, username, password, name));
-  };
   const logout = () => { clearToken(); setUser(undefined); };
 
   return (
     <Ctx.Provider value={{
       theme, subject, view, user, role: user?.role, ready, toast,
-      setTheme, setSubject, go, showToast, login, register, logout,
+      setTheme, setSubject, go, showToast, login, logout,
     }}>
       {children}
     </Ctx.Provider>
   );
-}
-
-// studentId for stats: a student sees their own; a teacher sees their (first)
-// student, fetched from /api/students.
-export function useStudentId(): string {
-  const { user } = useApp();
-  const students = useStudents(user?.role === "teacher");
-  if (user?.role === "student") return user.id;
-  return students.data?.[0]?.id ?? "";
 }

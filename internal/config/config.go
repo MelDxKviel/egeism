@@ -23,9 +23,12 @@ type Config struct {
 	// <WebURL>/api/media). Used to inline figures into bot rich messages; empty
 	// falls back to WebURL+"/api/media" when WebURL is set.
 	MediaPublicURL string
-	// AllowRegistration gates self-service signup (POST /api/auth/register). Off
-	// in production (accounts are provisioned once); default on for local dev.
-	AllowRegistration bool
+	// AdminUsername/AdminPassword seed the bootstrap admin account created on
+	// API startup when no active admin exists (self-registration is gone, so
+	// somebody has to be able to log in). Empty password = generate one and
+	// print it to the log once.
+	AdminUsername string
+	AdminPassword string
 
 	MinIOEndpoint  string
 	MinIOAccessKey string
@@ -48,7 +51,8 @@ func Load() Config {
 		FetcherURL:          env("FETCHER_URL", "http://localhost:8090"),
 		WebURL:              env("WEB_URL", ""),
 		MediaPublicURL:      env("MEDIA_PUBLIC_URL", ""),
-		AllowRegistration:   env("ALLOW_REGISTRATION", "true") != "false",
+		AdminUsername:       env("ADMIN_USERNAME", "admin"),
+		AdminPassword:       env("ADMIN_PASSWORD", ""),
 		MinIOEndpoint:       env("MINIO_ENDPOINT", "localhost:9000"),
 		MinIOAccessKey:      env("MINIO_ACCESS_KEY", "minioadmin"),
 		MinIOSecretKey:      env("MINIO_SECRET_KEY", "minioadmin"),

@@ -1,8 +1,9 @@
 # CLAUDE.md — ЕГЭ-платформа
 
 Backend for an exam-prep platform: **web + Telegram bot + admin**, one Go API.
-Stage 1 scope: **part 1 only** (auto-checkable answers), 4 subjects (rus/math/inf/soc),
-1 student + 1 teacher but the data model is multi-user from day one.
+Stage 1 scope: **part 1 only** (auto-checkable answers), 4 subjects (rus/math/inf/soc).
+Multi-user: **admin + teachers (per-subject or сверхучитель) + many students in
+teacher-owned classes** (a student may also be classless — the репетитор case).
 
 The full spec is in `plan-claude-code.md`; the frontend brief in `plan-claude-design.md`.
 
@@ -67,17 +68,46 @@ plan. **The table test in `checker_test.go` is the safety net — keep it green 
 extend it before changing comparison logic.** Human verification on real ФИПИ
 answers per subject is required before trusting it in production (§7 checkpoint).
 
-## Auth (JWT sessions)
+## Auth, roles & classes (JWT sessions)
 
-Real per-account auth, role tied to the account (no role toggle). Web users
-`POST /api/auth/register` / `/api/auth/login` (username + password, bcrypt-hashed)
-and get a signed JWT. **Self-service signup is gated by `ALLOW_REGISTRATION`**
-(default `true` for dev; the prod compose sets it `false`): when off, `/register`
-returns 403 and the web hides the tab — it reads the flag from the public
-`GET /api/config` (`{allow_registration}`). Every protected call sends `Authorization: Bearer <jwt>`;
-`withUser` verifies it (secret from `JWT_SECRET`) and loads the user.
-`domain.User` never carries the password hash, so it can't leak. `GET /api/auth/me`
-returns the current user; the web restores the session from a stored token.
+Real per-account auth, role tied to the account: **student / teacher / admin**.
+**Self-registration is GONE** (no `/api/auth/register`; `GET /api/config` returns
+`allow_registration:false` for old clients): accounts are created only by an
+**admin** (`POST /api/admin/users`, any role) or by a **teacher**
+(`POST /api/students` — the student is enrolled to them, optionally straight
+into a class). The **bootstrap admin** is created on API startup when no active
+admin exists (`ADMIN_USERNAME`/`ADMIN_PASSWORD`; empty password → generated and
+printed to the log once — dev compose pins admin/admin). Login via
+`POST /api/auth/login`; every protected call sends `Authorization: Bearer <jwt>`;
+`withUser` verifies it (secret from `JWT_SECRET`), loads the user and **cuts off
+deactivated accounts** (`users.is_active`, toggled in the admin panel — takes
+effect on the next request, web and bot alike). `domain.User` never carries the
+password hash. `GET /api/auth/me` returns the current user; `GET /api/profile`
+the identity payload (student: classes + teacher names; teacher: subject scope,
+classes, roster size).
+
+**Roles.** *Admin* manages accounts (create/edit/activate/delete — delete is
+refused with 409 while history exists; self-guards stop an admin from demoting/
+deactivating themselves) and watches `GET /api/admin/stats` (platform counters +
+per-subject activity). *Teachers* carry an optional `users.subject`: set = they
+work ONLY that subject (bank, tests, generator, assignments are all checked via
+`subjectInScope`/`testInScope`/`taskInScope` in `internal/api/admin.go`; the web
+locks the subject tabs); NULL = **сверхучитель**, any subject (file import is
+super-teacher-only — a file can mix subjects). *Students* solve; they see only
+their own stats.
+
+**Classes & the roster.** `classes` (teacher-owned) + `class_members` (m2m,
+migration 00005). Adding a member also creates the `enrollments` row (one tx,
+`store.AddClassMember`) — enrollment is THE teacher↔student link every
+per-student authorization runs on (`resolveStudent`, `attemptReadable`,
+assignment targeting); removing from a class keeps it, so the student stays "мой
+ученик без класса". `GET /api/students` returns the teacher's enrolled students
+tagged with class names (`?scope=all` = the platform-wide picker; admins always
+see all). `POST /api/admin/assignments` takes exactly one target — `student_id`
+(enrolled check) or `class_id` (**fan-out**: one assignment + bell notification
++ Telegram schedule per member). `GET /api/classes/{id}/overview?subject=` is
+the teacher's **color grid** (per-member per-number accuracy, empty members
+included) the web renders red→green so lagging students/numbers pop.
 
 **Telegram linking (bot auth).** The bot no longer auto-provisions an anonymous
 student. A user (student *or* teacher) links their real web account to Telegram
@@ -89,7 +119,9 @@ redeems it — `/start <code>` or `/link <code>` → `POST /api/auth/telegram/li
 (`RedeemTelegramLinkCode`, one tx; `users.telegram_id` UNIQUE → one Telegram per
 account). Thereafter `POST /api/auth/telegram` (`{telegram_id}`) is **resolve-only**
 (404 if unlinked → the bot prompts to link). The account's role decides the bot's
-command set: students solve, teachers get read-only stats/что назначено/как решено.
+command set: students solve, teachers get read-only stats/что назначено/как
+решено (multi-student: /students list + /student N picker), admins get a
+pointer to the web panel (the bot won't let an admin pollute solve stats).
 
 **Bot UX (inline keyboards).** Messages are styled Telegram-HTML with inline
 keyboards; `Reply.Buttons` rides through the transport as `reply_markup`, and
@@ -109,8 +141,10 @@ URL never loses the notification.
 
 React + Vite + TypeScript, TanStack Query, Recharts. Design tokens (light/dark)
 from the handoff live in `web/src/theme.css`; API client + hooks in
-`web/src/api.ts`. All 11 screens (student + teacher) call the real API. Auth: a
-login/register screen (`web/src/Login.tsx`) stores the JWT and sends it as
+`web/src/api.ts`. All screens (student + teacher + admin: users CRUD in `web/src/admin.tsx`,
+classes/roster/color grid + per-student stats in `web/src/teacher.tsx`, profile
+in `web/src/profile.tsx`) call the real API. Auth: a login-only screen
+(`web/src/Login.tsx` — no signup) stores the JWT and sends it as
 `Authorization: Bearer`; the role comes from the account, no toggle. `vite dev`
 proxies `/api` and `/health` to `:8080`. The random-variant generator
 (`POST /api/admin/tests/generate`) is the teacher's one-click test builder.
@@ -280,7 +314,9 @@ docker stack incl. web, the full React frontend (all 11 screens wired), and
 real JWT auth (register/login per role, bot on tokens), and the media pipeline
 (MinIO upload/serve, images+files rendered in the web), and in-app web
 notifications (the bell: assigned → student, solved → teacher, click-through
-to the test), and PDF export of composed variants
+to the test), the multi-user overhaul (admin panel: users CRUD + platform
+stats; teacher classes with the color grid; per-subject teacher scoping;
+profiles; no self-registration), and PDF export of composed variants
 (`GET /api/admin/tests/{id}/export.pdf`, `?answers=1` appends the key page;
 `internal/pdf` renders statements, pipe-table grids and MinIO images with
 embedded DejaVu; web buttons «PDF для ученика» / «PDF с ответами» on the test

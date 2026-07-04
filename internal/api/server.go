@@ -26,19 +26,18 @@ type AssignmentScheduler interface {
 
 // Server holds handler dependencies.
 type Server struct {
-	store             *store.Store
-	scheduler         AssignmentScheduler // optional; nil disables enqueue
-	jwtSecret         string
-	media             *media.Store // optional; nil disables media serving
-	fetcherURL        string       // optional; empty disables button-driven fetch
-	botUsername       string       // optional; empty omits deep_link in link-code responses
-	allowRegistration bool         // false disables self-service signup (prod)
+	store       *store.Store
+	scheduler   AssignmentScheduler // optional; nil disables enqueue
+	jwtSecret   string
+	media       *media.Store // optional; nil disables media serving
+	fetcherURL  string       // optional; empty disables button-driven fetch
+	botUsername string       // optional; empty omits deep_link in link-code responses
 }
 
 // NewServer builds a Server over the given store. scheduler and mediaStore may
 // be nil; fetcherURL and botUsername may be empty.
-func NewServer(st *store.Store, sched AssignmentScheduler, jwtSecret string, mediaStore *media.Store, fetcherURL, botUsername string, allowRegistration bool) *Server {
-	return &Server{store: st, scheduler: sched, jwtSecret: jwtSecret, media: mediaStore, fetcherURL: fetcherURL, botUsername: botUsername, allowRegistration: allowRegistration}
+func NewServer(st *store.Store, sched AssignmentScheduler, jwtSecret string, mediaStore *media.Store, fetcherURL, botUsername string) *Server {
+	return &Server{store: st, scheduler: sched, jwtSecret: jwtSecret, media: mediaStore, fetcherURL: fetcherURL, botUsername: botUsername}
 }
 
 // Router wires all routes and returns an http.Handler.
@@ -58,12 +57,13 @@ func (s *Server) Router() http.Handler {
 	r.Get("/api/media/*", s.handleGetMedia)
 
 	r.Route("/api", func(r chi.Router) {
-		// Public runtime flags the web reads before login (e.g. hide the
-		// registration tab when signup is disabled).
+		// Public runtime flags. Self-registration is permanently gone; the
+		// endpoint stays for older clients and always answers false.
 		r.Get("/config", s.handleConfig)
 
 		// Auth: credential login for the web, telegram entry for the bot.
-		r.Post("/auth/register", s.handleRegister)
+		// There is no /auth/register: accounts are created by an admin (admin
+		// panel) or by a teacher (their students).
 		r.Post("/auth/login", s.handleLogin)
 		r.Post("/auth/telegram", s.handleTelegramAuth)      // bot: resolve a linked telegram_id → token
 		r.Post("/auth/telegram/link", s.handleTelegramLink) // bot: redeem a link code → bind telegram_id
@@ -77,10 +77,22 @@ func (s *Server) Router() http.Handler {
 		r.Group(func(r chi.Router) {
 			r.Use(s.withUser)
 
-			// Current user + teacher's students.
+			// Current user, profile and the teacher's roster.
 			r.Get("/auth/me", s.handleMe)
 			r.Post("/auth/telegram/link-code", s.handleTelegramLinkCode) // web: issue a code to link this account to Telegram
+			r.Get("/profile", s.handleProfile)
 			r.Get("/students", s.handleListStudents)
+			r.Post("/students", s.handleCreateStudent) // teacher creates a student account
+
+			// Classes (teacher-owned groups of students).
+			r.Get("/classes", s.handleListClasses)
+			r.Post("/classes", s.handleCreateClass)
+			r.Get("/classes/{classID}", s.handleGetClass)
+			r.Patch("/classes/{classID}", s.handleRenameClass)
+			r.Delete("/classes/{classID}", s.handleDeleteClass)
+			r.Post("/classes/{classID}/members", s.handleAddClassMember)
+			r.Delete("/classes/{classID}/members/{studentID}", s.handleRemoveClassMember)
+			r.Get("/classes/{classID}/overview", s.handleClassOverview)
 
 			// Student solve flow (§6 WS-A).
 			r.Post("/practice", s.handleStartPractice)
@@ -128,6 +140,14 @@ func (s *Server) Router() http.Handler {
 			r.Post("/admin/tests/generate", s.handleGenerateVariant)
 			r.Post("/admin/tests/{testID}/items", s.handleAddTestItem)
 			r.Post("/admin/assignments", s.handleCreateAssignment)
+
+			// Admin panel: user management + platform-wide stats (admin role).
+			r.Get("/admin/users", s.handleAdminListUsers)
+			r.Post("/admin/users", s.handleAdminCreateUser)
+			r.Patch("/admin/users/{userID}", s.handleAdminUpdateUser)
+			r.Delete("/admin/users/{userID}", s.handleAdminDeleteUser)
+			r.Get("/admin/stats", s.handleAdminStats)
+			r.Get("/admin/classes", s.handleAdminListClasses)
 		})
 	})
 
@@ -143,8 +163,10 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleConfig exposes public runtime flags the web needs before authenticating.
+// Self-registration was removed for good (accounts come from the admin panel or
+// a teacher), so the flag is a constant kept only for older clients.
 func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]bool{"allow_registration": s.allowRegistration})
+	writeJSON(w, http.StatusOK, map[string]bool{"allow_registration": false})
 }
 
 // corsDev is a permissive CORS policy for local web development. Tighten before

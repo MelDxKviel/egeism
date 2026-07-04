@@ -168,10 +168,19 @@ func (b *Bot) Handle(ctx context.Context, in InMessage) Reply {
 	}
 
 	b.ensureCommands(ctx, sess, in.ChatID)
+	if sess.user.Role == "admin" {
+		return b.adminReply(in.ChatID)
+	}
 	if sess.user.Role == "teacher" {
 		return b.handleTeacher(ctx, sess, in, text)
 	}
 	return b.handleStudent(ctx, sess, in, text)
+}
+
+// adminReply is all the bot offers an admin account: management lives in the
+// web admin panel, and letting an admin run the solve flow would pollute stats.
+func (b *Bot) adminReply(chatID int64) Reply {
+	return b.text(chatID, "👑 Это админ-аккаунт. Управление пользователями и статистика — в веб-панели.\nБот работает для учеников и учителей.")
 }
 
 // HandleCallback processes an inline-button press. Data grammar:
@@ -196,6 +205,10 @@ func (b *Bot) HandleCallback(ctx context.Context, in InCallback) Reply {
 	}
 	b.ensureCommands(ctx, sess, in.ChatID)
 	data := strings.TrimSpace(in.Data)
+
+	if sess.user.Role == "admin" {
+		return b.adminReply(in.ChatID)
+	}
 
 	if sess.user.Role == "teacher" {
 		msg := InMessage{TelegramID: in.TelegramID, ChatID: in.ChatID, FirstName: in.FirstName}
@@ -267,6 +280,11 @@ func (b *Bot) link(ctx context.Context, sess *session, in InMessage, code string
 	*sess = session{token: token, user: user}
 	b.ensureCommands(ctx, sess, in.ChatID) // role just became known → set its menu
 	greet := "🔗 <b>Аккаунт привязан:</b> " + escapeHTML(user.Name) + "\n\n"
+	if user.Role == "admin" {
+		r := b.adminReply(in.ChatID)
+		r.HTML = greet + r.HTML
+		return r
+	}
 	if user.Role == "teacher" {
 		r := b.welcomeTeacherReply(in.ChatID)
 		r.HTML = greet + r.HTML

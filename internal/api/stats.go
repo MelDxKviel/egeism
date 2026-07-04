@@ -13,7 +13,8 @@ import (
 )
 
 // resolveStudent parses the studentID path param and enforces access: a student
-// may only read their own stats; a teacher may read any of their students'.
+// may only read their own stats; a teacher only their enrolled students'
+// (class members and students they created); an admin — anyone's.
 func (s *Server) resolveStudent(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
 	id, err := uuid.Parse(chi.URLParam(r, "studentID"))
 	if err != nil {
@@ -22,8 +23,13 @@ func (s *Server) resolveStudent(w http.ResponseWriter, r *http.Request) (uuid.UU
 	}
 	user, _ := userFrom(r.Context())
 	switch user.Role {
+	case domain.RoleAdmin:
+		return id, true
 	case domain.RoleTeacher:
-		return id, true // stage 1: single teacher oversees the students
+		if !s.studentOfTeacher(w, r, user, id) {
+			return uuid.Nil, false
+		}
+		return id, true
 	case domain.RoleStudent:
 		if user.ID != id {
 			writeErr(w, http.StatusForbidden, "cannot read another student's stats")

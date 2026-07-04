@@ -54,14 +54,29 @@ func toDomainTasks(rows []sqlc.Task) ([]domain.Task, error) {
 }
 
 func toDomainUser(u sqlc.User) domain.User {
+	var subject *domain.SubjectCode
+	if u.Subject != nil {
+		sc := domain.SubjectCode(*u.Subject)
+		subject = &sc
+	}
 	return domain.User{
 		ID:         u.ID,
 		Role:       domain.Role(u.Role),
 		TelegramID: u.TelegramID,
 		Username:   u.Username,
 		Name:       u.Name,
+		Subject:    subject,
+		IsActive:   u.IsActive,
 		CreatedAt:  u.CreatedAt,
 	}
+}
+
+func toDomainUsers(rows []sqlc.User) []domain.User {
+	out := make([]domain.User, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, toDomainUser(r))
+	}
+	return out
 }
 
 func toDomainSubject(s sqlc.Subject) domain.Subject {
