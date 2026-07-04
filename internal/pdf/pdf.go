@@ -6,7 +6,9 @@
 // This is presentation over the frozen domain types, like the bot's rich HTML:
 // statement parsing mirrors internal/bot/format.go and web/src/ui.tsx — pipe
 // tables (`| a | b |`) become grids, ⟦img:N⟧ inline-formula placeholders are
-// substituted with their alt text, block figures are fetched and embedded.
+// drawn as real images flowing mid-sentence (like the web; РЕШУ formulas are
+// SVG, rasterized here) with their alt text as the fallback, block figures are
+// fetched and embedded.
 package pdf
 
 import (
@@ -14,6 +16,7 @@ import (
 	"context"
 	"fmt"
 	"image"
+	"image/draw"
 	"image/png"
 	"regexp"
 	"strconv"
@@ -23,7 +26,13 @@ import (
 	_ "image/gif"  // decode support for figure embedding
 	_ "image/jpeg" // decode support for figure embedding
 
+	_ "golang.org/x/image/bmp"  // decode support for figure embedding
+	_ "golang.org/x/image/tiff" // decode support for figure embedding
+	_ "golang.org/x/image/webp" // decode support for figure embedding
+
 	"github.com/go-pdf/fpdf"
+	"github.com/srwiley/oksvg"
+	"github.com/srwiley/rasterx"
 
 	"egeism/internal/domain"
 )
@@ -53,11 +62,13 @@ const (
 	marginX    = 16.0
 	marginTop  = 16.0
 	contentW   = pageW - 2*marginX
-	lineH      = 5.4 // body line height for 11pt
-	cellPad    = 1.6 // inner padding of table cells
+	pageBottom = 279.0 // page bottom minus break margin
+	lineH      = 5.4   // body line height for 11pt
+	cellPad    = 1.6   // inner padding of table cells
 	maxImgW    = 150.0
 	maxImgH    = 190.0
-	imgDPI     = 110.0 // assumed source DPI: FIPI scans read well at this scale
+	imgDPI     = 110.0 // assumed raster source DPI: FIPI scans read well at this scale
+	svgDPI     = 96.0  // SVG user units are CSS px (РЕШУ formulas size in them)
 	answerRule = "___________________________"
 )
 
@@ -70,7 +81,7 @@ func Render(ctx context.Context, test domain.Test, tasks []domain.Task, opts Opt
 	doc.AddUTF8FontFromBytes("dejavu", "B", fontBold)
 	doc.SetTitle(test.Title, true)
 
-	r := &renderer{doc: doc, ctx: ctx, opts: opts}
+	r := &renderer{doc: doc, ctx: ctx, opts: opts, imgCache: map[string]*embImg{}}
 	r.header(test, len(tasks))
 	for i, t := range tasks {
 		r.task(i+1, t)
@@ -91,7 +102,19 @@ type renderer struct {
 	ctx  context.Context
 	opts Options
 	imgN int // unique image registration names
+	// One fetch+decode+registration per media key across the document (formula
+	// images repeat); nil = known-bad key (failed fetch/decode), skip retries.
+	imgCache map[string]*embImg
 }
+
+// embImg is a media image registered with the document, with its natural
+// display size in mm (raster px at imgDPI, SVG user units at svgDPI).
+type embImg struct {
+	name     string
+	wMM, hMM float64
+}
+
+var pngOpts = fpdf.ImageOptions{ImageType: "PNG"}
 
 func (r *renderer) header(test domain.Test, taskCount int) {
 	doc := r.doc
@@ -147,8 +170,8 @@ func (r *renderer) task(pos int, t domain.Task) {
 	doc.SetTextColor(0, 0, 0)
 	doc.Ln(0.5)
 
-	r.statement(t.Statement, t.Media)
-	r.figures(t.Media)
+	handled := r.statement(t.Statement, t.Media)
+	r.figures(t.Media, handled)
 
 	doc.Ln(2.5)
 	doc.SetFont("dejavu", "", 11)
@@ -157,11 +180,12 @@ func (r *renderer) task(pos int, t domain.Task) {
 	r.rule()
 }
 
-// statement renders the task text: paragraph runs as wrapped text, pipe-table
-// runs as bordered grids, ⟦img:N⟧ placeholders as their alt text.
-func (r *renderer) statement(text string, media []domain.Media) {
-	doc := r.doc
-	doc.SetFont("dejavu", "", 11)
+// statement renders the task text: paragraph runs as flowing text with ⟦img:N⟧
+// placeholders drawn as real inline images (alt text as the fallback),
+// pipe-table runs as bordered grids. Returns the media indices it rendered (or
+// substituted) so figures() doesn't repeat them as blocks.
+func (r *renderer) statement(text string, media []domain.Media) map[int]bool {
+	handled := map[int]bool{}
 	lines := strings.Split(text, "\n")
 	var para []string
 	flush := func() {
@@ -173,8 +197,7 @@ func (r *renderer) statement(text string, media []domain.Media) {
 		if joined == "" {
 			return
 		}
-		doc.MultiCell(contentW, lineH, substituteInline(joined, media), "", "L", false)
-		doc.Ln(1)
+		r.flowText(joined, media, handled)
 	}
 	for i := 0; i < len(lines); {
 		if isTableRow(lines[i]) {
@@ -191,6 +214,87 @@ func (r *renderer) statement(text string, media []domain.Media) {
 		}
 	}
 	flush()
+	return handled
+}
+
+// flowText writes one paragraph as flowing text, drawing each ⟦img:N⟧ as an
+// image mid-sentence (the web's renderInline, in print). A formula that can't
+// be fetched/decoded degrades to its alt text, exactly the old behavior.
+func (r *renderer) flowText(text string, media []domain.Media, handled map[int]bool) {
+	doc := r.doc
+	doc.SetFont("dejavu", "", 11)
+	locs := inlineImgRe.FindAllStringSubmatchIndex(text, -1)
+	pos := 0
+	for _, loc := range locs {
+		if loc[0] > pos {
+			doc.Write(lineH, text[pos:loc[0]])
+		}
+		idx, err := strconv.Atoi(text[loc[2]:loc[3]])
+		pos = loc[1]
+		if err != nil || idx < 0 || idx >= len(media) {
+			continue
+		}
+		r.inlineImage(idx, media[idx], handled)
+	}
+	if pos < len(text) {
+		doc.Write(lineH, text[pos:])
+	}
+	if doc.GetX() > marginX { // flush the unfinished line Write leaves behind
+		doc.Ln(lineH)
+	}
+	doc.Ln(1)
+}
+
+// inlineImage draws media[idx] at the current write position. Text-height
+// formulas sit in the line (vertically centered on the line box); tall ones
+// (multi-storey fractions, systems) get their own line at natural size so they
+// stay readable. Marks the index handled on success or alt-text fallback.
+func (r *renderer) inlineImage(idx int, m domain.Media, handled map[int]bool) {
+	doc := r.doc
+	emb := r.embedImage(m)
+	if emb == nil {
+		if m.Alt != "" {
+			doc.Write(lineH, m.Alt)
+			handled[idx] = true
+		}
+		return
+	}
+	w, h := emb.wMM, emb.hMM
+	const maxInlineH = lineH * 1.15
+	if h <= maxInlineH*1.35 { // line-sized (or близко): squeeze into the line
+		if h > maxInlineH {
+			w, h = w*maxInlineH/h, maxInlineH
+		}
+		if w > contentW {
+			h, w = h*contentW/w, contentW
+		}
+		if doc.GetX()+w > pageW-marginX {
+			doc.Ln(lineH)
+		}
+		if doc.GetY()+h > pageBottom {
+			doc.AddPage()
+		}
+		x, y := doc.GetX(), doc.GetY()
+		doc.ImageOptions(emb.name, x, y+(lineH-h)/2, w, h, false, pngOpts, 0, "")
+		doc.SetXY(x+w+0.5, y)
+	} else { // display-sized: its own line inside the paragraph flow
+		if w > contentW {
+			h, w = h*contentW/w, contentW
+		}
+		if h > maxImgH {
+			w, h = w*maxImgH/h, maxImgH
+		}
+		if doc.GetX() > marginX {
+			doc.Ln(lineH)
+		}
+		if doc.GetY()+h > pageBottom {
+			doc.AddPage()
+		}
+		doc.ImageOptions(emb.name, marginX, doc.GetY()+0.7, w, h, false, pngOpts, 0, "")
+		doc.SetY(doc.GetY() + h + 1.4)
+		doc.SetX(marginX)
+	}
+	handled[idx] = true
 }
 
 // table draws pipe-table rows as a bordered grid: column widths follow content
@@ -271,7 +375,7 @@ func (r *renderer) table(rows []string, media []domain.Media) {
 		}
 		rowH := float64(maxLines)*tblLineH + 2*cellPad
 
-		if doc.GetY()+rowH > 279 { // page bottom minus break margin
+		if doc.GetY()+rowH > pageBottom {
 			doc.AddPage()
 		}
 		x, y := marginX, doc.GetY()
@@ -297,20 +401,24 @@ func (r *renderer) table(rows []string, media []domain.Media) {
 }
 
 // figures embeds the task's block images and notes attached files. Inline
-// formulas with alt text were already substituted into the statement; anything
-// unembeddable degrades to its alt text so no information is silently lost.
-func (r *renderer) figures(media []domain.Media) {
+// formulas the statement already drew (or substituted as alt text) are skipped;
+// anything unembeddable degrades to its alt text so no information is silently
+// lost.
+func (r *renderer) figures(media []domain.Media, handled map[int]bool) {
 	doc := r.doc
 	var files []domain.Media
-	for _, m := range media {
+	for i, m := range media {
 		if m.Kind == "file" {
 			files = append(files, m)
 			continue
 		}
-		if m.Inline && m.Alt != "" {
-			continue // already in the text
+		if handled[i] {
+			continue // drawn (or alt-substituted) inside the statement
 		}
-		if !r.image(m) && m.Alt != "" {
+		if m.Inline && m.Alt != "" {
+			continue // substituted as text (e.g. inside a table cell)
+		}
+		if !r.blockImage(m) && m.Alt != "" {
 			doc.SetFont("dejavu", "", 10)
 			doc.SetTextColor(110, 110, 110)
 			doc.MultiCell(contentW, 5, "[Рисунок: "+m.Alt+"]", "", "L", false)
@@ -334,38 +442,15 @@ func (r *renderer) figures(media []domain.Media) {
 	}
 }
 
-// image fetches and draws one figure, returning false when it can't be embedded
-// (no fetcher, fetch error, or bytes that don't decode as an image). The source
-// is decoded and re-encoded to a clean PNG first: fpdf has no way to recover
-// from a corrupt image (SetError never clears), so only bytes the stdlib fully
-// decodes are allowed anywhere near the document.
-func (r *renderer) image(m domain.Media) bool {
-	if r.opts.FetchImage == nil {
-		return false
-	}
-	data, err := r.opts.FetchImage(r.ctx, m.Key)
-	if err != nil || len(data) == 0 {
-		return false
-	}
-	src, _, err := image.Decode(bytes.NewReader(data))
-	if err != nil {
-		return false
-	}
-	var clean bytes.Buffer
-	if err := png.Encode(&clean, src); err != nil {
+// blockImage draws one figure at the left margin at its natural size (clamped
+// to the content box), returning false when it can't be embedded.
+func (r *renderer) blockImage(m domain.Media) bool {
+	emb := r.embedImage(m)
+	if emb == nil {
 		return false
 	}
 	doc := r.doc
-	r.imgN++
-	name := fmt.Sprintf("img-%d", r.imgN)
-	doc.RegisterImageOptionsReader(name, fpdf.ImageOptions{ImageType: "PNG"}, &clean)
-	if doc.Err() {
-		return false
-	}
-	// Scale pixels to mm at the assumed source DPI, clamp to the content box.
-	b := src.Bounds()
-	w := float64(b.Dx()) * 25.4 / imgDPI
-	h := float64(b.Dy()) * 25.4 / imgDPI
+	w, h := emb.wMM, emb.hMM
 	if w > maxImgW {
 		h *= maxImgW / w
 		w = maxImgW
@@ -374,13 +459,153 @@ func (r *renderer) image(m domain.Media) bool {
 		w *= maxImgH / h
 		h = maxImgH
 	}
-	if doc.GetY()+h > 279 {
+	if doc.GetY()+h > pageBottom {
 		doc.AddPage()
 	}
 	doc.Ln(1)
-	doc.ImageOptions(name, marginX, doc.GetY(), w, h, false, fpdf.ImageOptions{ImageType: "PNG"}, 0, "")
+	doc.ImageOptions(emb.name, marginX, doc.GetY(), w, h, false, pngOpts, 0, "")
 	doc.SetY(doc.GetY() + h + 1)
 	return true
+}
+
+// embedImage fetches, decodes and registers a media image with the document,
+// once per key (cached, incl. failures). Raster formats beyond the stdlib
+// (WebP/BMP/TIFF) decode via x/image; SVG — how РЕШУ serves every formula and
+// many figures, and the reason PDFs used to come out with no images at all —
+// is rasterized. Everything is flattened onto white and re-encoded to a clean
+// PNG first: fpdf has no way to recover from a corrupt image (SetError never
+// clears), so only bytes fully decoded here are allowed anywhere near the
+// document. Returns nil when the image can't be embedded.
+func (r *renderer) embedImage(m domain.Media) *embImg {
+	if emb, seen := r.imgCache[m.Key]; seen {
+		return emb
+	}
+	emb := r.loadImage(m.Key)
+	r.imgCache[m.Key] = emb
+	return emb
+}
+
+func (r *renderer) loadImage(key string) *embImg {
+	if r.opts.FetchImage == nil {
+		return nil
+	}
+	data, err := r.opts.FetchImage(r.ctx, key)
+	if err != nil || len(data) == 0 {
+		return nil
+	}
+	var (
+		src      image.Image
+		wMM, hMM float64
+	)
+	if looksSVG(data) {
+		svg, wPx, hPx, err := rasterizeSVG(data)
+		if err != nil {
+			return nil
+		}
+		src, wMM, hMM = svg, wPx*25.4/svgDPI, hPx*25.4/svgDPI
+	} else {
+		raster, _, err := image.Decode(bytes.NewReader(data))
+		if err != nil {
+			return nil
+		}
+		src = raster
+		b := raster.Bounds()
+		wMM, hMM = float64(b.Dx())*25.4/imgDPI, float64(b.Dy())*25.4/imgDPI
+	}
+	if wMM <= 0 || hMM <= 0 {
+		return nil
+	}
+	var clean bytes.Buffer
+	if err := png.Encode(&clean, flattenWhite(src)); err != nil {
+		return nil
+	}
+	doc := r.doc
+	r.imgN++
+	name := fmt.Sprintf("img-%d", r.imgN)
+	doc.RegisterImageOptionsReader(name, pngOpts, &clean)
+	if doc.Err() {
+		return nil
+	}
+	return &embImg{name: name, wMM: wMM, hMM: hMM}
+}
+
+// looksSVG sniffs SVG markup (XML can't be told apart by magic bytes).
+func looksSVG(data []byte) bool {
+	head := data
+	if len(head) > 1024 {
+		head = head[:1024]
+	}
+	trimmed := bytes.TrimLeft(head, " \t\r\n\xef\xbb\xbf")
+	return len(trimmed) > 0 && trimmed[0] == '<' &&
+		bytes.Contains(bytes.ToLower(head), []byte("<svg"))
+}
+
+// rasterizeSVG renders SVG markup to a raster image at 4× its natural size
+// (print-crisp at A4 scale) and reports the natural size in SVG user units.
+// oksvg is known to panic on some malformed inputs, so this recovers — a bad
+// formula must degrade to alt text, never kill the whole export.
+func rasterizeSVG(data []byte) (img image.Image, wPx, hPx float64, err error) {
+	defer func() {
+		if p := recover(); p != nil {
+			img, err = nil, fmt.Errorf("svg rasterize panic: %v", p)
+		}
+	}()
+	icon, err := oksvg.ReadIconStream(bytes.NewReader(data), oksvg.WarnErrorMode)
+	if err != nil {
+		return nil, 0, 0, err
+	}
+	wPx, hPx = icon.ViewBox.W, icon.ViewBox.H
+	if wPx <= 0 || hPx <= 0 {
+		return nil, 0, 0, fmt.Errorf("svg: empty viewBox")
+	}
+	const scale = 4.0
+	pw, ph := int(wPx*scale+0.5), int(hPx*scale+0.5)
+	// Cap the raster: formulas are tiny, but a full-page SVG figure at 4× would
+	// be enormous. The aspect ratio is preserved.
+	const maxPx = 2600
+	if pw > maxPx {
+		ph = ph * maxPx / pw
+		pw = maxPx
+	}
+	if ph > maxPx {
+		pw = pw * maxPx / ph
+		ph = maxPx
+	}
+	if pw < 1 || ph < 1 {
+		return nil, 0, 0, fmt.Errorf("svg: degenerate size")
+	}
+	rgba := image.NewRGBA(image.Rect(0, 0, pw, ph))
+	draw.Draw(rgba, rgba.Bounds(), image.White, image.Point{}, draw.Src)
+	icon.SetTarget(0, 0, float64(pw), float64(ph))
+	icon.Draw(rasterx.NewDasher(pw, ph, rasterx.NewScannerGV(pw, ph, rgba, rgba.Bounds())), 1)
+	if isBlank(rgba) {
+		// oksvg skips elements it can't draw (e.g. <text>) with only a warning;
+		// an all-white raster means nothing was drawn — alt text beats an
+		// invisible formula.
+		return nil, 0, 0, fmt.Errorf("svg: rendered blank")
+	}
+	return rgba, wPx, hPx, nil
+}
+
+// isBlank reports whether every pixel is (opaque) white.
+func isBlank(img *image.RGBA) bool {
+	for i := 0; i < len(img.Pix); i += 4 {
+		if img.Pix[i] != 0xff || img.Pix[i+1] != 0xff || img.Pix[i+2] != 0xff {
+			return false
+		}
+	}
+	return true
+}
+
+// flattenWhite composites an image onto a white background — the PDF page is
+// white and print must never depend on alpha (mirrors the bot's flattenToWhite
+// and the web's always-white figure container).
+func flattenWhite(src image.Image) *image.RGBA {
+	b := src.Bounds()
+	out := image.NewRGBA(image.Rect(0, 0, b.Dx(), b.Dy()))
+	draw.Draw(out, out.Bounds(), image.White, image.Point{}, draw.Src)
+	draw.Draw(out, out.Bounds(), src, b.Min, draw.Over)
+	return out
 }
 
 // answerKey renders the teacher's key on its own page: one row per task with
@@ -408,7 +633,7 @@ func (r *renderer) answerKey(tasks []domain.Task) {
 		ans := strings.Join(t.AnswerSchema.Correct, " / ")
 		lines := doc.SplitText(ans, wAns-2*cellPad)
 		rowH := float64(len(lines))*4.8 + 2*cellPad
-		if doc.GetY()+rowH > 279 {
+		if doc.GetY()+rowH > pageBottom {
 			doc.AddPage()
 		}
 		y := doc.GetY()
@@ -432,8 +657,9 @@ func (r *renderer) answerKey(tasks []domain.Task) {
 var inlineImgRe = regexp.MustCompile(`⟦img:(\d+)⟧`)
 
 // substituteInline replaces ⟦img:N⟧ placeholders with media[N].Alt (the
-// formula's text form); a placeholder without alt is dropped — its image still
-// renders as a block figure below.
+// formula's text form) — used inside table cells, where images don't flow; a
+// placeholder without alt is dropped, its image still renders as a block
+// figure below. Statement paragraphs draw the real image instead (flowText).
 func substituteInline(s string, media []domain.Media) string {
 	if !strings.Contains(s, "⟦img:") {
 		return s

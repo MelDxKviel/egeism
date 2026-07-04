@@ -100,6 +100,37 @@ def test_fallback_to_first_visible_pbody_when_no_nobreak():
     assert answer == "7"
 
 
+# --- drill (number-targeted) id discovery ------------------------------------
+
+# The shape sdamgia's get_catalog returns: topics (= задания) with categories.
+CATALOG = [
+    {"topic_id": "1", "topic_name": "Задание 1", "categories": [
+        {"category_id": "c11", "category_name": "a"},
+        {"category_id": "c12", "category_name": "b"},
+    ]},
+    {"topic_id": "№ 2", "topic_name": "Задание 2", "categories": [
+        {"category_id": "c21", "category_name": "c"},
+    ]},
+    {"topic_id": "C4", "topic_name": "Часть 2", "categories": [
+        {"category_id": "part2", "category_name": "d"},
+    ]},
+]
+
+
+def test_topic_categories_targets_one_number():
+    # A drill for задание 1 must draw from ALL of topic 1's categories — and
+    # nothing else — so the whole pull budget fills the drill pool.
+    assert F._topic_categories(CATALOG, 1) == ["c11", "c12"]
+    assert F._topic_categories(CATALOG, 2) == ["c21"]  # «№ 2» label still matches
+
+
+def test_topic_categories_falls_back_when_unmatched():
+    # Unknown/part-2 numbers → [] so fetch() falls back to the all-numbers spread
+    # (the server-side number filter still applies).
+    assert F._topic_categories(CATALOG, 27) == []
+    assert F._topic_categories(None, 3) == []
+
+
 # --- openfipi table normalization -------------------------------------------
 
 # The load-bearing shape of a ФИПИ задание-1 distance matrix on openfipi: the

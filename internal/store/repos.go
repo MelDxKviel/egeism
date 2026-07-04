@@ -370,6 +370,18 @@ func (s *Store) TaskExistsBySource(ctx context.Context, provider, externID strin
 	})
 }
 
+// ActivateDraftTaskBySource promotes a dedup-hit draft to active (drafts only —
+// a task the teacher rejected stays rejected). Returns whether a row changed.
+func (s *Store) ActivateDraftTaskBySource(ctx context.Context, provider, externID string) (bool, error) {
+	n, err := s.q.ActivateDraftTaskBySource(ctx, sqlc.ActivateDraftTaskBySourceParams{
+		Provider: provider, ExternID: externID,
+	})
+	if err != nil {
+		return false, mapErr(err)
+	}
+	return n > 0, nil
+}
+
 // ClearBank wipes the task bank for a subject, keeping any task that carries
 // student history (has a recorded answer) so attempts/stats never orphan. The
 // kept tasks are first detached from any tests (test_items). Runs in one tx and

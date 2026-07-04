@@ -66,7 +66,7 @@ func (s *Server) handleFetchTasks(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, fetchResp{
 		Fetched: res.Fetched, Inserted: res.Inserted, Skipped: res.Skipped, Invalid: res.Invalid,
-		Source: mode,
+		Promoted: res.Promoted, Source: mode,
 	})
 }
 
@@ -97,6 +97,7 @@ type fetchResp struct {
 	Inserted int    `json:"inserted"`
 	Skipped  int    `json:"skipped"`
 	Invalid  int    `json:"invalid"`
+	Promoted int    `json:"promoted"` // dedup hits promoted draft → active
 	Source   string `json:"source"`
 }
 

@@ -634,7 +634,7 @@ paths:
                 limit: { type: integer, default: 30 }
                 active: { type: boolean, default: false }
       responses:
-        '200': { description: "{ fetched, inserted, skipped, invalid, source }; source is 'real' (РЕШУ) or 'mock' (demo fallback)" }
+        '200': { description: "{ fetched, inserted, skipped, invalid, promoted, source }; promoted = dedup-hit drafts activated when `active` is set; source is 'real' (РЕШУ) or 'mock' (demo fallback)" }
         '502': { description: source unavailable }
 
   /api/admin/tasks/import:
