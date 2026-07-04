@@ -7,10 +7,11 @@ import {
   useAdminTasks, useTests, useTestDetail, useInvalidate, useClasses, useClassDetail, useClassOverview, useStudents,
 } from "./api";
 import { useApp } from "./state";
-import { Card, Label, Pill, Button, Async, Empty, Loading, Modal, accColor, SUBJECT_TITLES, testTitle, MediaBlock, StatementView, AttemptReviewGrid } from "./ui";
+import { Card, Label, Pill, Button, Async, Empty, Loading, Modal, PasswordInput, accColor, SUBJECT_TITLES, testTitle, MediaBlock, StatementView, AttemptReviewGrid } from "./ui";
 import { ScoreGauge, computeStreak, WeakSpotsList, Section, MasteryChart } from "./charts";
 import { StreakBadge, ASSIGNMENT_STATUS_RU } from "./student";
 import { Icon } from "./icons";
+import { ResetLinkModal } from "./reset";
 
 const SUBJECTS: SubjectCode[] = ["rus", "math", "inf", "soc"];
 // Which live source feeds a subject (per CLAUDE.md: openfipi serves информатика,
@@ -102,7 +103,8 @@ function CreateStudentModal({ classId, onClose, onDone }: { classId?: string; on
         <label><Label>Логин</Label>
           <input value={username} onChange={(e) => setUsername(e.target.value)} style={{ width: "100%", marginTop: 6 }} /></label>
         <label><Label>Пароль</Label>
-          <input type="text" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="минимум 6 символов" style={{ width: "100%", marginTop: 6 }} /></label>
+          <PasswordInput value={password} onChange={setPassword} autoComplete="new-password"
+            placeholder="минимум 6 символов" style={{ marginTop: 6 }} /></label>
         <label>
           <Label>Класс (необязательно)</Label>
           <select value={klass} onChange={(e) => setKlass(e.target.value)} style={{ width: "100%", marginTop: 6 }}>
@@ -544,6 +546,7 @@ export function StudentStatsPage() {
   const assignments = useAssignments(sid);
   const [open, setOpen] = useState<number | null>(null);
   const [review, setReview] = useState<{ title: string; items: AttemptReviewItem[] } | null>(null);
+  const [resetOpen, setResetOpen] = useState(false);
 
   if (!student) {
     return <Empty title="Ученик не выбран" action={<Button onClick={() => go("t-dashboard")}>К ученикам</Button>} />;
@@ -567,7 +570,14 @@ export function StudentStatsPage() {
           borderRadius: 10, padding: "8px 14px", fontSize: 14, color: "var(--text-2)",
         }}><Icon name="arrowLeft" size={16} /> Ко всем ученикам</button>
         <div style={{ fontWeight: 800, fontSize: 18 }}>{student.name}</div>
-        <Button variant="soft" onClick={() => { requestAssign({ studentId: student.id }); go("t-assign"); }}>Назначить тест</Button>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <Button variant="ghost" onClick={() => setResetOpen(true)}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
+              <Icon name="key" size={15} /> Сбросить пароль
+            </span>
+          </Button>
+          <Button variant="soft" onClick={() => { requestAssign({ studentId: student.id }); go("t-assign"); }}>Назначить тест</Button>
+        </div>
       </div>
 
       <SubjectTabs value={subject} onChange={setSubject} />
@@ -673,6 +683,8 @@ export function StudentStatsPage() {
           <AttemptReviewGrid items={review.items} />
         </Modal>
       )}
+
+      {resetOpen && <ResetLinkModal user={student} onClose={() => setResetOpen(false)} />}
     </div>
   );
 }

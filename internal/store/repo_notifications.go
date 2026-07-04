@@ -16,7 +16,21 @@ import (
 // assignment_done.
 func (s *Store) CreateNotification(ctx context.Context, userID uuid.UUID, kind domain.NotificationKind, assignmentID uuid.UUID) error {
 	err := s.q.CreateNotification(ctx, sqlc.CreateNotificationParams{
-		UserID: userID, Kind: string(kind), AssignmentID: assignmentID,
+		UserID: userID, Kind: string(kind), AssignmentID: &assignmentID,
+	})
+	if err != nil {
+		return mapErr(err)
+	}
+	return nil
+}
+
+// CreatePasswordResetNotification records «subjectUser забыл пароль» for one
+// recipient (a teacher of the student or an admin). Idempotent while unread:
+// a pending unread notification about the same user suppresses duplicates, so
+// button-mashing «забыл пароль» never floods the bell.
+func (s *Store) CreatePasswordResetNotification(ctx context.Context, recipientID, subjectUserID uuid.UUID) error {
+	err := s.q.CreatePasswordResetNotification(ctx, sqlc.CreatePasswordResetNotificationParams{
+		UserID: recipientID, SubjectUserID: &subjectUserID,
 	})
 	if err != nil {
 		return mapErr(err)
@@ -25,7 +39,7 @@ func (s *Store) CreateNotification(ctx context.Context, userID uuid.UUID, kind d
 }
 
 // ListNotifications returns a user's notifications, newest first, enriched with
-// their assignment/test context.
+// their assignment/test context (or the subject user for password resets).
 func (s *Store) ListNotifications(ctx context.Context, userID uuid.UUID, limit int) ([]domain.Notification, error) {
 	if limit <= 0 {
 		limit = 30
@@ -38,20 +52,46 @@ func (s *Store) ListNotifications(ctx context.Context, userID uuid.UUID, limit i
 	}
 	out := make([]domain.Notification, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, domain.Notification{
-			ID:               r.ID,
-			Kind:             domain.NotificationKind(r.Kind),
-			AssignmentID:     r.AssignmentID,
-			TestID:           r.TestID,
-			TestTitle:        r.TestTitle,
-			SubjectID:        r.SubjectID,
-			StudentID:        r.StudentID,
-			StudentName:      r.StudentName,
-			ScheduledAt:      r.ScheduledAt,
-			AssignmentStatus: domain.AssignmentStatus(r.AssignmentStatus),
-			ReadAt:           r.ReadAt,
-			CreatedAt:        r.CreatedAt,
-		})
+		// The assignment context is LEFT-JOINed (absent on password resets);
+		// missing pieces collapse to zero values the JSON encoder omits or the
+		// web ignores — clients key on Kind before touching them.
+		n := domain.Notification{
+			ID:        r.ID,
+			Kind:      domain.NotificationKind(r.Kind),
+			ReadAt:    r.ReadAt,
+			CreatedAt: r.CreatedAt,
+		}
+		if r.AssignmentID != nil {
+			n.AssignmentID = *r.AssignmentID
+		}
+		if r.TestID != nil {
+			n.TestID = *r.TestID
+		}
+		if r.TestTitle != nil {
+			n.TestTitle = *r.TestTitle
+		}
+		if r.SubjectID != nil {
+			n.SubjectID = *r.SubjectID
+		}
+		if r.StudentID != nil {
+			n.StudentID = *r.StudentID
+		}
+		if r.StudentName != nil {
+			n.StudentName = *r.StudentName
+		}
+		if r.ScheduledAt != nil {
+			n.ScheduledAt = *r.ScheduledAt
+		}
+		if r.AssignmentStatus != nil {
+			n.AssignmentStatus = domain.AssignmentStatus(*r.AssignmentStatus)
+		}
+		if r.SubjectUserID != nil {
+			n.SubjectUserID = *r.SubjectUserID
+		}
+		if r.SubjectUserName != nil {
+			n.SubjectUserName = *r.SubjectUserName
+		}
+		out = append(out, n)
 	}
 	return out, nil
 }

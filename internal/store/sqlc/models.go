@@ -60,12 +60,22 @@ type Enrollment struct {
 }
 
 type Notification struct {
-	ID           uuid.UUID  `json:"id"`
-	UserID       uuid.UUID  `json:"user_id"`
-	Kind         string     `json:"kind"`
-	AssignmentID uuid.UUID  `json:"assignment_id"`
-	ReadAt       *time.Time `json:"read_at"`
-	CreatedAt    time.Time  `json:"created_at"`
+	ID            uuid.UUID  `json:"id"`
+	UserID        uuid.UUID  `json:"user_id"`
+	Kind          string     `json:"kind"`
+	AssignmentID  *uuid.UUID `json:"assignment_id"`
+	ReadAt        *time.Time `json:"read_at"`
+	CreatedAt     time.Time  `json:"created_at"`
+	SubjectUserID *uuid.UUID `json:"subject_user_id"`
+}
+
+type PasswordResetToken struct {
+	Token     string     `json:"token"`
+	UserID    uuid.UUID  `json:"user_id"`
+	CreatedBy *uuid.UUID `json:"created_by"`
+	ExpiresAt time.Time  `json:"expires_at"`
+	UsedAt    *time.Time `json:"used_at"`
+	CreatedAt time.Time  `json:"created_at"`
 }
 
 type Subject struct {

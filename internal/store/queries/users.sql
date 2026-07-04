@@ -73,3 +73,11 @@ RETURNING *;
 SELECT EXISTS(
     SELECT 1 FROM enrollments WHERE teacher_id = $1 AND student_id = $2
 ) AS enrolled;
+
+-- name: ListTeacherIDsForStudent :many
+-- Reverse enrollment lookup: who teaches this student (the recipients of the
+-- «забыл пароль» notification).
+SELECT teacher_id FROM enrollments WHERE student_id = $1;
+
+-- name: ListActiveAdminIDs :many
+SELECT id FROM users WHERE role = 'admin' AND is_active;
