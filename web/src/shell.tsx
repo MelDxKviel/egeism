@@ -140,40 +140,63 @@ export function Shell({ title, cta, children }: { title: string; cta?: ReactNode
 
 // notifText builds the human line for one notification. assignment_created is
 // only ever delivered to the student, assignment_done to the teacher who
-// assigned, password_reset_requested to teachers/admins — kind alone decides
-// the wording.
+// assigned, password_reset_requested to teachers/admins of a user who forgot
+// their password — kind alone decides the wording. The arrival time is shown
+// separately (relTime), so the sub only carries the distinct extra fact — the
+// due date for an assignment, the subject for a solved test.
 function notifText(n: NotificationItem, subjectCode?: string): { title: string; sub: string } {
-  const when = (iso: string) =>
-    new Date(iso).toLocaleString("ru", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
   const subj = subjectCode ? SUBJECT_TITLES[subjectCode] : undefined;
   if (n.kind === "assignment_created") {
+    const due = new Date(n.scheduled_at).toLocaleString("ru", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
     return {
       title: `Тебе назначен тест «${testTitle(n.test_title)}»`,
-      sub: [subj, `на ${when(n.scheduled_at)}`].filter(Boolean).join(" · "),
+      sub: [subj, `на ${due}`].filter(Boolean).join(" · "),
     };
   }
   if (n.kind === "password_reset_requested") {
     return {
       title: `${n.subject_user_name || "Пользователь"} забыл(а) пароль`,
-      sub: when(n.created_at),
+      sub: "",
     };
   }
   return {
     title: `${n.student_name} решил(а) тест «${testTitle(n.test_title)}»`,
-    sub: [subj, when(n.created_at)].filter(Boolean).join(" · "),
+    sub: subj ?? "",
   };
 }
 
-// NotificationsBell polls the in-app feed, shows the unread badge, and opens
-// the list in the shared themed Modal. Clicking a notification marks it read
-// and jumps to the test: the student straight into solving the assigned
-// variant, the teacher into the test view.
+// relTime renders how long ago a notification arrived — «только что», «5 мин»,
+// «3 ч», «2 дн» — then falls back to an absolute date for anything older than a
+// week. The exact timestamp rides along as a title tooltip (fullTime).
+function relTime(iso: string): string {
+  const mins = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60000));
+  if (mins < 1) return "только что";
+  if (mins < 60) return `${mins} мин`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs} ч`;
+  const days = Math.floor(hrs / 24);
+  if (days < 7) return `${days} дн`;
+  return new Date(iso).toLocaleDateString("ru", { day: "2-digit", month: "2-digit" });
+}
+const fullTime = (iso: string) =>
+  new Date(iso).toLocaleString("ru", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+
+// NotificationsBell polls the in-app feed, shows the unread badge, and drops a
+// themed popover list anchored under the icon — no dimming backdrop; a tap
+// outside or Esc closes it. On desktop it's a compact dropdown right below the
+// bell; on mobile it becomes a near-full-width sheet pinned just under the
+// header (comfortable to read and tap, kept clear of the bottom nav). Each row
+// carries its arrival time. Clicking a notification marks it read and jumps to
+// the test: the student straight into solving the assigned variant, the teacher
+// into the test view.
 function NotificationsBell() {
   const { go, role, subject, user, showToast } = useApp();
+  const isMobile = useIsMobile();
   const invalidate = useInvalidate();
   const feed = useNotifications(user?.id ?? "");
   const subjects = useSubjects();
   const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
   // The user whose «забыл пароль» notification was clicked → reset-link modal.
   const [resetFor, setResetFor] = useState<{ id: string; name: string } | null>(null);
 
@@ -195,6 +218,22 @@ function NotificationsBell() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [feed.data]);
 
+  // Close the popover on an outside pointer (mouse or touch) or Esc. The bell
+  // itself lives inside wrapRef, so tapping it toggles rather than double-fires.
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: PointerEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("pointerdown", onDown);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onDown);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
   const markAll = () => api.markAllNotificationsRead().then(() => invalidate("notifications")).catch(() => {});
 
   const openItem = (n: NotificationItem) => {
@@ -206,27 +245,30 @@ function NotificationsBell() {
       }
       return;
     }
+    setOpen(false);
     if (n.kind === "assignment_created") {
       if (n.assignment_status === "done") { showToast("Этот тест уже решён ✓"); return; }
       requestSolve({
         subject: codeOf(n.subject_id) ?? subject,
         testId: n.test_id, assignmentId: n.assignment_id, title: testTitle(n.test_title),
       });
-      setOpen(false);
       go("solve");
     } else {
       requestTestView(n.test_id);
-      setOpen(false);
       go("t-test");
     }
   };
 
   const unread = feed.data?.unread ?? 0;
+  const items = feed.data?.items ?? [];
+
   return (
-    <>
-      <button onClick={() => setOpen(true)} title="Уведомления" style={{
+    <div ref={wrapRef} style={{ position: "relative", display: "inline-flex" }}>
+      <button onClick={() => setOpen((o) => !o)} title="Уведомления" style={{
         display: "flex", alignItems: "center", position: "relative",
-        background: "transparent", border: "1px solid var(--border)", borderRadius: 10, padding: 8, color: "var(--text-2)",
+        background: open ? "var(--accent-soft)" : "transparent",
+        border: "1px solid var(--border)", borderRadius: 10, padding: 8,
+        color: open ? "var(--accent-2)" : "var(--text-2)", transition: "background .15s, color .15s",
       }}>
         <Icon name="bell" size={17} />
         {unread > 0 && (
@@ -237,58 +279,97 @@ function NotificationsBell() {
           }}>{unread > 9 ? "9+" : unread}</span>
         )}
       </button>
+
       {open && (
-        <Modal onClose={() => setOpen(false)} maxWidth={480}
-          title={<><Icon name="bell" size={20} /> Уведомления</>}>
-          {feed.isLoading && <Loading label="Загружаем…" />}
-          {feed.data && feed.data.items.length === 0 && (
-            <div style={{ color: "var(--text-2)", fontSize: 14, padding: "4px 0 8px" }}>
-              Пока нет уведомлений.{role === "teacher"
-                ? " Здесь появится, когда ученик решит назначенный тест."
-                : role === "student" ? " Здесь появится, когда учитель назначит тебе тест." : ""}
+        <div className="popdown" style={{
+          position: isMobile ? "fixed" : "absolute",
+          ...(isMobile
+            ? { top: 68, left: 8, right: 8, maxHeight: "calc(100vh - 150px)" }
+            : { top: "calc(100% + 10px)", right: 0, width: 384, maxHeight: "min(72vh, 540px)" }),
+          background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 16,
+          boxShadow: "var(--shadow-lg)", zIndex: 60, transformOrigin: "top right",
+          display: "flex", flexDirection: "column", overflow: "hidden",
+        }}>
+          <div style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
+            padding: "13px 16px", borderBottom: "1px solid var(--border)", flex: "none",
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 9, fontWeight: 700, fontSize: 15 }}>
+              <Icon name="bell" size={18} /> Уведомления
+              {unread > 0 && (
+                <span className="mono" style={{
+                  background: "var(--bad)", color: "#fff", borderRadius: 999,
+                  fontSize: 10.5, fontWeight: 700, padding: "1px 7px",
+                }}>{unread}</span>
+              )}
             </div>
-          )}
-          {feed.data && feed.data.items.length > 0 && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
               {unread > 0 && (
                 <button onClick={markAll} style={{
-                  alignSelf: "flex-end", background: "none", border: "none",
-                  color: "var(--accent-2)", fontSize: 13, padding: "0 0 2px",
+                  background: "none", border: "none", color: "var(--accent-2)",
+                  fontSize: 13, fontWeight: 600, padding: "4px 6px", borderRadius: 8, whiteSpace: "nowrap",
                 }}>Прочитать все</button>
               )}
-              {feed.data.items.map((n) => {
-                const { title, sub } = notifText(n, codeOf(n.subject_id));
-                const isUnread = !n.read_at;
-                return (
-                  <button key={n.id} onClick={() => openItem(n)} style={{
-                    display: "flex", gap: 10, alignItems: "flex-start", textAlign: "left", width: "100%",
-                    background: isUnread ? "var(--accent-soft)" : "var(--surface-2)",
-                    border: "none", borderRadius: 12, padding: "10px 12px", cursor: "pointer",
-                  }}>
-                    <span style={{ color: isUnread ? "var(--accent-2)" : "var(--text-3)", marginTop: 2 }}>
-                      <Icon name={n.kind === "assignment_created" ? "assign" : n.kind === "password_reset_requested" ? "key" : "check"} size={18} />
-                    </span>
-                    <span style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0, flex: 1 }}>
-                      <span style={{ fontWeight: isUnread ? 700 : 600, fontSize: 14, color: "var(--text)" }}>{title}</span>
-                      {sub && <span className="mono" style={{ fontSize: 11.5, color: "var(--text-3)" }}>{sub}</span>}
-                      <span style={{ fontSize: 12.5, color: "var(--accent-2)", display: "inline-flex", alignItems: "center", gap: 5 }}>
-                        {n.kind === "password_reset_requested"
-                          ? <>Выдать ссылку для смены пароля <Icon name="arrowRight" size={13} /></>
-                          : n.kind === "assignment_created" && n.assignment_status === "done"
-                            ? "уже решён ✓"
-                            : <>Перейти к тесту <Icon name="arrowRight" size={13} /></>}
-                      </span>
-                    </span>
-                    {isUnread && <span style={{ width: 8, height: 8, borderRadius: 999, background: "var(--accent)", marginTop: 5, flex: "none" }} />}
-                  </button>
-                );
-              })}
+              {isMobile && (
+                <button onClick={() => setOpen(false)} title="Закрыть" style={{
+                  display: "flex", background: "none", border: "none", color: "var(--text-3)", padding: 4,
+                }}><Icon name="close" size={19} /></button>
+              )}
             </div>
-          )}
-        </Modal>
+          </div>
+
+          <div className="scroll" style={{ overflowY: "auto", padding: 8, minHeight: 0 }}>
+            {feed.isLoading && <Loading label="Загружаем…" />}
+            {feed.data && items.length === 0 && (
+              <div style={{ color: "var(--text-2)", fontSize: 14, padding: "22px 16px", textAlign: "center", lineHeight: 1.5 }}>
+                Пока нет уведомлений.{role === "teacher"
+                  ? " Здесь появится, когда ученик решит назначенный тест."
+                  : role === "student" ? " Здесь появится, когда учитель назначит тебе тест." : ""}
+              </div>
+            )}
+            {items.length > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {items.map((n) => {
+                  const { title, sub } = notifText(n, codeOf(n.subject_id));
+                  const isUnread = !n.read_at;
+                  const done = n.kind === "assignment_created" && n.assignment_status === "done";
+                  const iconName: IconName = n.kind === "assignment_created" ? "assign" : n.kind === "password_reset_requested" ? "key" : "check";
+                  const action = n.kind === "password_reset_requested" ? "Выдать ссылку для смены пароля" : "Перейти к тесту";
+                  return (
+                    <button key={n.id} onClick={() => openItem(n)} title={fullTime(n.created_at)} style={{
+                      display: "flex", gap: 11, alignItems: "flex-start", textAlign: "left", width: "100%",
+                      background: isUnread ? "var(--accent-soft)" : "transparent",
+                      border: isUnread ? "1px solid transparent" : "1px solid var(--border)",
+                      borderRadius: 12, padding: "10px 12px", cursor: "pointer",
+                    }}>
+                      <span style={{
+                        display: "flex", flex: "none", width: 30, height: 30, borderRadius: 9,
+                        alignItems: "center", justifyContent: "center", color: "var(--accent-2)",
+                        background: isUnread ? "var(--surface)" : "var(--surface-2)",
+                      }}>
+                        <Icon name={iconName} size={17} />
+                      </span>
+                      <span style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0, flex: 1 }}>
+                        <span style={{ display: "flex", gap: 8, alignItems: "baseline", justifyContent: "space-between" }}>
+                          <span style={{ fontWeight: isUnread ? 700 : 600, fontSize: 13.5, color: "var(--text)", lineHeight: 1.35 }}>{title}</span>
+                          <span className="mono" style={{ fontSize: 11, color: "var(--text-3)", flex: "none", whiteSpace: "nowrap" }}>{relTime(n.created_at)}</span>
+                        </span>
+                        {sub && <span className="mono" style={{ fontSize: 11.5, color: "var(--text-3)" }}>{sub}</span>}
+                        <span style={{ fontSize: 12.5, color: "var(--accent-2)", display: "inline-flex", alignItems: "center", gap: 5 }}>
+                          {done ? "уже решён ✓" : <>{action} <Icon name="arrowRight" size={13} /></>}
+                        </span>
+                      </span>
+                      {isUnread && <span style={{ width: 8, height: 8, borderRadius: 999, background: "var(--accent)", marginTop: 6, flex: "none" }} />}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
       )}
       {resetFor && <ResetLinkModal user={resetFor} onClose={() => setResetFor(null)} />}
-    </>
+    </div>
   );
 }
 
