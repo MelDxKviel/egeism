@@ -5,6 +5,7 @@ import { api, User, NotificationItem, useNotifications, useSubjects, useInvalida
 import { Button, Loading, Modal, Spinner, SUBJECT_TITLES, testTitle } from "./ui";
 import { requestSolve } from "./student";
 import { requestTestView } from "./teacher";
+import { ResetLinkModal } from "./reset";
 
 function useIsMobile() {
   const [m, setM] = useState(window.innerWidth < 900);
@@ -139,7 +140,8 @@ export function Shell({ title, cta, children }: { title: string; cta?: ReactNode
 
 // notifText builds the human line for one notification. assignment_created is
 // only ever delivered to the student, assignment_done to the teacher who
-// assigned, so kind alone decides the wording.
+// assigned, password_reset_requested to teachers/admins — kind alone decides
+// the wording.
 function notifText(n: NotificationItem, subjectCode?: string): { title: string; sub: string } {
   const when = (iso: string) =>
     new Date(iso).toLocaleString("ru", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
@@ -148,6 +150,12 @@ function notifText(n: NotificationItem, subjectCode?: string): { title: string; 
     return {
       title: `Тебе назначен тест «${testTitle(n.test_title)}»`,
       sub: [subj, `на ${when(n.scheduled_at)}`].filter(Boolean).join(" · "),
+    };
+  }
+  if (n.kind === "password_reset_requested") {
+    return {
+      title: `${n.subject_user_name || "Пользователь"} забыл(а) пароль`,
+      sub: when(n.created_at),
     };
   }
   return {
@@ -166,6 +174,8 @@ function NotificationsBell() {
   const feed = useNotifications(user?.id ?? "");
   const subjects = useSubjects();
   const [open, setOpen] = useState(false);
+  // The user whose «забыл пароль» notification was clicked → reset-link modal.
+  const [resetFor, setResetFor] = useState<{ id: string; name: string } | null>(null);
 
   const codeOf = (subjectId: string) => subjects.data?.find((s) => s.id === subjectId)?.code;
 
@@ -189,6 +199,13 @@ function NotificationsBell() {
 
   const openItem = (n: NotificationItem) => {
     if (!n.read_at) api.markNotificationRead(n.id).then(() => invalidate("notifications")).catch(() => {});
+    if (n.kind === "password_reset_requested") {
+      if (n.subject_user_id) {
+        setResetFor({ id: n.subject_user_id, name: n.subject_user_name || "" });
+        setOpen(false);
+      }
+      return;
+    }
     if (n.kind === "assignment_created") {
       if (n.assignment_status === "done") { showToast("Этот тест уже решён ✓"); return; }
       requestSolve({
@@ -249,15 +266,17 @@ function NotificationsBell() {
                     border: "none", borderRadius: 12, padding: "10px 12px", cursor: "pointer",
                   }}>
                     <span style={{ color: isUnread ? "var(--accent-2)" : "var(--text-3)", marginTop: 2 }}>
-                      <Icon name={n.kind === "assignment_created" ? "assign" : "check"} size={18} />
+                      <Icon name={n.kind === "assignment_created" ? "assign" : n.kind === "password_reset_requested" ? "key" : "check"} size={18} />
                     </span>
                     <span style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0, flex: 1 }}>
                       <span style={{ fontWeight: isUnread ? 700 : 600, fontSize: 14, color: "var(--text)" }}>{title}</span>
                       {sub && <span className="mono" style={{ fontSize: 11.5, color: "var(--text-3)" }}>{sub}</span>}
                       <span style={{ fontSize: 12.5, color: "var(--accent-2)", display: "inline-flex", alignItems: "center", gap: 5 }}>
-                        {n.kind === "assignment_created" && n.assignment_status === "done"
-                          ? "уже решён ✓"
-                          : <>Перейти к тесту <Icon name="arrowRight" size={13} /></>}
+                        {n.kind === "password_reset_requested"
+                          ? <>Выдать ссылку для смены пароля <Icon name="arrowRight" size={13} /></>
+                          : n.kind === "assignment_created" && n.assignment_status === "done"
+                            ? "уже решён ✓"
+                            : <>Перейти к тесту <Icon name="arrowRight" size={13} /></>}
                       </span>
                     </span>
                     {isUnread && <span style={{ width: 8, height: 8, borderRadius: 999, background: "var(--accent)", marginTop: 5, flex: "none" }} />}
@@ -268,6 +287,7 @@ function NotificationsBell() {
           )}
         </Modal>
       )}
+      {resetFor && <ResetLinkModal user={resetFor} onClose={() => setResetFor(null)} />}
     </>
   );
 }

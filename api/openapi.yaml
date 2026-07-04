@@ -193,6 +193,64 @@ paths:
         '200': { description: user }
         '401': { description: not authenticated }
 
+  /api/auth/forgot-password:
+    post:
+      summary: >
+        «Забыл пароль»: notifies the user's teachers and active admins (in-app
+        bell) so one of them issues a reset link. The response never reveals
+        whether the username exists.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username]
+              properties:
+                username: { type: string }
+      responses:
+        '200': { description: "{ ok: true } — always, no user enumeration" }
+
+  /api/auth/reset-password/{token}:
+    get:
+      summary: Check a reset token before showing the form (name + expiry)
+      security: []
+      responses:
+        '200': { description: "{ name, expires_at }" }
+        '404': { description: unknown, expired or already-used token }
+
+  /api/auth/reset-password:
+    post:
+      summary: >
+        Redeem a one-time reset link: set a new password (token burned in the
+        same tx) and log the user in.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, password]
+              properties:
+                token: { type: string }
+                password: { type: string, minLength: 6 }
+      responses:
+        '200': { description: "{ token, user } — session token, auto-login" }
+        '400': { description: invalid/expired token or password too short }
+        '403': { description: account deactivated }
+
+  /api/users/{userID}/password-reset-link:
+    post:
+      summary: >
+        Issue a one-time password-reset link for a user (valid 1 hour; expired →
+        issue a new one). Admin: any account; teacher: only their enrolled
+        students. The web builds the URL as <origin>/#reset=<token>.
+      responses:
+        '201': { description: "{ token, expires_at }" }
+        '403': { description: not your student / role too low }
+
   /api/students:
     get:
       summary: >

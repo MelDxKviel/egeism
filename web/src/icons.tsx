@@ -12,7 +12,8 @@ export type IconName =
   | "flame" | "paperclip" | "bot" | "image" | "check"  // inline markers
   | "close" | "arrowRight" | "arrowLeft" | "trash" | "pencil"  // affordances
   | "bell"   // notifications
-  | "download";  // PDF export
+  | "download"  // PDF export
+  | "eye" | "eyeOff" | "key";  // password visibility + reset
 
 const PATHS: Record<IconName, ReactNode> = {
   dashboard: (
@@ -139,6 +140,28 @@ const PATHS: Record<IconName, ReactNode> = {
   ),
   arrowRight: <path d="M4 12h15M13 5.5l6.5 6.5-6.5 6.5" />,
   arrowLeft: <path d="M20 12H5M11 18.5 4.5 12 11 5.5" />,
+  eye: (
+    <>
+      <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" />
+      <circle cx="12" cy="12" r="2.8" />
+    </>
+  ),
+  eyeOff: (
+    <>
+      <path d="M10.6 6c.46-.07.93-.1 1.4-.1 6 0 9.5 6.1 9.5 6.1a17.6 17.6 0 0 1-2.2 2.9" />
+      <path d="M6.4 7.4A17 17 0 0 0 2.5 12S6 18.1 12 18.1c1.5 0 2.86-.38 4.06-.96" />
+      <path d="M9.9 9.9a2.8 2.8 0 0 0 4.2 4.2" />
+      <path d="m4 4 16 16" />
+    </>
+  ),
+  key: (
+    <>
+      <circle cx="7.5" cy="16.5" r="4.5" />
+      <path d="m10.8 13.2 9.7-9.7" />
+      <path d="m15.5 8.5 3 3" />
+      <path d="m19 5 2 2" />
+    </>
+  ),
 };
 
 export function Icon({ name, size = 20, strokeWidth = 1.75, style, className }:

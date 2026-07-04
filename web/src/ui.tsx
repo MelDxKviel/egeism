@@ -239,6 +239,38 @@ export function Button({ children, onClick, variant = "primary", disabled, style
   return <button type={type || "button"} onClick={onClick} disabled={disabled} style={{ ...base, ...styles[variant] }}>{children}</button>;
 }
 
+// PasswordInput — a password field with the «глазик»: a trailing eye button
+// toggles between the masked and plain view. Use it for EVERY password field
+// (login, reset page, admin/teacher account forms) so the affordance is
+// uniform. tabIndex=-1 on the toggle keeps Tab flowing input → submit.
+export function PasswordInput({ value, onChange, placeholder, autoComplete, autoFocus, style }: {
+  value: string; onChange: (v: string) => void; placeholder?: string;
+  autoComplete?: string; autoFocus?: boolean; style?: CSSProperties;
+}) {
+  const [show, setShow] = useState(false);
+  return (
+    <div style={{ position: "relative", width: "100%", ...style }}>
+      <input
+        type={show ? "text" : "password"} value={value} onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder} autoComplete={autoComplete} autoFocus={autoFocus}
+        style={{ width: "100%", paddingRight: 42 }}
+      />
+      <button
+        type="button" onClick={() => setShow((s) => !s)} tabIndex={-1}
+        title={show ? "Скрыть пароль" : "Показать пароль"}
+        aria-label={show ? "Скрыть пароль" : "Показать пароль"}
+        style={{
+          position: "absolute", right: 4, top: "50%", transform: "translateY(-50%)",
+          display: "flex", alignItems: "center", background: "none", border: "none",
+          color: "var(--text-3)", padding: 8, cursor: "pointer",
+        }}
+      >
+        <Icon name={show ? "eyeOff" : "eye"} size={17} />
+      </button>
+    </div>
+  );
+}
+
 export function Spinner() {
   return <div style={{
     width: 22, height: 22, border: "2px solid var(--border-2)", borderTopColor: "var(--accent)",
