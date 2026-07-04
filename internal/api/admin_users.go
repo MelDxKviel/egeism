@@ -94,6 +94,33 @@ func (s *Server) handleAdminUpdateUser(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "нельзя менять роль или отключать собственный аккаунт")
 		return
 	}
+	// Never let the panel lock itself out: the last active admin can't be
+	// deactivated or demoted (self-edits are already blocked above, so this
+	// only bites when a stale/racing session targets the sole remaining admin).
+	demoting := req.Role != nil && *req.Role != domain.RoleAdmin
+	deactivating := req.IsActive != nil && !*req.IsActive
+	if user.Role == domain.RoleAdmin && user.IsActive && (demoting || deactivating) {
+		if n, err := s.store.CountActiveAdmins(r.Context()); err != nil {
+			writeStoreErr(w, err)
+			return
+		} else if n <= 1 {
+			writeErr(w, http.StatusConflict, "нельзя отключить или понизить последнего админа")
+			return
+		}
+	}
+	// Demoting a teacher who still owns classes would strand them unmanageable
+	// (class endpoints require the owning teacher role) — clean up first.
+	if req.Role != nil && user.Role == domain.RoleTeacher && *req.Role != domain.RoleTeacher {
+		classes, err := s.store.ListClassesForTeacher(r.Context(), id)
+		if err != nil {
+			writeStoreErr(w, err)
+			return
+		}
+		if len(classes) > 0 {
+			writeErr(w, http.StatusConflict, "у пользователя есть классы — сначала удалите или расформируйте их")
+			return
+		}
+	}
 
 	if req.Name != nil {
 		name := strings.TrimSpace(*req.Name)
@@ -164,6 +191,16 @@ func (s *Server) handleAdminDeleteUser(w http.ResponseWriter, r *http.Request) {
 	if id == admin.ID {
 		writeErr(w, http.StatusBadRequest, "нельзя удалить собственный аккаунт")
 		return
+	}
+	// The last active admin can't be deleted either (see handleAdminUpdateUser).
+	if target, err := s.store.GetUser(r.Context(), id); err == nil && target.Role == domain.RoleAdmin && target.IsActive {
+		if n, err := s.store.CountActiveAdmins(r.Context()); err != nil {
+			writeStoreErr(w, err)
+			return
+		} else if n <= 1 {
+			writeErr(w, http.StatusConflict, "нельзя удалить последнего админа")
+			return
+		}
 	}
 	if err := s.store.DeleteUser(r.Context(), id); err != nil {
 		if errors.Is(err, store.ErrInUse) {

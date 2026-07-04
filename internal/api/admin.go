@@ -67,6 +67,17 @@ func (s *Server) testInScope(w http.ResponseWriter, r *http.Request, user domain
 	return test, true
 }
 
+// testOwned guards MUTATING test operations (delete/rename/items): with many
+// teachers sharing a subject's test list, only the creator may change or
+// destroy a test — reading, exporting and assigning stay shared.
+func (s *Server) testOwned(w http.ResponseWriter, teacher domain.User, test domain.Test) bool {
+	if test.CreatedBy == teacher.ID {
+		return true
+	}
+	writeErr(w, http.StatusForbidden, "тест создан другим учителем")
+	return false
+}
+
 // taskInScope enforces the teacher's subject scope on a task id (bank edits).
 func (s *Server) taskInScope(w http.ResponseWriter, r *http.Request, user domain.User, taskID uuid.UUID) bool {
 	if user.Subject == nil {
@@ -312,7 +323,8 @@ func (s *Server) handleDeleteTest(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "invalid test id")
 		return
 	}
-	if _, ok := s.testInScope(w, r, teacher, id); !ok {
+	test, ok := s.testInScope(w, r, teacher, id)
+	if !ok || !s.testOwned(w, teacher, test) {
 		return
 	}
 	if err := s.store.DeleteTest(r.Context(), id); err != nil {
@@ -338,7 +350,8 @@ func (s *Server) handleRenameTest(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "invalid test id")
 		return
 	}
-	if _, ok := s.testInScope(w, r, teacher, id); !ok {
+	test, ok := s.testInScope(w, r, teacher, id)
+	if !ok || !s.testOwned(w, teacher, test) {
 		return
 	}
 	var req renameTestReq
@@ -350,12 +363,12 @@ func (s *Server) handleRenameTest(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "title is required")
 		return
 	}
-	test, err := s.store.RenameTest(r.Context(), id, title)
+	renamed, err := s.store.RenameTest(r.Context(), id, title)
 	if err != nil {
 		writeStoreErr(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, test)
+	writeJSON(w, http.StatusOK, renamed)
 }
 
 type addItemReq struct {
@@ -373,11 +386,24 @@ func (s *Server) handleAddTestItem(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "invalid test id")
 		return
 	}
-	if _, ok := s.testInScope(w, r, teacher, testID); !ok {
+	test, ok := s.testInScope(w, r, teacher, testID)
+	if !ok || !s.testOwned(w, teacher, test) {
 		return
 	}
 	var req addItemReq
 	if !decodeJSON(w, r, &req) {
+		return
+	}
+	// The task must belong to the test's subject — otherwise a subject-scoped
+	// teacher could smuggle a foreign-subject task into their test and read its
+	// answer key through the test detail/export.
+	task, err := s.store.GetTask(r.Context(), req.TaskID)
+	if err != nil {
+		writeStoreErr(w, err)
+		return
+	}
+	if task.SubjectID != test.SubjectID {
+		writeErr(w, http.StatusBadRequest, "задание другого предмета")
 		return
 	}
 	item, err := s.store.AddTestItem(r.Context(), testID, req.TaskID, req.Position)
@@ -437,12 +463,15 @@ func (s *Server) handleCreateAssignment(w http.ResponseWriter, r *http.Request) 
 			writeStoreErr(w, err)
 			return
 		}
-		if len(members) == 0 {
-			writeErr(w, http.StatusUnprocessableEntity, "в классе пока нет учеников")
-			return
-		}
 		for _, m := range members {
+			if !m.IsActive {
+				continue // deactivated accounts must not receive work or pings
+			}
 			students = append(students, m.ID)
+		}
+		if len(students) == 0 {
+			writeErr(w, http.StatusUnprocessableEntity, "в классе нет активных учеников")
+			return
 		}
 	}
 	resp := createAssignmentResp{Assignments: make([]domain.Assignment, 0, len(students))}

@@ -44,6 +44,10 @@ DROP TABLE IF EXISTS class_members;
 DROP TABLE IF EXISTS classes;
 ALTER TABLE users DROP COLUMN IF EXISTS subject;
 ALTER TABLE users DROP COLUMN IF EXISTS is_active;
+-- The narrower CHECK validates existing rows, and the bootstrap admin exists
+-- on any deployment that ever started the API — demote admins to teachers so
+-- the rollback doesn't abort on them.
+UPDATE users SET role = 'teacher' WHERE role = 'admin';
 ALTER TABLE users DROP CONSTRAINT users_role_check;
 ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('student', 'teacher'));
 -- +goose StatementEnd
