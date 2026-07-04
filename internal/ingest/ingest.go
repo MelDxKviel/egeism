@@ -52,8 +52,9 @@ type Source interface {
 type Result struct {
 	Fetched  int `json:"fetched"`
 	Inserted int `json:"inserted"`
-	Skipped  int `json:"skipped"` // duplicates
-	Invalid  int `json:"invalid"` // failed validation
+	Skipped  int `json:"skipped"`  // duplicates
+	Invalid  int `json:"invalid"`  // failed validation
+	Promoted int `json:"promoted"` // duplicates promoted draft → active (Status=active runs)
 }
 
 // Runner writes candidates into the store with dedup and validation.
@@ -89,6 +90,9 @@ func (r *Runner) Ingest(ctx context.Context, sourceName string, raws []RawTask) 
 	for _, raw := range raws {
 		if err := r.ingestOne(ctx, sourceName, raw); err != nil {
 			switch {
+			case err == errPromoted:
+				res.Skipped++
+				res.Promoted++
 			case err == errDuplicate:
 				res.Skipped++
 			case err == errInvalid:
@@ -101,12 +105,14 @@ func (r *Runner) Ingest(ctx context.Context, sourceName string, raws []RawTask) 
 		res.Inserted++
 	}
 	slog.Info("ingest complete", "source", sourceName,
-		"fetched", res.Fetched, "inserted", res.Inserted, "skipped", res.Skipped, "invalid", res.Invalid)
+		"fetched", res.Fetched, "inserted", res.Inserted, "skipped", res.Skipped,
+		"invalid", res.Invalid, "promoted", res.Promoted)
 	return res, nil
 }
 
 var (
 	errDuplicate = fmt.Errorf("duplicate")
+	errPromoted  = fmt.Errorf("duplicate promoted to active")
 	errInvalid   = fmt.Errorf("invalid")
 )
 
@@ -127,6 +133,15 @@ func (r *Runner) ingestOne(ctx context.Context, sourceName string, raw RawTask) 
 		return err
 	}
 	if exists {
+		// An active-status run (the variant builder / «сразу активными») needs
+		// the task USABLE, not just present: a dedup hit that sits in the bank
+		// as a draft is promoted to active (never a rejected one), so repeat
+		// fetches actually grow the drill/variant pool.
+		if r.Status == domain.TaskActive {
+			if ok, err := r.store.ActivateDraftTaskBySource(ctx, src.Provider, src.ExternID); err == nil && ok {
+				return errPromoted
+			}
+		}
 		return errDuplicate
 	}
 	sub, err := r.store.GetSubjectByCode(ctx, raw.Subject)

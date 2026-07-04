@@ -11,6 +11,29 @@ import (
 	"github.com/google/uuid"
 )
 
+const activateDraftTaskBySource = `-- name: ActivateDraftTaskBySource :execrows
+UPDATE tasks SET status = 'active'
+WHERE source ->> 'provider'  = $1::text
+  AND source ->> 'extern_id' = $2::text
+  AND status = 'draft'
+`
+
+type ActivateDraftTaskBySourceParams struct {
+	Provider string `json:"provider"`
+	ExternID string `json:"extern_id"`
+}
+
+// Promote a dedup-hit DRAFT to active (the builder path ingests as active, so a
+// re-fetched task it needs must become usable). Drafts only — a task the
+// teacher rejected stays rejected.
+func (q *Queries) ActivateDraftTaskBySource(ctx context.Context, arg ActivateDraftTaskBySourceParams) (int64, error) {
+	result, err := q.db.Exec(ctx, activateDraftTaskBySource, arg.Provider, arg.ExternID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const countTasksBySubject = `-- name: CountTasksBySubject :one
 SELECT COUNT(*) FROM tasks WHERE subject_id = $1
 `

@@ -61,16 +61,19 @@ def real_tasks(subject: str, limit: int, min_conf: float, number: int = 0, ids=N
         if subject == "inf":
             return list(OF.fetch_by_ids(ids, delay))
         return list(F.fetch_by_ids(subject, ids))
+    # A wall-time budget just under the hard deadline: both sources then return
+    # what they HAVE when time is up, instead of the deadline killing the pull.
+    budget = max(10.0, FETCH_DEADLINE - 5)
     if subject == "inf":
         # информатика: pull REAL ФИПИ open-bank tasks WITH answers from openfipi
         # (it filters by задание server-side, only lists tasks that have an
         # answer, and spreads an all-numbers pull evenly across 1..27). РЕШУ/
-        # sdamgia is the source for the other subjects. Give it a wall-time
-        # budget just under the hard deadline so it returns gracefully.
-        gen = OF.fetch(number, limit, delay, budget=max(10.0, FETCH_DEADLINE - 5))
+        # sdamgia is the source for the other subjects.
+        gen = OF.fetch(number, limit, delay, budget=budget)
     else:
-        # fetch a wider pool when filtering by number so we still get enough.
-        gen = F.fetch(subject, limit * 4 if number else limit, delay)
+        # number goes to the source: a drill pull draws ids from that задание's
+        # categories only. The number filter below stays as a safety net.
+        gen = F.fetch(subject, limit, delay, number=number, budget=budget)
     out = []
     for rt in gen:
         if rt.get("_confidence", 1.0) < min_conf:

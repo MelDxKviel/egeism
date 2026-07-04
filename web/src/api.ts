@@ -137,7 +137,7 @@ async function req<T>(method: string, path: string, body?: unknown): Promise<T> 
   return res.json() as Promise<T>;
 }
 
-export interface ImportResult { fetched: number; inserted: number; skipped: number; invalid: number; source?: string; }
+export interface ImportResult { fetched: number; inserted: number; skipped: number; invalid: number; promoted?: number; source?: string; }
 
 // uploadTasks posts a JSON/JSONL task file as multipart form-data. Kept separate
 // from req() because FormData must set its own Content-Type (boundary).

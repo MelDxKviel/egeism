@@ -59,6 +59,15 @@ SELECT EXISTS (
       AND source ->> 'extern_id' = sqlc.arg('extern_id')::text
 );
 
+-- name: ActivateDraftTaskBySource :execrows
+-- Promote a dedup-hit DRAFT to active (the builder path ingests as active, so a
+-- re-fetched task it needs must become usable). Drafts only — a task the
+-- teacher rejected stays rejected.
+UPDATE tasks SET status = 'active'
+WHERE source ->> 'provider'  = sqlc.arg('provider')::text
+  AND source ->> 'extern_id' = sqlc.arg('extern_id')::text
+  AND status = 'draft';
+
 -- name: CountTasksBySubject :one
 SELECT COUNT(*) FROM tasks WHERE subject_id = $1;
 

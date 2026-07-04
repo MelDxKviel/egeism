@@ -217,9 +217,16 @@ goes live without a human approving it in the bank.
   tasks + answers). РЕШУ is ~seconds per request, so `fetch.py` fetches
   **concurrently** (a `ThreadPoolExecutor`, `FETCH_WORKERS`=6) and **round-robins
   one category per задание** for coverage — a full variant that used to time out
-  now completes (≈20 real math tasks in ~20s). Part-2 problems (topic like
-  "Д14 C4") are skipped. Still less battle-tested than openfipi; if it returns
-  empty, check `docker compose logs fetcher`.
+  now completes (≈20 real math tasks in ~20s). A **number-targeted pull (the
+  drill builder) draws ids from THAT задание's categories only**
+  (`_topic_categories`) — the old spread gave the wanted номер ~1/19 of the pull
+  and drills came out stunted. Both sources run under a wall-time budget
+  (`FETCH_DEADLINE - 5`) and return what they HAVE when it expires — partial
+  results survive; leftover page-fetch futures are cancelled, not awaited (the
+  old `with ex.map(…)` shutdown stalled past the deadline and lost the whole
+  pull). Part-2 problems (topic like "Д14 C4") are skipped. Still less
+  battle-tested than openfipi; if it returns empty, check
+  `docker compose logs fetcher`.
 
 **Button-driven (primary UX):** the fetcher runs as an HTTP service
 (`tools/fetch/server.py`, the `fetcher` compose service) exposing `POST /fetch`.
@@ -227,7 +234,10 @@ The bank's **"Подтянуть задания"** button hits `POST /api/admin/
 (teacher), which calls the fetcher and runs the result through the same ingest
 (media → MinIO, dedup, draft). **REAL sources only — there is no mock/demo
 generator** (it was removed: fake tasks polluted the bank, the teacher couldn't
-tell them apart, and the variant builder ingests as *active*). openfipi serves
+tell them apart, and the variant builder ingests as *active* — an active-status
+pull also **promotes dedup-hit drafts to active** (`ActivateDraftTaskBySource`;
+rejected stays rejected), so a drill pool grows even when the source returns
+tasks the bank already holds as drafts). openfipi serves
 информатика (requests+bs4, always installed); РЕШУ/sdamgia serves the rest (the
 image installs the fork from git, best-effort). On failure or empty the fetcher
 returns `[]` (always `X-Fetch-Mode: real`) and the API answers "источник не
@@ -324,8 +334,11 @@ stats; teacher classes with the color grid; per-subject teacher scoping;
 profiles; no self-registration), and PDF export of composed variants
 (`GET /api/admin/tests/{id}/export.pdf`, `?answers=1` appends the key page;
 `internal/pdf` renders statements, pipe-table grids and MinIO images with
-embedded DejaVu; web buttons «PDF для ученика» / «PDF с ответами» on the test
-detail page — never hand the answers file to a student).
+embedded DejaVu; ⟦img:N⟧ formulas draw as REAL images flowing mid-sentence —
+РЕШУ serves formulas as SVG, rasterized via oksvg (an all-white render, e.g.
+unsupported `<text>`, degrades to alt text instead of an invisible strip), and
+WebP/BMP/TIFF rasters decode too; web buttons «PDF для ученика» / «PDF с
+ответами» on the test detail page — never hand the answers file to a student).
 TODO: run/validate the Python fetcher against live РЕШУ/FIPI (it's a template),
 Telegram deep-link handoff, LLM-assisted answers + progressive hints
 (part-2), real ФИПИ primary→test score tables.

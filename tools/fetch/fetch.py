@@ -40,7 +40,9 @@ import os
 import random
 import re
 import sys
+import time
 from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FutureTimeout
 
 import requests
 from bs4 import (BeautifulSoup, CData, Comment, Declaration, Doctype,
@@ -280,17 +282,44 @@ def _fetch_one(subject_code: str, base: str, session, pid, require_answer: bool 
         return None
 
 
-def fetch(subject_code: str, limit: int, delay: float):
+def _topic_categories(catalog, number):
+    """Category ids of ONE задание (topic) from a get_catalog() result.
+
+    Drills need many tasks of a single number, and pulling the whole catalog
+    round-robin hands the wanted задание only ~1/19 of the pull — the drill pool
+    then never fills. Returns [] when the topic isn't in the catalog (part-2
+    «C»-topics, catalog layout drift) so the caller can fall back to the spread.
+    """
+    want = str(number)
+    for t in catalog or []:
+        tid = str(t.get("topic_id", "")).strip().lstrip("№").strip()
+        if tid == want:
+            return [c["category_id"] for c in t.get("categories", []) if c.get("category_id")]
+    return []
+
+
+def fetch(subject_code: str, limit: int, delay: float, number: int = 0, budget: float = 0.0):
     """Yield RawTask dicts for a subject.
 
     Ids come from the sdamgia library (catalog + category listings); each
     problem PAGE is fetched and parsed here so formulas stay inline.
+
+    `number` targets one задание (the drill builder): ids then come from THAT
+    задание's categories only, so the whole pull fills the drill pool instead of
+    spreading ~1/19 of it per number. `budget` bounds wall-time in seconds; on
+    expiry the tasks fetched SO FAR are still yielded — a partial pull beats the
+    hard server deadline killing everything.
     """
     try:
         from sdamgia import SdamGIA  # validate against your installed version
     except ImportError as e:
         # Raise (not sys.exit) so the server can catch it and return [].
         raise RuntimeError("sdamgia lib not installed: pip install -r tools/fetch/requirements.txt") from e
+
+    deadline = time.monotonic() + budget if budget > 0 else None
+
+    def over():
+        return deadline is not None and time.monotonic() > deadline
 
     subj = SDAMGIA_SUBJECT[subject_code]
     base = _base_url(subj)
@@ -302,13 +331,24 @@ def fetch(subject_code: str, limit: int, delay: float):
     # past the fetch deadline on anything but a tiny pull).
     workers = max(1, int(os.getenv("FETCH_WORKERS", "6")))
 
-    # One representative category per topic (= задание), fetched in parallel, so a
-    # pull COVERS the whole exam structure (round-robin) instead of clustering,
-    # and the id-gathering itself doesn't eat the deadline.
-    cat_ids = [t["categories"][0]["category_id"]
-               for t in api.get_catalog(subj) if t.get("categories")]
+    catalog = api.get_catalog(subj)
+    targeted = _topic_categories(catalog, number) if number else []
+    if targeted:
+        # Drill: every category of the wanted задание — the whole pull is it.
+        cat_ids, want = targeted, limit
+    else:
+        # One representative category per topic (= задание), fetched in parallel,
+        # so a pull COVERS the whole exam structure (round-robin) instead of
+        # clustering, and the id-gathering itself doesn't eat the deadline. With
+        # an unmatched `number` the caller filters by it, so over-pull to
+        # compensate for the spread.
+        cat_ids = [t["categories"][0]["category_id"]
+                   for t in catalog if t.get("categories")]
+        want = limit * 4 if number else limit
 
     def _cat(cid):
+        if over():
+            return []
         try:
             return api.get_category_by_id(subj, cid)
         except Exception as e:  # noqa: BLE001
@@ -324,12 +364,29 @@ def fetch(subject_code: str, limit: int, delay: float):
         for b in buckets:
             if i < len(b):
                 ids.append(b[i])
-    ids = list(dict.fromkeys(ids))[: max(limit * 2, limit + 12)]  # over-fetch for failures
+    ids = list(dict.fromkeys(ids))[: max(want * 2, want + 12)]  # over-fetch for failures
 
-    with ThreadPoolExecutor(max_workers=workers) as ex:
-        for rt in ex.map(lambda pid: _fetch_one(subject_code, base, session, pid), ids):
+    # Explicit futures instead of `with … ex.map(…)`: the context manager's
+    # shutdown WAITS for every queued page even when the caller stops early
+    # (enough tasks / budget over), which used to stall past the server deadline
+    # and lose the whole pull. Here leftovers are cancelled and abandoned.
+    ex = ThreadPoolExecutor(max_workers=workers)
+    try:
+        futures = [ex.submit(_fetch_one, subject_code, base, session, pid) for pid in ids]
+        yielded = 0
+        for fut in futures:
+            if yielded >= want or over():
+                break
+            try:
+                rt = fut.result(timeout=None if deadline is None
+                                else max(0.1, deadline - time.monotonic()))
+            except FutureTimeout:
+                break
             if rt and rt["statement"]:
                 yield rt
+                yielded += 1
+    finally:
+        ex.shutdown(wait=False, cancel_futures=True)
 
 
 def fetch_by_ids(subject_code: str, ids):
@@ -353,12 +410,13 @@ def main():
     ap = argparse.ArgumentParser(description="Fetch ЕГЭ tasks → normalized JSONL")
     ap.add_argument("--subject", required=True, choices=list(SDAMGIA_SUBJECT))
     ap.add_argument("--limit", type=int, default=50)
+    ap.add_argument("--number", type=int, default=0, help="restrict to one задание (drill)")
     ap.add_argument("--delay", type=float, default=0.5, help="seconds between requests")
     ap.add_argument("--min-confidence", type=float, default=0.0,
                     help="drop tasks below this classification confidence")
     args = ap.parse_args()
 
-    for rt in fetch(args.subject, args.limit, args.delay):
+    for rt in fetch(args.subject, args.limit, args.delay, number=args.number):
         if rt["_confidence"] < args.min_confidence:
             continue
         print(json.dumps(rt, ensure_ascii=False))

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"image"
 	"image/color"
 	"image/png"
@@ -96,6 +97,109 @@ func TestRenderSurvivesImageFailures(t *testing.T) {
 				t.Fatal("output is not a PDF")
 			}
 		})
+	}
+}
+
+// РЕШУ serves every formula (and many figures) as SVG — exactly what used to
+// come out of the PDF blank. Both media of the sample task must now embed as
+// real images: the inline ⟦img:0⟧ formula mid-sentence and the block figure.
+func TestRenderEmbedsSVG(t *testing.T) {
+	svgSized := func(w int) []byte {
+		return []byte(fmt.Sprintf(`<?xml version="1.0"?>`+
+			`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 %d 16">`+
+			`<rect x="1" y="1" width="%d" height="14" fill="black"/></svg>`, w, w-2))
+	}
+	fetched := map[string]int{}
+	out, err := Render(context.Background(), sampleTest(), sampleTasks(), Options{
+		FetchImage: func(ctx context.Context, key string) ([]byte, error) {
+			fetched[key]++
+			if key == "formula.png" {
+				return svgSized(40), nil // line-sized formula
+			}
+			return svgSized(400), nil // wide block figure
+		},
+	})
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	// fpdf dedups identical bytes, so distinct content must yield two objects.
+	if got := bytes.Count(out, []byte("/Subtype /Image")); got != 2 {
+		t.Fatalf("embedded images: got %d, want 2 (inline formula + block figure)", got)
+	}
+	// The attached file is never fetched; each image key exactly once (cache).
+	if fetched["data.zip"] != 0 {
+		t.Fatalf("file media must not be fetched, got %d", fetched["data.zip"])
+	}
+	for _, key := range []string{"formula.png", "figure.png"} {
+		if fetched[key] != 1 {
+			t.Fatalf("fetch count for %s: got %d, want 1", key, fetched[key])
+		}
+	}
+}
+
+// A failed image is remembered: repeated placeholders of one key cost one fetch.
+func TestImageFailureCached(t *testing.T) {
+	task := domain.Task{
+		ID:        uuid.New(),
+		Number:    2,
+		Statement: "⟦img:0⟧ и ещё раз ⟦img:1⟧",
+		Media: []domain.Media{
+			{Key: "same.png", Kind: "image", Alt: "x", Inline: true},
+			{Key: "same.png", Kind: "image", Alt: "x", Inline: true},
+		},
+		AnswerSchema: domain.AnswerSchema{Type: domain.AnswerNumber, Correct: []string{"1"}},
+	}
+	calls := 0
+	_, err := Render(context.Background(), sampleTest(), []domain.Task{task}, Options{
+		FetchImage: func(ctx context.Context, key string) ([]byte, error) {
+			calls++
+			return nil, errors.New("boom")
+		},
+	})
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	if calls != 1 {
+		t.Fatalf("fetch calls: got %d, want 1 (failure cached)", calls)
+	}
+}
+
+func TestLooksSVG(t *testing.T) {
+	cases := map[string]bool{
+		`<svg viewBox="0 0 1 1"/>`:                         true,
+		"\xef\xbb\xbf  <?xml version=\"1.0\"?><svg></svg>": true,
+		"\x89PNG\r\n\x1a\n":                                false,
+		"plain text":                                       false,
+		"":                                                 false,
+	}
+	for in, want := range cases {
+		if got := looksSVG([]byte(in)); got != want {
+			t.Errorf("looksSVG(%q) = %v, want %v", in, got, want)
+		}
+	}
+}
+
+func TestRasterizeSVG(t *testing.T) {
+	img, w, h, err := rasterizeSVG([]byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 16"><rect width="40" height="16"/></svg>`))
+	if err != nil {
+		t.Fatalf("rasterizeSVG: %v", err)
+	}
+	if w != 40 || h != 16 {
+		t.Fatalf("natural size: got %gx%g, want 40x16", w, h)
+	}
+	b := img.Bounds()
+	if b.Dx() != 160 || b.Dy() != 64 { // 4× scale
+		t.Fatalf("raster size: got %dx%d, want 160x64", b.Dx(), b.Dy())
+	}
+	// Degenerate SVGs must error (degrade to alt), not produce a broken image.
+	if _, _, _, err := rasterizeSVG([]byte(`<svg></svg>`)); err == nil {
+		t.Fatal("empty-viewBox svg: want error")
+	}
+	// oksvg skips <text> with a warning; an SVG that renders all-white must
+	// error too — alt text beats an invisible formula.
+	textOnly := `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 90 18"><text x="2" y="14">formula</text></svg>`
+	if _, _, _, err := rasterizeSVG([]byte(textOnly)); err == nil {
+		t.Fatal("blank-rendered svg: want error")
 	}
 }
 

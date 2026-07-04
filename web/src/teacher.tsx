@@ -699,7 +699,12 @@ export function Builder() {
     setBusy(true);
     try {
       const res = await api.generateVariant(subject, kind, kind === "drill" ? { number, count } : {});
-      showToast(`Вариант собран: ${res.task_count} задач · задания с «${SOURCE_TITLE[subject]}» добавлены в банк`);
+      // A drill can come out shorter than asked: the bank + source ran dry for
+      // that номер. Say so instead of silently handing over a smaller variant.
+      const short = kind === "drill" && res.task_count < count
+        ? ` (просили ${count} — активных заданий №${number} пока столько; попробуй собрать ещё раз)`
+        : "";
+      showToast(`Вариант собран: ${res.task_count} задач${short} · задания с «${SOURCE_TITLE[subject]}» добавлены в банк`);
       invalidate("tests");
       invalidate("admin-tasks");
     } catch (e) { showToast(String((e as Error).message)); }
@@ -1063,8 +1068,9 @@ function SourcePanel({ subject, onDone }: { subject: SubjectCode; onDone: () => 
     try {
       const r = await api.fetchTasks(subject, count, active);
       const src = SOURCE_TITLE[subject];
-      if (r.inserted > 0) showToast(`Добавлено ${r.inserted} заданий с «${src}»${r.skipped ? ` (${r.skipped} уже были)` : ""}`);
-      else if (r.skipped > 0) showToast(`Новых нет — все ${r.skipped} уже в банке`);
+      const promoted = r.promoted ? `, ${r.promoted} черновиков активировано` : "";
+      if (r.inserted > 0) showToast(`Добавлено ${r.inserted} заданий с «${src}»${r.skipped ? ` (${r.skipped} уже были${promoted})` : ""}`);
+      else if (r.skipped > 0) showToast(`Новых нет — все ${r.skipped} уже в банке${promoted}`);
       else showToast(`Источник (${src}) не вернул заданий`);
       onDone();
     } catch (err) {
