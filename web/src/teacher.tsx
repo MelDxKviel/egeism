@@ -158,7 +158,12 @@ export function TeacherDashboard() {
   const [creatingStudent, setCreatingStudent] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  const refresh = () => { invalidate("classes"); invalidate("students"); };
+  const refresh = () => {
+    invalidate("classes"); invalidate("students");
+    // A student may have been created straight into a class — refresh the
+    // class page's roster/grid too (staleTime would otherwise hide them 30s).
+    invalidate("class-detail"); invalidate("class-overview");
+  };
 
   const createClass = async () => {
     if (!className.trim()) { showToast("Укажи название класса"); return; }
@@ -886,6 +891,10 @@ export function Assign() {
   const [when, setWhen] = useState("");
   const [notify, setNotify] = useState(true);
   const [busy, setBusy] = useState(false);
+  const invalidate = useInvalidate();
+  // Tests are per subject: switching the tab must drop the picked test, or
+  // submit would silently assign a test the UI no longer shows as selected.
+  useEffect(() => { setTestId(""); }, [subject]);
 
   const submit = async () => {
     const target = mode === "class" ? { class_id: classId } : { student_id: studentId };
@@ -898,6 +907,7 @@ export function Assign() {
       const r = await api.createAssignment(testId, target, new Date(when).toISOString(), notify);
       const who = mode === "class" ? `классу (${r.created} уч.)` : "ученику";
       showToast(notify ? `Назначено ${who} · уведомления в Telegram запланированы` : `Назначено ${who} · без уведомлений`);
+      invalidate("assignments"); // the student pages' «Назначенные тесты» feed
     } catch (e) { showToast(String((e as Error).message)); }
     finally { setBusy(false); }
   };

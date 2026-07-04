@@ -294,6 +294,12 @@ func (s *Server) handleTelegramLink(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+	// The account may have been deactivated between issuing the code and
+	// redeeming it — don't hand a disabled account a session token.
+	if !user.IsActive {
+		writeErr(w, http.StatusForbidden, "аккаунт отключён — обратись к администратору")
+		return
+	}
 	s.respondWithToken(w, user, http.StatusOK)
 }
 

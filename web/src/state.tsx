@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Role, SubjectCode, User, api, setToken, clearToken, hasToken } from "./api";
 
 export type View =
@@ -57,6 +58,10 @@ function initialSubject(u: User): SubjectCode {
 }
 
 export function AppProvider({ children }: { children: ReactNode }) {
+  // Most query keys aren't user-scoped, and staleTime is 30s — wipe the cache
+  // whenever the acting account changes so a logout→login on one browser never
+  // serves the previous user's roster/classes/profile.
+  const queryClient = useQueryClient();
   const [theme, setThemeS] = useState<"light" | "dark">(
     (localStorage.getItem("egeism.theme") as "light" | "dark") || "light");
   const [subject, setSubjectS] = useState<SubjectCode>(
@@ -97,6 +102,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const applyAuth = (res: { token: string; user: User }) => {
+    queryClient.clear();
     setToken(res.token);
     setUser(res.user);
     setSubjectS(initialSubject(res.user));
@@ -105,7 +111,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     localStorage.setItem("egeism.view", v);
   };
   const login = async (username: string, password: string) => { applyAuth(await api.login(username, password)); };
-  const logout = () => { clearToken(); setUser(undefined); };
+  const logout = () => { clearToken(); setUser(undefined); queryClient.clear(); };
 
   return (
     <Ctx.Provider value={{

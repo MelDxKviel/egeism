@@ -23,6 +23,10 @@ import (
 // must link via the web button + a /start <code> deep link).
 var ErrNotLinked = errors.New("telegram not linked")
 
+// ErrDisabled means the linked account exists but was deactivated by an admin
+// (403 from the API) — a very different message than "server unavailable".
+var ErrDisabled = errors.New("account disabled")
+
 // APIClient is a minimal HTTP client for the egeism API.
 type APIClient struct {
 	base string
@@ -184,8 +188,13 @@ func (c *APIClient) ResolveTelegram(ctx context.Context, tgID int64) (User, stri
 		map[string]any{"telegram_id": tgID}, &out)
 	if err != nil {
 		var ae *apiError
-		if errors.As(err, &ae) && ae.Status == http.StatusNotFound {
-			return User{}, "", ErrNotLinked
+		if errors.As(err, &ae) {
+			switch ae.Status {
+			case http.StatusNotFound:
+				return User{}, "", ErrNotLinked
+			case http.StatusForbidden:
+				return User{}, "", ErrDisabled
+			}
 		}
 		return User{}, "", err
 	}

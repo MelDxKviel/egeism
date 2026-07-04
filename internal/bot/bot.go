@@ -162,6 +162,9 @@ func (b *Bot) Handle(ctx context.Context, in InMessage) Reply {
 			if errors.Is(err, ErrNotLinked) {
 				return b.text(in.ChatID, needLinkMsg)
 			}
+			if errors.Is(err, ErrDisabled) {
+				return b.text(in.ChatID, "Аккаунт отключён — обратись к администратору.")
+			}
 			return b.text(in.ChatID, "Не получилось подключиться к серверу. Попробуй позже.")
 		}
 		sess.token, sess.user = token, user
@@ -198,6 +201,9 @@ func (b *Bot) HandleCallback(ctx context.Context, in InCallback) Reply {
 		if err != nil {
 			if errors.Is(err, ErrNotLinked) {
 				return b.text(in.ChatID, needLinkMsg)
+			}
+			if errors.Is(err, ErrDisabled) {
+				return b.text(in.ChatID, "Аккаунт отключён — обратись к администратору.")
 			}
 			return b.text(in.ChatID, "Не получилось подключиться к серверу. Попробуй позже.")
 		}
@@ -917,10 +923,19 @@ var (
 	}
 )
 
-// commandsFor returns the command menu for a role.
+// commandsFor returns the command menu for a role. An admin gets the bare
+// start/help pair — their tooling lives in the web panel, and showing the
+// student solve commands would only invite stat-polluting attempts.
 func commandsFor(role string) []botCommand {
-	if role == "teacher" {
+	switch role {
+	case "teacher":
 		return teacherCommands
+	case "admin":
+		return []botCommand{
+			{"start", "Начать"},
+			{"help", "Что умеет бот"},
+		}
+	default:
+		return studentCommands
 	}
-	return studentCommands
 }
