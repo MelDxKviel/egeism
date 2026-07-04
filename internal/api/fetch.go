@@ -24,7 +24,8 @@ type fetchTasksReq struct {
 // fetcher service, which wraps РЕШУ/sdamgia) and runs them through the same
 // ingest as everything else — media into MinIO, dedup, draft for curation.
 func (s *Server) handleFetchTasks(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.requireTeacher(w, r); !ok {
+	teacher, ok := s.requireTeacher(w, r)
+	if !ok {
 		return
 	}
 	if s.fetcherURL == "" {
@@ -38,6 +39,9 @@ func (s *Server) handleFetchTasks(w http.ResponseWriter, r *http.Request) {
 	if req.Subject != domain.SubjectRus && req.Subject != domain.SubjectMath &&
 		req.Subject != domain.SubjectInf && req.Subject != domain.SubjectSoc {
 		writeErr(w, http.StatusBadRequest, "unknown subject")
+		return
+	}
+	if !s.subjectInScope(w, teacher, req.Subject) {
 		return
 	}
 	if req.Limit <= 0 {

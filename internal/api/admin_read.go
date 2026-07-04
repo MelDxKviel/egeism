@@ -17,12 +17,19 @@ import (
 // curation screen. Unlike the student /api/tasks, this exposes the answer so the
 // teacher can review/edit it.
 func (s *Server) handleListAdminTasks(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.requireTeacher(w, r); !ok {
+	teacher, ok := s.requireTeacher(w, r)
+	if !ok {
 		return
 	}
 	q := r.URL.Query()
 	f := store.TaskFilter{Limit: 200}
-	if code := q.Get("subject"); code != "" {
+	// A subject-scoped teacher only ever sees their own bank: their subject
+	// overrides whatever the query asks for.
+	code := q.Get("subject")
+	if teacher.Subject != nil {
+		code = string(*teacher.Subject)
+	}
+	if code != "" {
 		sub, err := s.store.GetSubjectByCode(r.Context(), domain.SubjectCode(code))
 		if err != nil {
 			writeStoreErr(w, err)
@@ -60,11 +67,16 @@ func (s *Server) handleListAdminTasks(w http.ResponseWriter, r *http.Request) {
 // handleListTests lists tests, optionally filtered by subject, for the builder
 // and assignment screens (contract gap #4).
 func (s *Server) handleListTests(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.requireTeacher(w, r); !ok {
+	teacher, ok := s.requireTeacher(w, r)
+	if !ok {
 		return
 	}
 	var subjectID *uuid.UUID
-	if code := r.URL.Query().Get("subject"); code != "" {
+	code := r.URL.Query().Get("subject")
+	if teacher.Subject != nil {
+		code = string(*teacher.Subject) // scoped teachers see only their subject
+	}
+	if code != "" {
 		sub, err := s.store.GetSubjectByCode(r.Context(), domain.SubjectCode(code))
 		if err != nil {
 			writeStoreErr(w, err)
@@ -88,7 +100,8 @@ type testDetail struct {
 // handleGetTestDetail returns a test with its ordered tasks (full, incl. answer)
 // for builder preview and PDF export.
 func (s *Server) handleGetTestDetail(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.requireTeacher(w, r); !ok {
+	teacher, ok := s.requireTeacher(w, r)
+	if !ok {
 		return
 	}
 	id, err := uuid.Parse(chi.URLParam(r, "testID"))
@@ -96,9 +109,8 @@ func (s *Server) handleGetTestDetail(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "invalid test id")
 		return
 	}
-	test, err := s.store.GetTest(r.Context(), id)
-	if err != nil {
-		writeStoreErr(w, err)
+	test, ok := s.testInScope(w, r, teacher, id)
+	if !ok {
 		return
 	}
 	tasks, err := s.store.ListTestTasks(r.Context(), id)
@@ -133,6 +145,9 @@ func (s *Server) handleGenerateVariant(w http.ResponseWriter, r *http.Request) {
 	}
 	var req generateVariantReq
 	if !decodeJSON(w, r, &req) {
+		return
+	}
+	if !s.subjectInScope(w, teacher, req.Subject) {
 		return
 	}
 	sub, err := s.store.GetSubjectByCode(r.Context(), req.Subject)

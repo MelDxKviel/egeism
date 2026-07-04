@@ -3,7 +3,7 @@ import {
   api, SubjectCode, TaskView, DayAnswer, AssignmentCard, AttemptReviewItem, useForecast, useHeatmap, useWeakSpots,
   useMastery, useMasterySeries, useAssignments, useAttempts, useInvalidate,
 } from "./api";
-import { useApp, useStudentId } from "./state";
+import { useApp } from "./state";
 import { Card, Label, Pill, Button, Async, Empty, Loading, Modal, accColor, SUBJECT_TITLES, testTitle, MediaBlock, StatementView, AttemptReviewGrid } from "./ui";
 import { ScoreGauge, Heatmap, computeStreak, WeakSpotsList, Section, MasteryChart, Sparkline } from "./charts";
 import { AnswerInput } from "./answer";
@@ -101,8 +101,8 @@ function AssignedTestsList({ cards, onSolve, onReview }: {
 
 // ---------- Dashboard ----------
 export function Dashboard() {
-  const { subject, go } = useApp();
-  const sid = useStudentId();
+  const { subject, go, user } = useApp();
+  const sid = user?.id ?? "";
   const forecast = useForecast(sid, subject);
   const heat = useHeatmap(sid);
   const weak = useWeakSpots(sid, subject);
@@ -161,8 +161,8 @@ export function Dashboard() {
 
 // ---------- Subject screen ----------
 export function SubjectScreen() {
-  const { subject, setSubject, go } = useApp();
-  const sid = useStudentId();
+  const { subject, setSubject, go, user } = useApp();
+  const sid = user?.id ?? "";
   const mastery = useMastery(sid, subject);
   const series = useMasterySeries(sid, subject);
   const [open, setOpen] = useState<number | null>(null);
@@ -403,8 +403,8 @@ function Results({ tasks, done, onExit }: { tasks: TaskView[]; done: Answered[];
 
 // ---------- History ----------
 export function History() {
-  const { subject, go } = useApp();
-  const sid = useStudentId();
+  const { subject, go, user } = useApp();
+  const sid = user?.id ?? "";
   const heat = useHeatmap(sid);
   const attempts = useAttempts(sid);
   const assignments = useAssignments(sid);

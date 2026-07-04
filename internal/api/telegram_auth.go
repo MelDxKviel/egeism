@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 
 	"egeism/internal/domain"
@@ -21,54 +22,50 @@ type authResp struct {
 	User  domain.User `json:"user"`
 }
 
-type registerReq struct {
-	Role     domain.Role `json:"role"`
-	Name     string      `json:"name"`
-	Username string      `json:"username"`
-	Password string      `json:"password"`
+// Self-registration is gone (переработка №6): accounts are created only by an
+// admin (any role, admin panel) or by a teacher (their students). The shared
+// validation lives in validateNewCredentials / createAccount below.
+
+// validateNewCredentials normalizes and validates a username/password pair for
+// a new account. Returns a message for the 400 response when invalid.
+func validateNewCredentials(username, password string) (string, string) {
+	username = strings.TrimSpace(strings.ToLower(username))
+	if len(username) < 3 {
+		return "", "логин должен быть не короче 3 символов"
+	}
+	if len(password) < 6 {
+		return "", "пароль должен быть не короче 6 символов"
+	}
+	return username, ""
 }
 
-// handleRegister creates a username/password account for a student or teacher
-// and returns a session token. Stage-1 family setup: create the two accounts
-// once.
-func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
-	if !s.allowRegistration {
-		writeErr(w, http.StatusForbidden, "регистрация отключена")
-		return
+// createAccount hashes the password and inserts the user, mapping the username
+// collision to a friendly 409. Shared by the admin panel and teacher-creates-
+// student paths.
+func (s *Server) createAccount(w http.ResponseWriter, r *http.Request, role domain.Role, name, username, password string, subject *domain.SubjectCode) (domain.User, bool) {
+	username, msg := validateNewCredentials(username, password)
+	if msg != "" {
+		writeErr(w, http.StatusBadRequest, msg)
+		return domain.User{}, false
 	}
-	var req registerReq
-	if !decodeJSON(w, r, &req) {
-		return
+	if name = strings.TrimSpace(name); name == "" {
+		name = username
 	}
-	req.Username = strings.TrimSpace(strings.ToLower(req.Username))
-	if req.Role != domain.RoleStudent && req.Role != domain.RoleTeacher {
-		writeErr(w, http.StatusBadRequest, "role must be student or teacher")
-		return
-	}
-	if len(req.Username) < 3 {
-		writeErr(w, http.StatusBadRequest, "username must be at least 3 characters")
-		return
-	}
-	if len(req.Password) < 6 {
-		writeErr(w, http.StatusBadRequest, "password must be at least 6 characters")
-		return
-	}
-	name := req.Name
-	if name == "" {
-		name = req.Username
-	}
-	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	hash, err := hashPassword(password)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "could not hash password")
-		return
+		return domain.User{}, false
 	}
-	user, err := s.store.CreateUserWithCredentials(r.Context(), req.Role, name, req.Username, string(hash))
+	user, err := s.store.CreateUserWithCredentials(r.Context(), role, name, username, hash, subject)
 	if err != nil {
-		// Unique-violation on username -> friendly conflict.
-		writeErr(w, http.StatusConflict, "username already taken")
-		return
+		if errors.Is(err, store.ErrUsernameTaken) {
+			writeErr(w, http.StatusConflict, "этот логин уже занят")
+			return domain.User{}, false
+		}
+		writeStoreErr(w, err)
+		return domain.User{}, false
 	}
-	s.respondWithToken(w, user, http.StatusCreated)
+	return user, true
 }
 
 type loginReq struct {
@@ -96,6 +93,10 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusUnauthorized, "invalid username or password")
 		return
 	}
+	if !creds.User.IsActive {
+		writeErr(w, http.StatusForbidden, "аккаунт отключён — обратись к администратору")
+		return
+	}
 	s.respondWithToken(w, creds.User, http.StatusOK)
 }
 
@@ -105,17 +106,103 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, user)
 }
 
-// handleListStudents returns the students a teacher oversees (stage-1: all).
+// classRef is a lightweight class tag on a student row.
+type classRef struct {
+	ID   uuid.UUID `json:"id"`
+	Name string    `json:"name"`
+}
+
+// studentSummary is one roster row: the student plus which of the teacher's
+// classes they belong to (empty = "ученик без класса", the репетитор case).
+type studentSummary struct {
+	domain.User
+	Classes []classRef `json:"classes"`
+}
+
+// handleListStudents returns the roster. A teacher sees their own students
+// (enrollments), tagged with their class names; ?scope=all widens to every
+// student on the platform (the add-to-class picker). An admin always sees all.
 func (s *Server) handleListStudents(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.requireTeacher(w, r); !ok {
+	user, _ := userFrom(r.Context())
+	if user.Role != domain.RoleTeacher && user.Role != domain.RoleAdmin {
+		writeErr(w, http.StatusForbidden, "teacher role required")
 		return
 	}
-	students, err := s.store.ListStudents(r.Context())
+	var (
+		students []domain.User
+		err      error
+	)
+	if user.Role == domain.RoleAdmin || r.URL.Query().Get("scope") == "all" {
+		students, err = s.store.ListStudents(r.Context())
+	} else {
+		students, err = s.store.ListStudentsForTeacher(r.Context(), user.ID)
+	}
 	if err != nil {
 		writeStoreErr(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, students)
+	byStudent := map[uuid.UUID][]classRef{}
+	if user.Role == domain.RoleTeacher {
+		memberships, err := s.store.ListClassMembershipsForTeacher(r.Context(), user.ID)
+		if err != nil {
+			writeStoreErr(w, err)
+			return
+		}
+		for _, m := range memberships {
+			byStudent[m.StudentID] = append(byStudent[m.StudentID], classRef{ID: m.ClassID, Name: m.ClassName})
+		}
+	}
+	out := make([]studentSummary, 0, len(students))
+	for _, st := range students {
+		classes := byStudent[st.ID]
+		if classes == nil {
+			classes = []classRef{}
+		}
+		out = append(out, studentSummary{User: st, Classes: classes})
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+type createStudentReq struct {
+	Name     string     `json:"name"`
+	Username string     `json:"username"`
+	Password string     `json:"password"`
+	ClassID  *uuid.UUID `json:"class_id,omitempty"`
+}
+
+// handleCreateStudent lets a teacher create a student account (переработка №2/№6):
+// the student is enrolled to the teacher immediately and optionally dropped
+// straight into one of the teacher's classes.
+func (s *Server) handleCreateStudent(w http.ResponseWriter, r *http.Request) {
+	teacher, ok := s.requireTeacher(w, r)
+	if !ok {
+		return
+	}
+	var req createStudentReq
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	// Validate the class up front so a bad id doesn't leave a half-set-up student.
+	if req.ClassID != nil {
+		if _, ok := s.classOwned(w, r, teacher, *req.ClassID); !ok {
+			return
+		}
+	}
+	student, ok := s.createAccount(w, r, domain.RoleStudent, req.Name, req.Username, req.Password, nil)
+	if !ok {
+		return
+	}
+	if err := s.store.CreateEnrollment(r.Context(), teacher.ID, student.ID); err != nil {
+		writeStoreErr(w, err)
+		return
+	}
+	if req.ClassID != nil {
+		if err := s.store.AddClassMember(r.Context(), *req.ClassID, teacher.ID, student.ID); err != nil {
+			writeStoreErr(w, err)
+			return
+		}
+	}
+	writeJSON(w, http.StatusCreated, student)
 }
 
 type telegramAuthReq struct {
@@ -143,6 +230,10 @@ func (s *Server) handleTelegramAuth(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeStoreErr(w, err)
+		return
+	}
+	if !user.IsActive {
+		writeErr(w, http.StatusForbidden, "аккаунт отключён — обратись к администратору")
 		return
 	}
 	s.respondWithToken(w, user, http.StatusOK)
@@ -203,7 +294,19 @@ func (s *Server) handleTelegramLink(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+	// The account may have been deactivated between issuing the code and
+	// redeeming it — don't hand a disabled account a session token.
+	if !user.IsActive {
+		writeErr(w, http.StatusForbidden, "аккаунт отключён — обратись к администратору")
+		return
+	}
 	s.respondWithToken(w, user, http.StatusOK)
+}
+
+// hashPassword bcrypt-hashes a password for storage.
+func hashPassword(password string) (string, error) {
+	b, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	return string(b), err
 }
 
 // respondWithToken mints a token for the user and writes the auth response.

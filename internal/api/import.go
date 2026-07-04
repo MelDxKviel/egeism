@@ -16,7 +16,14 @@ import (
 // (default) for curation in the bank. `provider` labels their source; `status`
 // may be set to `active` to skip curation.
 func (s *Server) handleImportTasks(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.requireTeacher(w, r); !ok {
+	teacher, ok := s.requireTeacher(w, r)
+	if !ok {
+		return
+	}
+	// A file may mix subjects, so the manual import needs the full-bank view —
+	// subject-scoped teachers use the per-subject "Подтянуть задания" button.
+	if teacher.Subject != nil {
+		writeErr(w, http.StatusForbidden, "импорт файла доступен сверхучителю; используй кнопку «Подтянуть задания»")
 		return
 	}
 

@@ -165,25 +165,8 @@ paths:
       responses:
         '200': { description: "{ token, user }" }
 
-  /api/auth/register:
-    post:
-      summary: Register a student or teacher (username + password) → session token
-      security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [role, username, password]
-              properties:
-                role: { type: string, enum: [student, teacher] }
-                username: { type: string }
-                password: { type: string }
-                name: { type: string }
-      responses:
-        '201': { description: "{ token, user }" }
-        '409': { description: username already taken }
+  # /api/auth/register was REMOVED (переработка №6): accounts are created only
+  # by an admin (POST /api/admin/users) or a teacher (POST /api/students).
 
   /api/auth/login:
     post:
@@ -212,9 +195,156 @@ paths:
 
   /api/students:
     get:
-      summary: Students the teacher oversees (teacher only)
+      summary: >
+        The roster. Teacher: their enrolled students, each tagged with the
+        teacher's class names (?scope=all widens to every student, for the
+        add-to-class picker). Admin: all students.
+      parameters:
+        - { name: scope, in: query, schema: { type: string, enum: [mine, all] } }
+      responses:
+        '200': { description: "[{...user, classes: [{id,name}]}]" }
+    post:
+      summary: Teacher creates a student account (enrolled to them, optionally straight into a class)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                name: { type: string }
+                username: { type: string }
+                password: { type: string }
+                class_id: { type: string, format: uuid, nullable: true }
+      responses:
+        '201': { description: user }
+        '409': { description: username already taken }
+
+  /api/profile:
+    get:
+      summary: >
+        Личный профиль: user + classes (student: their classes with teacher
+        names; teacher: own classes with member counts + students_count).
+      responses:
+        '200': { description: "{ user, classes, students_count? }" }
+
+  /api/classes:
+    get:
+      summary: The teacher's classes with member counts
+      responses:
+        '200': { description: classes }
+    post:
+      summary: Create a class
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+      responses:
+        '201': { description: class }
+
+  /api/classes/{classID}:
+    get:
+      summary: Class detail (class + members). Owner-teacher only.
+      responses:
+        '200': { description: "{ class, students }" }
+    patch:
+      summary: Rename the class
+      responses:
+        '200': { description: class }
+    delete:
+      summary: Delete the class (memberships unlink; students stay)
+      responses:
+        '204': { description: deleted }
+
+  /api/classes/{classID}/members:
+    post:
+      summary: >
+        Add a student to the class. Also creates the teacher↔student enrollment
+        (one tx) — the link stats access and assignment targeting run on.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [student_id]
+              properties:
+                student_id: { type: string, format: uuid }
+      responses:
+        '201': { description: student }
+
+  /api/classes/{classID}/members/{studentID}:
+    delete:
+      summary: Remove a student from the class (the enrollment stays)
+      responses:
+        '204': { description: removed }
+
+  /api/classes/{classID}/overview:
+    get:
+      summary: >
+        The class color grid: per-member per-number accuracy for one subject
+        (rows = students incl. empty ones, columns = task numbers).
+      parameters:
+        - { name: subject, in: query, required: true, schema: { type: string, enum: [rus, math, inf, soc] } }
+      responses:
+        '200': { description: "[{student_id, name, total, correct, by_number: [{number,total,correct}]}]" }
+
+  /api/admin/users:
+    get:
+      summary: Every account (admin only), admins/teachers first
       responses:
         '200': { description: users }
+    post:
+      summary: Create an account of any role (teacher may carry a subject scope; empty = сверхучитель)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role, username, password]
+              properties:
+                role: { type: string, enum: [student, teacher, admin] }
+                name: { type: string }
+                username: { type: string }
+                password: { type: string }
+                subject: { type: string, enum: [rus, math, inf, soc], nullable: true }
+      responses:
+        '201': { description: user }
+        '409': { description: username already taken }
+
+  /api/admin/users/{userID}:
+    patch:
+      summary: >
+        Partial account edit: name, role+subject, is_active, password. Self-guards:
+        an admin can't change their own role or deactivate themselves.
+      responses:
+        '200': { description: user }
+    delete:
+      summary: >
+        Delete an account. Refused (409) when it still carries history
+        (attempts, created tests…) — deactivate instead.
+      responses:
+        '204': { description: deleted }
+        '409': { description: has history — deactivate instead }
+
+  /api/admin/stats:
+    get:
+      summary: Platform-wide counters + per-subject activity (admin only)
+      responses:
+        '200': { description: PlatformStats }
+
+  /api/admin/classes:
+    get:
+      summary: Every class with its teacher's name (admin only)
+      responses:
+        '200': { description: classes }
 
   /api/subjects:
     get:
@@ -608,6 +738,12 @@ paths:
       responses:
         '201': { description: created }
 
+  # POST /api/admin/assignments takes EXACTLY ONE target: student_id (must be
+  # the teacher's enrolled student) or class_id (fans out to every active
+  # member). individual=true clones the picked test into a personal random
+  # variant per student (same number structure, random bank tasks,
+  # tests.variant_of = source) — the anti-cheating mode; on a generation
+  # failure the student gets the shared test. Response: { created, assignments }.
   /api/admin/assignments:
     post:
       summary: Assign a test to a student at a time (enqueues TG notification)

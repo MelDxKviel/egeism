@@ -55,12 +55,18 @@ type refetchResp struct {
 //     colspan/rowspan distance-matrix tables (задание 1) ingested before the
 //     table fix, and any future parser improvement, with no per-bug heuristic.
 func (s *Server) handleRefetchFormulas(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.requireTeacher(w, r); !ok {
+	teacher, ok := s.requireTeacher(w, r)
+	if !ok {
 		return
 	}
 	if s.fetcherURL == "" {
 		writeErr(w, http.StatusServiceUnavailable, "источник заданий не настроен")
 		return
+	}
+	// A subject-scoped teacher repairs only their own subject's bank; the
+	// super-teacher sweeps all four.
+	inScope := func(code domain.SubjectCode) bool {
+		return teacher.Subject == nil || *teacher.Subject == code
 	}
 	runner := ingest.NewRunner(s.store)
 	if s.media != nil {
@@ -69,6 +75,9 @@ func (s *Server) handleRefetchFormulas(w http.ResponseWriter, r *http.Request) {
 	resp := refetchResp{BySubject: map[string]int{}}
 	// РЕШУ/sdamgia subjects: re-fetch only tasks detected as stale.
 	for _, subj := range []domain.SubjectCode{domain.SubjectMath, domain.SubjectRus, domain.SubjectSoc} {
+		if !inScope(subj) {
+			continue
+		}
 		byExtern, err := s.sdamgiaTasksNeedingUpgrade(r.Context(), subj)
 		if err != nil {
 			writeStoreErr(w, err)
@@ -108,9 +117,11 @@ func (s *Server) handleRefetchFormulas(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	// openfipi (информатика): re-parse everything, rewrite only real changes.
-	if err := s.refetchOpenfipi(r.Context(), runner, &resp); err != nil {
-		writeErr(w, http.StatusBadGateway, "источник недоступен: "+err.Error())
-		return
+	if inScope(domain.SubjectInf) {
+		if err := s.refetchOpenfipi(r.Context(), runner, &resp); err != nil {
+			writeErr(w, http.StatusBadGateway, "источник недоступен: "+err.Error())
+			return
+		}
 	}
 	writeJSON(w, http.StatusOK, resp)
 }

@@ -61,8 +61,8 @@ type submitAnswerReq struct {
 }
 
 type submitAnswerResp struct {
-	IsCorrect bool     `json:"is_correct"`
-	AnswerID  string   `json:"answer_id"`
+	IsCorrect bool   `json:"is_correct"`
+	AnswerID  string `json:"answer_id"`
 	// Solution is revealed only on a wrong answer (post-commit), so the client
 	// can show a разбор without ever seeing the answer before submitting (§3.4).
 	Solution []string `json:"solution,omitempty"`
@@ -172,17 +172,21 @@ func (s *Server) completeAssignment(ctx context.Context, assignmentID uuid.UUID)
 	}
 }
 
-// attemptReadable guards attempt reads: the owning student or any teacher (the
-// reviewer) may see an attempt's answers; other students may not.
+// attemptReadable guards attempt reads: the owning student, their teacher (the
+// reviewer, checked via enrollment) or an admin may see an attempt's answers;
+// unrelated users may not.
 func (s *Server) attemptReadable(w http.ResponseWriter, r *http.Request, attemptID uuid.UUID) bool {
 	user, _ := userFrom(r.Context())
-	if user.Role == domain.RoleTeacher {
+	if user.Role == domain.RoleAdmin {
 		return true
 	}
 	att, err := s.store.GetAttempt(r.Context(), attemptID)
 	if err != nil {
 		writeStoreErr(w, err)
 		return false
+	}
+	if user.Role == domain.RoleTeacher {
+		return s.studentOfTeacher(w, r, user, att.StudentID)
 	}
 	if att.StudentID != user.ID {
 		writeErr(w, http.StatusForbidden, "attempt does not belong to user")

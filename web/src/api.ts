@@ -2,13 +2,41 @@
 // a JWT sent as `Authorization: Bearer` (see setToken / req below).
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
-export type Role = "student" | "teacher";
+export type Role = "student" | "teacher" | "admin";
 export type SubjectCode = "rus" | "math" | "inf" | "soc";
 export type AnswerKind = "number" | "string" | "set" | "sequence";
 export type TaskStatus = "draft" | "active" | "rejected";
 export type TestKind = "classic" | "drill";
 
-export interface User { id: string; role: Role; name: string; telegram_id?: number; }
+export interface User {
+  id: string; role: Role; name: string; username?: string; telegram_id?: number;
+  // Teacher subject scope: set = ведёт один предмет, absent = сверхучитель.
+  subject?: SubjectCode;
+  is_active: boolean; created_at?: string;
+}
+export interface ClassRef { id: string; name: string; }
+// A roster row: the student plus which of MY classes they're in (teacher view).
+export interface StudentSummary extends User { classes: ClassRef[]; }
+// Klass = класс (group of students). "Class" is a reserved-ish word in TS/JSX contexts.
+export interface Klass {
+  id: string; teacher_id: string; name: string; created_at: string;
+  member_count: number; teacher_name?: string;
+}
+export interface ClassDetail { class: Klass; students: User[]; }
+export interface ClassNumberStat { number: number; total: number; correct: number; }
+// One row of the class overview color grid.
+export interface ClassStudentStats {
+  student_id: string; name: string; total: number; correct: number;
+  by_number: ClassNumberStat[];
+}
+export interface SubjectActivity { code: SubjectCode; active_tasks: number; answers: number; correct: number; }
+export interface PlatformStats {
+  students: number; teachers: number; admins: number; inactive_users: number;
+  classes: number; tasks: number; active_tasks: number; tests: number;
+  assignments: number; attempts: number; answers: number; correct_answers: number;
+  answers_7d: number; subjects: SubjectActivity[];
+}
+export interface Profile { user: User; classes: Klass[]; students_count?: number; }
 export interface Subject { id: string; code: SubjectCode; title: string; }
 export interface Media { key: string; kind: "image" | "table" | "file"; alt?: string; inline?: boolean; }
 export interface AnswerSchema {
@@ -157,16 +185,42 @@ export async function downloadTestPDF(id: string, title: string, answers: boolea
 export interface AuthResult { token: string; user: User; }
 
 export const api = {
-  // Public runtime flags read before login (e.g. whether signup is open).
-  config: () => req<{ allow_registration: boolean }>("GET", "/api/config"),
-  register: (role: Role, username: string, password: string, name: string) =>
-    req<AuthResult>("POST", "/api/auth/register", { role, username, password, name }),
+  // Self-registration is gone: accounts come from the admin panel or a teacher.
   login: (username: string, password: string) =>
     req<AuthResult>("POST", "/api/auth/login", { username, password }),
   me: () => req<User>("GET", "/api/auth/me"),
+  profile: () => req<Profile>("GET", "/api/profile"),
   telegramLinkCode: () =>
     req<{ code: string; deep_link?: string; expires_at: string }>("POST", "/api/auth/telegram/link-code"),
-  students: () => req<User[]>("GET", "/api/students"),
+  // Teacher roster (enrolled students, tagged with class names); scope=all
+  // widens to every student on the platform (the add-to-class picker).
+  students: (scope?: "mine" | "all") =>
+    req<StudentSummary[]>("GET", `/api/students${scope === "all" ? "?scope=all" : ""}`),
+  createStudent: (name: string, username: string, password: string, class_id?: string) =>
+    req<User>("POST", "/api/students", { name, username, password, class_id }),
+
+  // Classes (teacher).
+  classes: () => req<Klass[]>("GET", "/api/classes"),
+  createClass: (name: string) => req<Klass>("POST", "/api/classes", { name }),
+  classDetail: (id: string) => req<ClassDetail>("GET", `/api/classes/${id}`),
+  renameClass: (id: string, name: string) => req<Klass>("PATCH", `/api/classes/${id}`, { name }),
+  deleteClass: (id: string) => req<void>("DELETE", `/api/classes/${id}`),
+  addClassMember: (id: string, student_id: string) =>
+    req<User>("POST", `/api/classes/${id}/members`, { student_id }),
+  removeClassMember: (id: string, studentId: string) =>
+    req<void>("DELETE", `/api/classes/${id}/members/${studentId}`),
+  classOverview: (id: string, subject: SubjectCode) =>
+    req<ClassStudentStats[]>("GET", `/api/classes/${id}/overview?subject=${subject}`),
+
+  // Admin panel.
+  adminUsers: () => req<User[]>("GET", "/api/admin/users"),
+  adminCreateUser: (u: { role: Role; name: string; username: string; password: string; subject?: SubjectCode }) =>
+    req<User>("POST", "/api/admin/users", u),
+  adminUpdateUser: (id: string, patch: { name?: string; role?: Role; subject?: SubjectCode | ""; is_active?: boolean; password?: string }) =>
+    req<User>("PATCH", `/api/admin/users/${id}`, patch),
+  adminDeleteUser: (id: string) => req<void>("DELETE", `/api/admin/users/${id}`),
+  adminStats: () => req<PlatformStats>("GET", "/api/admin/stats"),
+  adminClasses: () => req<Klass[]>("GET", "/api/admin/classes"),
   subjects: () => req<Subject[]>("GET", "/api/subjects"),
   task: (id: string) => req<TaskView>("GET", `/api/tasks/${id}`),
   tasks: (q: string) => req<TaskView[]>("GET", `/api/tasks${q}`),
@@ -225,14 +279,30 @@ export const api = {
     req("POST", `/api/admin/tests/${testId}/items`, { task_id, position }),
   generateVariant: (subject: SubjectCode, kind: TestKind, opts: { number?: number; count?: number; title?: string } = {}) =>
     req<{ test: Test; task_count: number; source: string }>("POST", "/api/admin/tests/generate", { subject, kind, ...opts }),
-  createAssignment: (test_id: string, student_id: string, scheduled_at: string, notify = true) =>
-    req("POST", "/api/admin/assignments", { test_id, student_id, scheduled_at, notify }),
+  // Assign to one student OR fan out to a whole class (exactly one target).
+  // individual=true generates every target their own random variant of the
+  // picked test (same numbers, random bank tasks) — the anti-cheating mode.
+  createAssignment: (test_id: string, target: { student_id?: string; class_id?: string }, scheduled_at: string, notify = true, individual = false) =>
+    req<{ created: number }>("POST", "/api/admin/assignments", { test_id, ...target, scheduled_at, notify, individual }),
 };
 
 // --- hooks ---
 export const useSubjects = () => useQuery({ queryKey: ["subjects"], queryFn: api.subjects });
-export const useStudents = (enabled: boolean) =>
-  useQuery({ queryKey: ["students"], queryFn: api.students, enabled });
+export const useStudents = (enabled: boolean, scope: "mine" | "all" = "mine") =>
+  useQuery({ queryKey: ["students", scope], queryFn: () => api.students(scope), enabled });
+export const useClasses = (enabled: boolean) =>
+  useQuery({ queryKey: ["classes"], queryFn: api.classes, enabled });
+export const useClassDetail = (id: string | null) =>
+  useQuery({ queryKey: ["class-detail", id], queryFn: () => api.classDetail(id!), enabled: !!id });
+export const useClassOverview = (id: string | null, s: SubjectCode) =>
+  useQuery({ queryKey: ["class-overview", id, s], queryFn: () => api.classOverview(id!, s), enabled: !!id });
+export const useProfile = () => useQuery({ queryKey: ["profile"], queryFn: api.profile });
+export const useAdminUsers = (enabled: boolean) =>
+  useQuery({ queryKey: ["admin-users"], queryFn: api.adminUsers, enabled });
+export const useAdminStats = (enabled: boolean) =>
+  useQuery({ queryKey: ["admin-stats"], queryFn: api.adminStats, enabled });
+export const useAdminClasses = (enabled: boolean) =>
+  useQuery({ queryKey: ["admin-classes"], queryFn: api.adminClasses, enabled });
 export const useForecast = (sid: string, s: SubjectCode) =>
   useQuery({ queryKey: ["forecast", sid, s], queryFn: () => api.forecast(sid, s), enabled: !!sid });
 export const useHeatmap = (sid: string) =>

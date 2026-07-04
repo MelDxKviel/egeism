@@ -13,8 +13,11 @@ WHERE subject_id = $1 AND created_by = $2 AND kind = 'drill' AND title = '__prac
 LIMIT 1;
 
 -- name: ListTests :many
+-- Per-student variant clones (variant_of set) are working copies, not the
+-- teacher's library — keep them out of the builder/assign lists.
 SELECT * FROM tests
 WHERE (sqlc.narg('subject_id')::uuid IS NULL OR subject_id = sqlc.narg('subject_id'))
+  AND variant_of IS NULL
 ORDER BY created_at DESC;
 
 -- name: DeleteTest :execrows
@@ -30,6 +33,9 @@ SELECT EXISTS (SELECT 1 FROM attempts WHERE test_id = $1);
 
 -- name: DeleteAssignmentsByTest :exec
 DELETE FROM assignments WHERE test_id = $1;
+
+-- name: SetTestVariantOf :exec
+UPDATE tests SET variant_of = $2 WHERE id = $1;
 
 -- name: AddTestItem :one
 INSERT INTO test_items (test_id, task_id, position)

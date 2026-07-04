@@ -27,6 +27,10 @@ var ErrInUse = errors.New("in use")
 // account (users.telegram_id UNIQUE violation on link).
 var ErrTelegramTaken = errors.New("telegram already linked")
 
+// ErrUsernameTaken is returned when a username is already registered
+// (users.username UNIQUE violation on account creation).
+var ErrUsernameTaken = errors.New("username already taken")
+
 // Store is the concrete data-access layer backed by a pgx pool.
 type Store struct {
 	pool *pgxpool.Pool
@@ -68,4 +72,11 @@ func mapErr(err error) error {
 func isUniqueViolation(err error) bool {
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr) && pgErr.Code == "23505"
+}
+
+// isForeignKeyViolation reports whether err is a Postgres foreign-key (23503)
+// violation — e.g. deleting a user who still owns attempts or tests.
+func isForeignKeyViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23503"
 }

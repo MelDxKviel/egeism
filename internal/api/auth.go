@@ -54,7 +54,9 @@ func (s *Server) parseToken(raw string) (uuid.UUID, error) {
 
 // withUser resolves the acting user from the Authorization: Bearer token and
 // stores it in the request context. Real session auth (replaces the earlier
-// X-User-ID placeholder).
+// X-User-ID placeholder). Deactivated accounts are cut off here, so an admin
+// toggle takes effect on the user's very next request — no token revocation
+// machinery needed.
 func (s *Server) withUser(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		id, err := s.bearerUserID(r)
@@ -65,6 +67,10 @@ func (s *Server) withUser(next http.Handler) http.Handler {
 		user, err := s.store.GetUser(r.Context(), id)
 		if err != nil {
 			writeErr(w, http.StatusUnauthorized, "unknown user")
+			return
+		}
+		if !user.IsActive {
+			writeErr(w, http.StatusForbidden, "аккаунт отключён")
 			return
 		}
 		ctx := context.WithValue(r.Context(), userKey, user)

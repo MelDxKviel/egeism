@@ -71,3 +71,35 @@ FROM answers a
 JOIN attempts att ON att.id = a.attempt_id
 JOIN tasks t      ON t.id = a.task_id
 WHERE att.student_id = $1 AND t.subject_id = $2;
+
+-- name: PlatformStats :one
+-- Platform-wide counters for the admin dashboard.
+SELECT
+    (SELECT count(*) FROM users WHERE role = 'student')          AS students,
+    (SELECT count(*) FROM users WHERE role = 'teacher')          AS teachers,
+    (SELECT count(*) FROM users WHERE role = 'admin')            AS admins,
+    (SELECT count(*) FROM users WHERE NOT is_active)             AS inactive_users,
+    (SELECT count(*) FROM classes)                               AS classes,
+    (SELECT count(*) FROM tasks)                                 AS tasks,
+    (SELECT count(*) FROM tasks WHERE status = 'active')         AS active_tasks,
+    (SELECT count(*) FROM tests WHERE title <> '__practice__')   AS tests,
+    (SELECT count(*) FROM assignments)                           AS assignments,
+    (SELECT count(*) FROM attempts)                              AS attempts,
+    (SELECT count(*) FROM answers)                               AS answers,
+    (SELECT count(*) FROM answers WHERE is_correct)              AS correct_answers,
+    (SELECT count(*) FROM answers
+      WHERE answered_at >= now() - interval '7 days')            AS answers_7d;
+
+-- name: SubjectActivityStats :many
+-- Per-subject platform breakdown for the admin dashboard.
+SELECT s.code,
+       (SELECT count(*) FROM tasks t
+         WHERE t.subject_id = s.id AND t.status = 'active')      AS active_tasks,
+       (SELECT count(*) FROM answers a
+         JOIN tasks t ON t.id = a.task_id
+        WHERE t.subject_id = s.id)                               AS answers,
+       (SELECT count(*) FROM answers a
+         JOIN tasks t ON t.id = a.task_id
+        WHERE t.subject_id = s.id AND a.is_correct)              AS correct
+FROM subjects s
+ORDER BY s.code;

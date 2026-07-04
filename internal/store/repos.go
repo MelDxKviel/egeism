@@ -144,18 +144,33 @@ func (s *Store) GetCredentialsByUsername(ctx context.Context, username string) (
 	return Credentials{User: toDomainUser(u), PasswordHash: hash}, nil
 }
 
-// CreateUserWithCredentials registers a username/password user.
-func (s *Store) CreateUserWithCredentials(ctx context.Context, role domain.Role, name, username, passwordHash string) (domain.User, error) {
+// CreateUserWithCredentials creates a username/password account (admin panel /
+// teacher-created student). subject scopes a teacher; nil = super-teacher or a
+// non-teacher role. Returns ErrUsernameTaken on a username collision.
+func (s *Store) CreateUserWithCredentials(ctx context.Context, role domain.Role, name, username, passwordHash string, subject *domain.SubjectCode) (domain.User, error) {
 	u, err := s.q.CreateUserWithCredentials(ctx, sqlc.CreateUserWithCredentialsParams{
 		Role:         string(role),
 		Name:         name,
 		Username:     &username,
 		PasswordHash: &passwordHash,
+		Subject:      subjectPtr(subject),
 	})
 	if err != nil {
+		if isUniqueViolation(err) {
+			return domain.User{}, ErrUsernameTaken
+		}
 		return domain.User{}, mapErr(err)
 	}
 	return toDomainUser(u), nil
+}
+
+// subjectPtr converts an optional domain subject to the sqlc string pointer.
+func subjectPtr(subject *domain.SubjectCode) *string {
+	if subject == nil {
+		return nil
+	}
+	sc := string(*subject)
+	return &sc
 }
 
 // ListStudents returns all students (stage-1: the teacher oversees all of them).

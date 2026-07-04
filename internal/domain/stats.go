@@ -101,3 +101,49 @@ type SubjectAccuracy struct {
 	Correct  int64   `json:"correct"`
 	Accuracy float64 `json:"accuracy"`
 }
+
+// ClassNumberStat is one cell of the class mastery grid: how one student does
+// on one task number.
+type ClassNumberStat struct {
+	Number  int   `json:"number"`
+	Total   int64 `json:"total"`
+	Correct int64 `json:"correct"`
+}
+
+// ClassStudentStats is one row of the class overview grid: a member with their
+// overall accuracy and the per-number breakdown, so the teacher sees at a
+// glance which students lag and which task numbers the class struggles with.
+type ClassStudentStats struct {
+	StudentID uuid.UUID         `json:"student_id"`
+	Name      string            `json:"name"`
+	Total     int64             `json:"total"`
+	Correct   int64             `json:"correct"`
+	ByNumber  []ClassNumberStat `json:"by_number"`
+}
+
+// SubjectActivity is one row of the admin's per-subject platform breakdown.
+type SubjectActivity struct {
+	Code        SubjectCode `json:"code"`
+	ActiveTasks int64       `json:"active_tasks"`
+	Answers     int64       `json:"answers"`
+	Correct     int64       `json:"correct"`
+}
+
+// PlatformStats is the admin dashboard payload: platform-wide counts plus the
+// per-subject activity breakdown.
+type PlatformStats struct {
+	Students       int64             `json:"students"`
+	Teachers       int64             `json:"teachers"`
+	Admins         int64             `json:"admins"`
+	InactiveUsers  int64             `json:"inactive_users"`
+	Classes        int64             `json:"classes"`
+	Tasks          int64             `json:"tasks"`
+	ActiveTasks    int64             `json:"active_tasks"`
+	Tests          int64             `json:"tests"`
+	Assignments    int64             `json:"assignments"`
+	Attempts       int64             `json:"attempts"`
+	Answers        int64             `json:"answers"`
+	CorrectAnswers int64             `json:"correct_answers"`
+	Answers7d      int64             `json:"answers_7d"`
+	Subjects       []SubjectActivity `json:"subjects"`
+}
