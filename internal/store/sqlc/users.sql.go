@@ -239,6 +239,30 @@ func (q *Queries) IsTeacherOfStudent(ctx context.Context, arg IsTeacherOfStudent
 	return enrolled, err
 }
 
+const listActiveAdminIDs = `-- name: ListActiveAdminIDs :many
+SELECT id FROM users WHERE role = 'admin' AND is_active
+`
+
+func (q *Queries) ListActiveAdminIDs(ctx context.Context) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, listActiveAdminIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []uuid.UUID{}
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listStudents = `-- name: ListStudents :many
 SELECT id, role, telegram_id, name, created_at, username, password_hash, is_active, subject FROM users WHERE role = 'student' ORDER BY name
 `
@@ -303,6 +327,32 @@ func (q *Queries) ListStudentsForTeacher(ctx context.Context, teacherID uuid.UUI
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTeacherIDsForStudent = `-- name: ListTeacherIDsForStudent :many
+SELECT teacher_id FROM enrollments WHERE student_id = $1
+`
+
+// Reverse enrollment lookup: who teaches this student (the recipients of the
+// «забыл пароль» notification).
+func (q *Queries) ListTeacherIDsForStudent(ctx context.Context, studentID uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, listTeacherIDsForStudent, studentID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []uuid.UUID{}
+	for rows.Next() {
+		var teacher_id uuid.UUID
+		if err := rows.Scan(&teacher_id); err != nil {
+			return nil, err
+		}
+		items = append(items, teacher_id)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

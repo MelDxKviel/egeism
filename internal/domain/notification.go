@@ -15,10 +15,16 @@ const (
 	// NotificationAssignmentDone — the student completed an assigned test; goes
 	// to the teacher who assigned it.
 	NotificationAssignmentDone NotificationKind = "assignment_done"
+	// NotificationPasswordResetRequested — a user hit «забыл пароль» on the
+	// login screen; goes to their teachers (enrollments) and active admins, who
+	// can issue a one-hour reset link.
+	NotificationPasswordResetRequested NotificationKind = "password_reset_requested"
 )
 
-// Notification is one in-app (web) notification, enriched with its assignment
-// context so the bell feed can render it and jump straight to the test.
+// Notification is one in-app (web) notification, enriched with its context so
+// the bell feed can render it and jump straight to the target. Assignment
+// kinds carry the assignment/test fields; password_reset_requested carries
+// only the subject user (whose password to reset).
 type Notification struct {
 	ID               uuid.UUID        `json:"id"`
 	Kind             NotificationKind `json:"kind"`
@@ -30,6 +36,8 @@ type Notification struct {
 	StudentName      string           `json:"student_name"`
 	ScheduledAt      time.Time        `json:"scheduled_at"`
 	AssignmentStatus AssignmentStatus `json:"assignment_status"`
+	SubjectUserID    uuid.UUID        `json:"subject_user_id,omitzero"`
+	SubjectUserName  string           `json:"subject_user_name,omitempty"`
 	ReadAt           *time.Time       `json:"read_at,omitempty"`
 	CreatedAt        time.Time        `json:"created_at"`
 }

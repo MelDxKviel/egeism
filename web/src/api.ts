@@ -84,14 +84,16 @@ export interface AttemptSummary {
   started_at: string; finished_at?: string; total: number; correct: number; time_ms: number;
 }
 // In-app notification (the bell): assignment_created goes to the student,
-// assignment_done to the teacher who assigned. Carries the assignment/test
-// context so the client can render it and jump straight to the test.
-export type NotificationKind = "assignment_created" | "assignment_done";
+// assignment_done to the teacher who assigned, password_reset_requested to the
+// teachers/admins of a user who hit «забыл пароль». Assignment kinds carry the
+// assignment/test context; the password kind only the subject user.
+export type NotificationKind = "assignment_created" | "assignment_done" | "password_reset_requested";
 export interface NotificationItem {
   id: string; kind: NotificationKind; assignment_id: string;
   test_id: string; test_title: string; subject_id: string;
   student_id: string; student_name: string;
   scheduled_at: string; assignment_status: string;
+  subject_user_id?: string; subject_user_name?: string;
   read_at?: string; created_at: string;
 }
 export interface NotificationsFeed { unread: number; items: NotificationItem[]; }
@@ -189,6 +191,16 @@ export const api = {
   login: (username: string, password: string) =>
     req<AuthResult>("POST", "/api/auth/login", { username, password }),
   me: () => req<User>("GET", "/api/auth/me"),
+  // Password recovery: «забыл пароль» pings the user's teachers/admins; one of
+  // them issues a one-hour reset link; the link holder sets a new password.
+  forgotPassword: (username: string) =>
+    req<{ ok: boolean }>("POST", "/api/auth/forgot-password", { username }),
+  peekResetToken: (token: string) =>
+    req<{ name: string; expires_at: string }>("GET", `/api/auth/reset-password/${token}`),
+  resetPassword: (token: string, password: string) =>
+    req<AuthResult>("POST", "/api/auth/reset-password", { token, password }),
+  createPasswordResetLink: (userId: string) =>
+    req<{ token: string; expires_at: string }>("POST", `/api/users/${userId}/password-reset-link`),
   profile: () => req<Profile>("GET", "/api/profile"),
   telegramLinkCode: () =>
     req<{ code: string; deep_link?: string; expires_at: string }>("POST", "/api/auth/telegram/link-code"),

@@ -68,6 +68,13 @@ func (s *Server) Router() http.Handler {
 		r.Post("/auth/telegram", s.handleTelegramAuth)      // bot: resolve a linked telegram_id → token
 		r.Post("/auth/telegram/link", s.handleTelegramLink) // bot: redeem a link code → bind telegram_id
 
+		// Password recovery (no email on the platform): «забыл пароль» notifies
+		// the user's teachers/admins, who issue a one-hour reset link; the link
+		// holder checks it and sets a new password here.
+		r.Post("/auth/forgot-password", s.handleForgotPassword)
+		r.Get("/auth/reset-password/{token}", s.handlePeekResetToken)
+		r.Post("/auth/reset-password", s.handleResetPassword)
+
 		// Public-ish content reads.
 		r.Get("/subjects", s.handleListSubjects)
 		r.Get("/tasks", s.handleListTasks)
@@ -83,6 +90,8 @@ func (s *Server) Router() http.Handler {
 			r.Get("/profile", s.handleProfile)
 			r.Get("/students", s.handleListStudents)
 			r.Post("/students", s.handleCreateStudent) // teacher creates a student account
+			// Reset link for a user: admin → anyone, teacher → their students.
+			r.Post("/users/{userID}/password-reset-link", s.handleCreatePasswordResetLink)
 
 			// Classes (teacher-owned groups of students).
 			r.Get("/classes", s.handleListClasses)

@@ -4,8 +4,9 @@ import {
   useAdminUsers, useAdminStats, useAdminClasses, useInvalidate,
 } from "./api";
 import { useApp } from "./state";
-import { Card, Label, Pill, Button, Async, Empty, Modal, accColor, SUBJECT_TITLES } from "./ui";
+import { Card, Label, Pill, Button, Async, Empty, Modal, PasswordInput, accColor, SUBJECT_TITLES } from "./ui";
 import { Icon } from "./icons";
+import { ResetLinkModal } from "./reset";
 
 const ROLE_RU: Record<Role, string> = { student: "ученик", teacher: "учитель", admin: "админ" };
 const SUBJECTS: SubjectCode[] = ["rus", "math", "inf", "soc"];
@@ -151,8 +152,8 @@ function UserForm({ initial, onSubmit, onClose, busy }: {
           <input value={username} onChange={(e) => setUsername(e.target.value)} disabled={editing}
             style={{ width: "100%", marginTop: 6, opacity: editing ? 0.6 : 1 }} /></label>
         <label><Label>{editing ? "Новый пароль (пусто — не менять)" : "Пароль"}</Label>
-          <input type="text" value={password} onChange={(e) => setPassword(e.target.value)}
-            placeholder={editing ? "" : "минимум 6 символов"} style={{ width: "100%", marginTop: 6 }} /></label>
+          <PasswordInput value={password} onChange={setPassword} autoComplete="new-password"
+            placeholder={editing ? "" : "минимум 6 символов"} style={{ marginTop: 6 }} /></label>
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
           <Button variant="ghost" onClick={onClose}>Отмена</Button>
           <Button disabled={busy} onClick={() => onSubmit({ role, name, username, password, subject })}>
@@ -175,6 +176,7 @@ export function AdminUsers() {
   const [search, setSearch] = useState("");
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<User | null>(null);
+  const [resetFor, setResetFor] = useState<User | null>(null);
   const [busy, setBusy] = useState(false);
 
   const refresh = () => { invalidate("admin-users"); invalidate("admin-stats"); };
@@ -279,6 +281,10 @@ export function AdminUsers() {
                           onClick={() => toggleActive(u)}>
                           {u.is_active ? "Отключить" : "Включить"}
                         </Button>
+                        <button onClick={() => setResetFor(u)} title="Ссылка для сброса пароля" style={{
+                          display: "inline-flex", alignItems: "center", background: "transparent",
+                          border: "none", color: "var(--text-3)", padding: 4,
+                        }}><Icon name="key" size={16} /></button>
                         <button onClick={() => del(u)} title="Удалить аккаунт" style={{
                           display: "inline-flex", alignItems: "center", background: "transparent",
                           border: "none", color: "var(--text-3)", padding: 4,
@@ -298,6 +304,7 @@ export function AdminUsers() {
         <UserForm busy={busy} initial={editing} onClose={() => setEditing(null)}
           onSubmit={(v) => saveEdit(editing, v)} />
       )}
+      {resetFor && <ResetLinkModal user={resetFor} onClose={() => setResetFor(null)} />}
     </div>
   );
 }

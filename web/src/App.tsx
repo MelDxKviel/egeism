@@ -1,6 +1,8 @@
+import { useEffect, useState } from "react";
 import { useApp } from "./state";
 import { Shell } from "./shell";
 import { Login } from "./Login";
+import { ResetPasswordPage } from "./reset";
 import { Dashboard, SubjectScreen, Solve, History } from "./student";
 import { TeacherDashboard, ClassPage, StudentStatsPage, Builder, Assign, Bank, TestDetailPage } from "./teacher";
 import { AdminStats, AdminUsers } from "./admin";
@@ -16,8 +18,24 @@ const TITLES: Record<string, string> = {
   profile: "Профиль",
 };
 
+const readResetToken = () =>
+  window.location.hash.startsWith("#reset=") ? window.location.hash.slice("#reset=".length) : "";
+
 export default function App() {
   const { view, ready, user, toast, theme } = useApp();
+
+  // A reset link (#reset=<token>) opens the standalone new-password page ahead
+  // of the auth gate — its holder is precisely someone who can't log in. The
+  // hashchange listener covers pasting the link into an already-open tab (a
+  // same-document navigation React wouldn't otherwise notice); the page drops
+  // the hash and reloads on success, re-entering the normal flow.
+  const [resetToken, setResetToken] = useState(readResetToken);
+  useEffect(() => {
+    const onHash = () => setResetToken(readResetToken());
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+  if (resetToken) return <ResetPasswordPage token={resetToken} />;
 
   if (!ready) {
     return <div className="app" data-theme={theme} style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
