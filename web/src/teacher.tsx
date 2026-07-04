@@ -890,6 +890,9 @@ export function Assign() {
   const [testId, setTestId] = useState("");
   const [when, setWhen] = useState("");
   const [notify, setNotify] = useState(true);
+  // Каждому свой вариант (анти-списывание): по умолчанию ВКЛ для класса —
+  // одинаковый тест классу почти гарантирует обмен ответами.
+  const [individual, setIndividual] = useState(true);
   const [busy, setBusy] = useState(false);
   const invalidate = useInvalidate();
   // Tests are per subject: switching the tab must drop the picked test, or
@@ -904,8 +907,9 @@ export function Assign() {
     if (!when) { showToast("Укажи время"); return; }
     setBusy(true);
     try {
-      const r = await api.createAssignment(testId, target, new Date(when).toISOString(), notify);
-      const who = mode === "class" ? `классу (${r.created} уч.)` : "ученику";
+      const indiv = mode === "class" && individual;
+      const r = await api.createAssignment(testId, target, new Date(when).toISOString(), notify, indiv);
+      const who = mode === "class" ? `классу (${r.created} уч.${indiv ? ", у каждого свой вариант" : ""})` : "ученику";
       showToast(notify ? `Назначено ${who} · уведомления в Telegram запланированы` : `Назначено ${who} · без уведомлений`);
       invalidate("assignments"); // the student pages' «Назначенные тесты» feed
     } catch (e) { showToast(String((e as Error).message)); }
@@ -960,6 +964,17 @@ export function Assign() {
           </label>
           <label><Label>Когда</Label>
             <input type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} style={{ width: "100%", marginTop: 6 }} /></label>
+          {mode === "class" && (
+            <label style={{ display: "flex", alignItems: "flex-start", gap: 10, fontSize: 14 }}>
+              <input type="checkbox" checked={individual} onChange={(e) => setIndividual(e.target.checked)} style={{ width: "auto", marginTop: 3 }} />
+              <span>
+                Каждому свой вариант
+                <span style={{ display: "block", color: "var(--text-3)", fontSize: 12.5 }}>
+                  та же структура номеров, но задания у всех разные (из банка) — чтобы не списывали
+                </span>
+              </span>
+            </label>
+          )}
           <label style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 14 }}>
             <input type="checkbox" checked={notify} onChange={(e) => setNotify(e.target.checked)} style={{ width: "auto" }} />
             Уведомить в Telegram

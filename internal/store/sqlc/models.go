@@ -95,12 +95,13 @@ type TelegramLinkCode struct {
 }
 
 type Test struct {
-	ID        uuid.UUID `json:"id"`
-	SubjectID uuid.UUID `json:"subject_id"`
-	Kind      string    `json:"kind"`
-	Title     string    `json:"title"`
-	CreatedBy uuid.UUID `json:"created_by"`
-	CreatedAt time.Time `json:"created_at"`
+	ID        uuid.UUID  `json:"id"`
+	SubjectID uuid.UUID  `json:"subject_id"`
+	Kind      string     `json:"kind"`
+	Title     string     `json:"title"`
+	CreatedBy uuid.UUID  `json:"created_by"`
+	CreatedAt time.Time  `json:"created_at"`
+	VariantOf *uuid.UUID `json:"variant_of"`
 }
 
 type TestItem struct {

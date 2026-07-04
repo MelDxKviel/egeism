@@ -105,7 +105,12 @@ assignment targeting); removing from a class keeps it, so the student stays "м�
 tagged with class names (`?scope=all` = the platform-wide picker; admins always
 see all). `POST /api/admin/assignments` takes exactly one target — `student_id`
 (enrolled check) or `class_id` (**fan-out**: one assignment + bell notification
-+ Telegram schedule per member). `GET /api/classes/{id}/overview?subject=` is
++ Telegram schedule per active member). `individual:true` (the web's default
+for classes) clones the picked test into a **personal random variant per
+student** — same number structure, random ACTIVE bank tasks per slot
+(`GenerateVariantLike`), titled «<тест> · <имя>», marked `tests.variant_of` so
+clones stay out of the builder's test list — чтобы не списывали; a thin bank
+falls back per-slot to the source task, a failed generation to the shared test. `GET /api/classes/{id}/overview?subject=` is
 the teacher's **color grid** (per-member per-number accuracy, empty members
 included) the web renders red→green so lagging students/numbers pop.
 

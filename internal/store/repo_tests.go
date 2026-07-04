@@ -153,7 +153,7 @@ func (s *Store) GenerateClassicVariant(ctx context.Context, subjectID, createdBy
 	for _, r := range rows {
 		ids = append(ids, r.ID)
 	}
-	return s.assembleVariant(ctx, subjectID, domain.TestClassic, title, createdBy, ids)
+	return s.assembleVariant(ctx, subjectID, domain.TestClassic, title, createdBy, ids, nil)
 }
 
 // GenerateDrillVariant builds a "drill" test of up to count random active tasks
@@ -168,11 +168,56 @@ func (s *Store) GenerateDrillVariant(ctx context.Context, subjectID uuid.UUID, n
 	if err != nil {
 		return GeneratedVariant{}, mapErr(err)
 	}
-	return s.assembleVariant(ctx, subjectID, domain.TestDrill, title, createdBy, ids)
+	return s.assembleVariant(ctx, subjectID, domain.TestDrill, title, createdBy, ids, nil)
 }
 
-// assembleVariant creates the test and its items in one transaction.
-func (s *Store) assembleVariant(ctx context.Context, subjectID uuid.UUID, kind domain.TestKind, title string, createdBy uuid.UUID, taskIDs []uuid.UUID) (GeneratedVariant, error) {
+// GenerateVariantLike builds a personal clone of a source test: the same
+// subject, kind and number structure (position for position), but each slot
+// drawn randomly from the ACTIVE bank — so a class assignment can hand every
+// student their own variant («чтобы не списывали»). Slots whose number has no
+// active bank tasks left fall back to the source task, so the clone never
+// comes out shorter than the original.
+func (s *Store) GenerateVariantLike(ctx context.Context, source domain.Test, createdBy uuid.UUID, title string) (GeneratedVariant, error) {
+	items, err := s.q.ListTestItems(ctx, source.ID)
+	if err != nil {
+		return GeneratedVariant{}, mapErr(err)
+	}
+	if len(items) == 0 {
+		return GeneratedVariant{}, ErrNotFound
+	}
+	// How many tasks of each number the clone needs.
+	need := map[int32]int32{}
+	for _, it := range items {
+		need[it.Number]++
+	}
+	// Draw that many random active tasks per number in one query each.
+	pool := map[int32][]uuid.UUID{}
+	for number, count := range need {
+		ids, err := s.q.RandomTasksForNumber(ctx, sqlc.RandomTasksForNumberParams{
+			SubjectID: source.SubjectID, Number: number, Limit: count,
+		})
+		if err != nil {
+			return GeneratedVariant{}, mapErr(err)
+		}
+		pool[number] = ids
+	}
+	// Fill the source's positions from the pools; dried-up pools keep the
+	// source task so the structure survives a thin bank.
+	taskIDs := make([]uuid.UUID, 0, len(items))
+	for _, it := range items {
+		if ids := pool[it.Number]; len(ids) > 0 {
+			taskIDs = append(taskIDs, ids[0])
+			pool[it.Number] = ids[1:]
+		} else {
+			taskIDs = append(taskIDs, it.TaskID)
+		}
+	}
+	return s.assembleVariant(ctx, source.SubjectID, source.Kind, title, createdBy, taskIDs, &source.ID)
+}
+
+// assembleVariant creates the test and its items in one transaction. variantOf
+// marks the test as a per-student clone of a source test (nil = a normal test).
+func (s *Store) assembleVariant(ctx context.Context, subjectID uuid.UUID, kind domain.TestKind, title string, createdBy uuid.UUID, taskIDs []uuid.UUID, variantOf *uuid.UUID) (GeneratedVariant, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return GeneratedVariant{}, err
@@ -185,6 +230,12 @@ func (s *Store) assembleVariant(ctx context.Context, subjectID uuid.UUID, kind d
 	})
 	if err != nil {
 		return GeneratedVariant{}, mapErr(err)
+	}
+	if variantOf != nil {
+		if err := qtx.SetTestVariantOf(ctx, sqlc.SetTestVariantOfParams{ID: test.ID, VariantOf: variantOf}); err != nil {
+			return GeneratedVariant{}, mapErr(err)
+		}
+		test.VariantOf = variantOf
 	}
 	for i, taskID := range taskIDs {
 		if _, err := qtx.AddTestItem(ctx, sqlc.AddTestItemParams{
@@ -206,6 +257,7 @@ func toDomainTest(t sqlc.Test) domain.Test {
 		Kind:      domain.TestKind(t.Kind),
 		Title:     t.Title,
 		CreatedBy: t.CreatedBy,
+		VariantOf: t.VariantOf,
 		CreatedAt: t.CreatedAt,
 	}
 }

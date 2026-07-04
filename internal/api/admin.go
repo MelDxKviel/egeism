@@ -424,6 +424,11 @@ type createAssignmentReq struct {
 	// Notify controls the Telegram notification (design §4.4 toggle). Absent =
 	// true, so older clients keep the previous always-notify behavior.
 	Notify *bool `json:"notify,omitempty"`
+	// Individual gives every target student their OWN generated variant — the
+	// picked test's number structure with randomly drawn bank tasks — so a
+	// class can't copy answers off each other. The picked test acts as the
+	// template; students are assigned personal clones (tests.variant_of).
+	Individual bool `json:"individual,omitempty"`
 }
 
 type createAssignmentResp struct {
@@ -444,16 +449,22 @@ func (s *Server) handleCreateAssignment(w http.ResponseWriter, r *http.Request) 
 		writeErr(w, http.StatusBadRequest, "укажи ровно одну цель: student_id или class_id")
 		return
 	}
-	if _, ok := s.testInScope(w, r, teacher, req.TestID); !ok {
+	test, ok := s.testInScope(w, r, teacher, req.TestID)
+	if !ok {
 		return
 	}
 	// Resolve the target students: one enrolled student, or a class's members.
-	var students []uuid.UUID
+	var students []domain.User
 	if req.StudentID != nil {
 		if !s.studentOfTeacher(w, r, teacher, *req.StudentID) {
 			return
 		}
-		students = []uuid.UUID{*req.StudentID}
+		student, err := s.store.GetUser(r.Context(), *req.StudentID)
+		if err != nil {
+			writeStoreErr(w, err)
+			return
+		}
+		students = []domain.User{student}
 	} else {
 		if _, ok := s.classOwned(w, r, teacher, *req.ClassID); !ok {
 			return
@@ -467,7 +478,7 @@ func (s *Server) handleCreateAssignment(w http.ResponseWriter, r *http.Request) 
 			if !m.IsActive {
 				continue // deactivated accounts must not receive work or pings
 			}
-			students = append(students, m.ID)
+			students = append(students, m)
 		}
 		if len(students) == 0 {
 			writeErr(w, http.StatusUnprocessableEntity, "в классе нет активных учеников")
@@ -475,11 +486,23 @@ func (s *Server) handleCreateAssignment(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 	resp := createAssignmentResp{Assignments: make([]domain.Assignment, 0, len(students))}
-	for _, studentID := range students {
-		assignment, err := s.createAssignmentFor(r.Context(), req.TestID, studentID, teacher.ID, req.ScheduledAt, req.Notify)
+	for _, student := range students {
+		// Individual mode: clone the template into a personal random variant.
+		// If generation fails the student still gets the shared test — an
+		// assignment must never be lost to a thin bank or a hiccup.
+		testID := req.TestID
+		if req.Individual {
+			gv, err := s.store.GenerateVariantLike(r.Context(), test, teacher.ID, test.Title+" · "+student.Name)
+			if err != nil {
+				slog.Warn("generate individual variant failed; assigning the shared test", "student", student.ID, "err", err)
+			} else {
+				testID = gv.Test.ID
+			}
+		}
+		assignment, err := s.createAssignmentFor(r.Context(), testID, student.ID, teacher.ID, req.ScheduledAt, req.Notify)
 		if err != nil {
 			// Partial fan-out: log and keep going; report what was created.
-			slog.Warn("create assignment failed mid-fanout", "student", studentID, "err", err)
+			slog.Warn("create assignment failed mid-fanout", "student", student.ID, "err", err)
 			continue
 		}
 		resp.Assignments = append(resp.Assignments, assignment)

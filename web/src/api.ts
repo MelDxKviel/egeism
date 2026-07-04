@@ -280,8 +280,10 @@ export const api = {
   generateVariant: (subject: SubjectCode, kind: TestKind, opts: { number?: number; count?: number; title?: string } = {}) =>
     req<{ test: Test; task_count: number; source: string }>("POST", "/api/admin/tests/generate", { subject, kind, ...opts }),
   // Assign to one student OR fan out to a whole class (exactly one target).
-  createAssignment: (test_id: string, target: { student_id?: string; class_id?: string }, scheduled_at: string, notify = true) =>
-    req<{ created: number }>("POST", "/api/admin/assignments", { test_id, ...target, scheduled_at, notify }),
+  // individual=true generates every target their own random variant of the
+  // picked test (same numbers, random bank tasks) — the anti-cheating mode.
+  createAssignment: (test_id: string, target: { student_id?: string; class_id?: string }, scheduled_at: string, notify = true, individual = false) =>
+    req<{ created: number }>("POST", "/api/admin/assignments", { test_id, ...target, scheduled_at, notify, individual }),
 };
 
 // --- hooks ---

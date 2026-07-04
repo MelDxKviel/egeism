@@ -739,8 +739,11 @@ paths:
         '201': { description: created }
 
   # POST /api/admin/assignments takes EXACTLY ONE target: student_id (must be
-  # the teacher's enrolled student) or class_id (fans out to every member).
-  # Response: { created, assignments }.
+  # the teacher's enrolled student) or class_id (fans out to every active
+  # member). individual=true clones the picked test into a personal random
+  # variant per student (same number structure, random bank tasks,
+  # tests.variant_of = source) — the anti-cheating mode; on a generation
+  # failure the student gets the shared test. Response: { created, assignments }.
   /api/admin/assignments:
     post:
       summary: Assign a test to a student at a time (enqueues TG notification)

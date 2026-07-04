@@ -153,7 +153,11 @@ type Test struct {
 	Kind      TestKind  `json:"kind"`
 	Title     string    `json:"title"`
 	CreatedBy uuid.UUID `json:"created_by"`
-	CreatedAt time.Time `json:"created_at"`
+	// VariantOf marks a per-student clone generated for a class assignment
+	// («каждому свой вариант»): it points at the source test and keeps the
+	// clone out of the teacher's test library.
+	VariantOf *uuid.UUID `json:"variant_of,omitempty"`
+	CreatedAt time.Time  `json:"created_at"`
 }
 
 // TestItem places a task at a position within a test.
