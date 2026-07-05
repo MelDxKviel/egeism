@@ -36,7 +36,9 @@ export interface PlatformStats {
   assignments: number; attempts: number; answers: number; correct_answers: number;
   answers_7d: number; subjects: SubjectActivity[];
 }
-export interface Profile { user: User; classes: Klass[]; students_count?: number; }
+// Student profile carries teachers — the full enrollment list: a student may
+// have several teachers at once (school + репетитор), including classless ones.
+export interface Profile { user: User; classes: Klass[]; teachers?: User[]; students_count?: number; }
 export interface Subject { id: string; code: SubjectCode; title: string; }
 export interface Media { key: string; kind: "image" | "table" | "file"; alt?: string; inline?: boolean; }
 export interface AnswerSchema {
@@ -210,6 +212,10 @@ export const api = {
     req<StudentSummary[]>("GET", `/api/students${scope === "all" ? "?scope=all" : ""}`),
   createStudent: (name: string, username: string, password: string, class_id?: string) =>
     req<User>("POST", "/api/students", { name, username, password, class_id }),
+  // Enrollment link (m2m — a student may have several teachers): take an
+  // existing student onto my roster / drop them from it (and my classes).
+  enrollStudent: (studentId: string) => req<User>("POST", `/api/students/${studentId}/enroll`),
+  unenrollStudent: (studentId: string) => req<void>("DELETE", `/api/students/${studentId}/enroll`),
 
   // Classes (teacher).
   classes: () => req<Klass[]>("GET", "/api/classes"),

@@ -120,7 +120,17 @@ migration 00005). Adding a member also creates the `enrollments` row (one tx,
 `store.AddClassMember`) — enrollment is THE teacher↔student link every
 per-student authorization runs on (`resolveStudent`, `attemptReadable`,
 assignment targeting); removing from a class keeps it, so the student stays "мой
-ученик без класса". `GET /api/students` returns the teacher's enrolled students
+ученик без класса". **Enrollments are m2m — one student may have SEVERAL
+teachers at once** (школьный + репетитор): a teacher takes an EXISTING student
+onto their roster via `POST /api/students/{id}/enroll` (idempotent; the web's
+«Взять ученика» modal — a picker over `?scope=all`, so no duplicate account is
+ever created; the create-student 409 toast points there) and drops them via
+`DELETE /api/students/{id}/enroll` (`store.UnenrollStudent`, one tx: removes the
+enrollment + memberships in THAT teacher's classes only — the account, solve
+history and other teachers' links stay; the «Отчислить» button on the teacher's
+student page). The student's profile (`GET /api/profile`) lists ALL their
+teachers (`teachers`, incl. classless ones) with subject scope. `GET
+/api/students` returns the teacher's enrolled students
 tagged with class names (`?scope=all` = the platform-wide picker; admins always
 see all). `POST /api/admin/assignments` takes exactly one target — `student_id`
 (enrolled check) or `class_id` (**fan-out**: one assignment + bell notification
