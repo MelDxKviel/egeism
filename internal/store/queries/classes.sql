@@ -34,6 +34,13 @@ ON CONFLICT (class_id, student_id) DO NOTHING;
 -- name: RemoveClassMember :execrows
 DELETE FROM class_members WHERE class_id = $1 AND student_id = $2;
 
+-- name: RemoveStudentFromTeacherClasses :exec
+-- Unenroll cleanup: drop the student's memberships in THIS teacher's classes
+-- only — memberships in other teachers' classes are untouched.
+DELETE FROM class_members cm
+USING classes c
+WHERE cm.class_id = c.id AND c.teacher_id = $1 AND cm.student_id = $2;
+
 -- name: ListClassMembers :many
 SELECT u.* FROM users u
 JOIN class_members cm ON cm.student_id = u.id

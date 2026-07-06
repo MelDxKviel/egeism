@@ -90,6 +90,10 @@ func (s *Server) Router() http.Handler {
 			r.Get("/profile", s.handleProfile)
 			r.Get("/students", s.handleListStudents)
 			r.Post("/students", s.handleCreateStudent) // teacher creates a student account
+			// Enrollment link management: a student may have SEVERAL teachers
+			// (m2m). Take an existing student onto my roster / drop them from it.
+			r.Post("/students/{studentID}/enroll", s.handleEnrollStudent)
+			r.Delete("/students/{studentID}/enroll", s.handleUnenrollStudent)
 			// Reset link for a user: admin → anyone, teacher → their students.
 			r.Post("/users/{userID}/password-reset-link", s.handleCreatePasswordResetLink)
 

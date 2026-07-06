@@ -91,7 +91,12 @@ function CreateStudentModal({ classId, onClose, onDone }: { classId?: string; on
       showToast(`Аккаунт создан: ${username}`);
       onDone();
       onClose();
-    } catch (e) { showToast(String((e as Error).message)); }
+    } catch (e) {
+      // Занятый логин почти всегда значит «ученик уже есть на платформе» (у
+      // другого учителя) — подскажи взять существующего, а не плодить аккаунты.
+      const msg = String((e as Error).message);
+      showToast(msg.includes("занят") ? `${msg} — если это твой ученик, возьми его через «Взять ученика»` : msg);
+    }
     finally { setBusy(false); }
   };
 
@@ -121,6 +126,65 @@ function CreateStudentModal({ classId, onClose, onDone }: { classId?: string; on
         </div>
       </div>
     </Modal>
+  );
+}
+
+// EnrollStudentModal — «взять ученика»: у ученика может быть НЕСКОЛЬКО учителей
+// (школьный + репетитор), поэтому существующего на платформе ученика берут к
+// себе как есть — без класса и без второго аккаунта. Поиск по всей платформе;
+// уже свои отфильтрованы.
+function EnrollStudentModal({ mine, onClose, onDone }: {
+  mine: StudentSummary[]; onClose: () => void; onDone: () => void;
+}) {
+  const { showToast } = useApp();
+  const all = useStudents(true, "all");
+  const [q, setQ] = useState("");
+  const [creating, setCreating] = useState(false);
+  const enrolled = new Set(mine.map((m) => m.id));
+
+  const enroll = async (s: User) => {
+    try {
+      await api.enrollStudent(s.id);
+      showToast(`${s.name} теперь твой ученик`);
+      onDone();
+    } catch (e) { showToast(String((e as Error).message)); }
+  };
+
+  return (
+    <>
+      <Modal onClose={onClose} maxWidth={460} title="Взять ученика">
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ color: "var(--text-2)", fontSize: 13.5 }}>
+            Ученик уже занимается на платформе (например, у другого учителя)? Возьми его к себе —
+            аккаунт один, у ученика может быть несколько учителей.
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <input placeholder="поиск: имя или логин" value={q} onChange={(e) => setQ(e.target.value)} style={{ flex: 1 }} />
+            <Button variant="soft" onClick={() => setCreating(true)}>+ Новый</Button>
+          </div>
+          <Async q={all}>{(list) => {
+            const qq = q.trim().toLowerCase();
+            const rows = list
+              .filter((s) => !enrolled.has(s.id))
+              .filter((s) => !qq || s.name.toLowerCase().includes(qq) || (s.username || "").toLowerCase().includes(qq));
+            return rows.length === 0
+              ? <div style={{ color: "var(--text-2)", fontSize: 14 }}>Свободных учеников не нашлось — создай нового.</div>
+              : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 320, overflowY: "auto" }}>
+                  {rows.map((s) => (
+                    <StudentRow key={s.id} s={s} onOpen={() => enroll(s)}
+                      right={<span style={{ color: "var(--accent-2)", fontSize: 13, fontWeight: 600 }}>взять</span>} />
+                  ))}
+                </div>
+              );
+          }}</Async>
+        </div>
+      </Modal>
+      {creating && (
+        <CreateStudentModal onClose={() => setCreating(false)}
+          onDone={() => { setCreating(false); onDone(); }} />
+      )}
+    </>
   );
 }
 
@@ -158,6 +222,7 @@ export function TeacherDashboard() {
   const [creatingClass, setCreatingClass] = useState(false);
   const [className, setClassName] = useState("");
   const [creatingStudent, setCreatingStudent] = useState(false);
+  const [enrolling, setEnrolling] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const refresh = () => {
@@ -186,6 +251,7 @@ export function TeacherDashboard() {
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
         <Button onClick={() => setCreatingClass(true)}>+ Новый класс</Button>
         <Button variant="soft" onClick={() => setCreatingStudent(true)}>+ Аккаунт ученика</Button>
+        <Button variant="ghost" onClick={() => setEnrolling(true)}>Взять ученика</Button>
       </div>
 
       <Section title="Классы">
@@ -249,6 +315,10 @@ export function TeacherDashboard() {
         </Modal>
       )}
       {creatingStudent && <CreateStudentModal onClose={() => setCreatingStudent(false)} onDone={refresh} />}
+      {enrolling && (
+        <EnrollStudentModal mine={students.data || []}
+          onClose={() => setEnrolling(false)} onDone={refresh} />
+      )}
     </div>
   );
 }
@@ -534,7 +604,8 @@ function EditableClassTitle({ id, title, onRenamed }: { id: string; title: strin
 // прогноз, слабые места, успешность по номерам, свежие попытки с разбором и
 // назначенные тесты. Это бывший обзор — теперь на каждого ученика свой.
 export function StudentStatsPage() {
-  const { subject, setSubject, go } = useApp();
+  const { subject, setSubject, go, showToast } = useApp();
+  const invalidate = useInvalidate();
   const student = useRef(viewStudent).current;
   const sid = student?.id ?? "";
   const forecast = useForecast(sid, subject);
@@ -561,6 +632,18 @@ export function StudentStatsPage() {
   };
   const toDrill = (number?: number) => { requestBuilder({ kind: "drill", number, count: 10 }); go("t-builder"); };
 
+  // «Отчислить» разрывает только СВОЮ связь с учеником: аккаунт, история и
+  // другие учителя (у ученика их может быть несколько) не трогаются.
+  const unenroll = async () => {
+    if (!window.confirm(`Отчислить «${student.name}»? Ученик уйдёт из твоего списка и твоих классов; аккаунт, история решений и другие его учителя останутся.`)) return;
+    try {
+      await api.unenrollStudent(student.id);
+      showToast(`${student.name} отчислен — аккаунт и история сохранены`);
+      invalidate("students"); invalidate("classes"); invalidate("class-detail"); invalidate("class-overview");
+      go("t-dashboard");
+    } catch (e) { showToast(String((e as Error).message)); }
+  };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
@@ -577,6 +660,10 @@ export function StudentStatsPage() {
             </span>
           </Button>
           <Button variant="soft" onClick={() => { requestAssign({ studentId: student.id }); go("t-assign"); }}>Назначить тест</Button>
+          <button onClick={unenroll} title="Убрать из моих учеников (аккаунт и история останутся)" style={{
+            display: "inline-flex", alignItems: "center", gap: 7, background: "transparent",
+            border: "1px solid var(--bad)", color: "var(--bad)", borderRadius: 10, padding: "8px 14px", fontSize: 14,
+          }}><Icon name="close" size={15} /> Отчислить</button>
         </div>
       </div>
 

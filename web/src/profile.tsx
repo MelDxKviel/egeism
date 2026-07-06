@@ -59,9 +59,33 @@ export function ProfilePage() {
 
       <Async q={q}>{(p) => (
         <>
+          {role === "student" && (
+            <Card>
+              <Label>Мои учителя</Label>
+              {(p.teachers ?? []).length === 0 ? (
+                <div style={{ color: "var(--text-2)", fontSize: 14, marginTop: 8 }}>
+                  Пока ни один учитель не взял тебя к себе.
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 10 }}>
+                  {(p.teachers ?? []).map((t) => (
+                    <div key={t.id} style={{
+                      display: "flex", justifyContent: "space-between", alignItems: "center",
+                      padding: "10px 12px", background: "var(--surface-2)", borderRadius: 10,
+                    }}>
+                      <span style={{ fontWeight: 600 }}>{t.name}</span>
+                      <span className="mono" style={{ color: "var(--text-3)", fontSize: 12 }}>
+                        {t.subject ? SUBJECT_TITLES[t.subject] : "все предметы"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card>
+          )}
           {role !== "admin" && (
             <Card>
-              <Label>{role === "teacher" ? "Мои классы" : "Мои классы и учителя"}</Label>
+              <Label>Мои классы</Label>
               {p.classes.length === 0 ? (
                 <div style={{ color: "var(--text-2)", fontSize: 14, marginTop: 8 }}>
                   {role === "teacher"

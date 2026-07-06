@@ -74,6 +74,19 @@ SELECT EXISTS(
     SELECT 1 FROM enrollments WHERE teacher_id = $1 AND student_id = $2
 ) AS enrolled;
 
+-- name: DeleteEnrollment :execrows
+-- Drops the teacher↔student link ("отчислить"). History (attempts,
+-- assignments) is untouched; other teachers' enrollments stay.
+DELETE FROM enrollments WHERE teacher_id = $1 AND student_id = $2;
+
+-- name: ListTeachersForStudent :many
+-- All teachers a student is enrolled to (a student may have several — school
+-- teacher + репетитор). Powers the student profile's "мои учителя".
+SELECT u.* FROM users u
+JOIN enrollments e ON e.teacher_id = u.id
+WHERE e.student_id = $1
+ORDER BY u.name;
+
 -- name: ListTeacherIDsForStudent :many
 -- Reverse enrollment lookup: who teaches this student (the recipients of the
 -- «забыл пароль» notification).

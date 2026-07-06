@@ -105,6 +105,40 @@ func (s *Store) CreateEnrollment(ctx context.Context, teacherID, studentID uuid.
 	return nil
 }
 
+// UnenrollStudent drops the teacher↔student link and the student's memberships
+// in that teacher's classes, in one transaction — the "отчислить" action. The
+// student's account and history stay, as do other teachers' enrollments.
+// Returns ErrNotFound when the student wasn't enrolled to this teacher.
+func (s *Store) UnenrollStudent(ctx context.Context, teacherID, studentID uuid.UUID) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	qtx := s.q.WithTx(tx)
+	if err := qtx.RemoveStudentFromTeacherClasses(ctx, sqlc.RemoveStudentFromTeacherClassesParams{TeacherID: teacherID, StudentID: studentID}); err != nil {
+		return mapErr(err)
+	}
+	n, err := qtx.DeleteEnrollment(ctx, sqlc.DeleteEnrollmentParams{TeacherID: teacherID, StudentID: studentID})
+	if err != nil {
+		return mapErr(err)
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return tx.Commit(ctx)
+}
+
+// ListTeachersForStudent returns every teacher the student is enrolled to —
+// a student may have several (school teacher + репетитор, different subjects).
+func (s *Store) ListTeachersForStudent(ctx context.Context, studentID uuid.UUID) ([]domain.User, error) {
+	rows, err := s.q.ListTeachersForStudent(ctx, studentID)
+	if err != nil {
+		return nil, mapErr(err)
+	}
+	return toDomainUsers(rows), nil
+}
+
 // PlatformStats assembles the admin dashboard: platform-wide counters plus the
 // per-subject activity breakdown.
 func (s *Store) PlatformStats(ctx context.Context) (domain.PlatformStats, error) {

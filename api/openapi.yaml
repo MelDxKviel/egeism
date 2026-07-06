@@ -279,13 +279,37 @@ paths:
         '201': { description: user }
         '409': { description: username already taken }
 
+  /api/students/{studentID}/enroll:
+    post:
+      summary: >
+        Teacher takes an EXISTING student onto their roster (no class involved —
+        the репетитор case). A student may be enrolled to several teachers at
+        once; re-enrolling is an idempotent no-op.
+      parameters:
+        - { name: studentID, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '201': { description: student }
+        '400': { description: target is not a student }
+        '403': { description: teacher role required }
+    delete:
+      summary: >
+        Teacher drops the student from their roster AND their classes
+        («отчислить»). Account, solve history and other teachers' enrollments
+        stay untouched.
+      parameters:
+        - { name: studentID, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '204': { description: unenrolled }
+        '404': { description: student was not enrolled to this teacher }
+
   /api/profile:
     get:
       summary: >
         Личный профиль: user + classes (student: their classes with teacher
-        names; teacher: own classes with member counts + students_count).
+        names + teachers — the full enrollment list, a student may have several;
+        teacher: own classes with member counts + students_count).
       responses:
-        '200': { description: "{ user, classes, students_count? }" }
+        '200': { description: "{ user, classes, teachers?, students_count? }" }
 
   /api/classes:
     get:

@@ -350,6 +350,24 @@ func (q *Queries) RemoveClassMember(ctx context.Context, arg RemoveClassMemberPa
 	return result.RowsAffected(), nil
 }
 
+const removeStudentFromTeacherClasses = `-- name: RemoveStudentFromTeacherClasses :exec
+DELETE FROM class_members cm
+USING classes c
+WHERE cm.class_id = c.id AND c.teacher_id = $1 AND cm.student_id = $2
+`
+
+type RemoveStudentFromTeacherClassesParams struct {
+	TeacherID uuid.UUID `json:"teacher_id"`
+	StudentID uuid.UUID `json:"student_id"`
+}
+
+// Unenroll cleanup: drop the student's memberships in THIS teacher's classes
+// only — memberships in other teachers' classes are untouched.
+func (q *Queries) RemoveStudentFromTeacherClasses(ctx context.Context, arg RemoveStudentFromTeacherClassesParams) error {
+	_, err := q.db.Exec(ctx, removeStudentFromTeacherClasses, arg.TeacherID, arg.StudentID)
+	return err
+}
+
 const renameClass = `-- name: RenameClass :one
 UPDATE classes SET name = $2 WHERE id = $1 RETURNING id, teacher_id, name, created_at
 `

@@ -13,6 +13,9 @@ import (
 type profileResp struct {
 	User    domain.User    `json:"user"`
 	Classes []domain.Class `json:"classes"`
+	// Teachers is the student's full teacher list (enrollments) — a student may
+	// have several, including ones with no class (the репетитор case).
+	Teachers []domain.User `json:"teachers,omitempty"`
 	// StudentsCount is the teacher's roster size (enrolled students).
 	StudentsCount int `json:"students_count,omitempty"`
 }
@@ -28,6 +31,12 @@ func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		resp.Classes = classes
+		teachers, err := s.store.ListTeachersForStudent(r.Context(), user.ID)
+		if err != nil {
+			writeStoreErr(w, err)
+			return
+		}
+		resp.Teachers = teachers
 	case domain.RoleTeacher:
 		classes, err := s.store.ListClassesForTeacher(r.Context(), user.ID)
 		if err != nil {

@@ -108,6 +108,25 @@ func (q *Queries) CreateUserWithCredentials(ctx context.Context, arg CreateUserW
 	return i, err
 }
 
+const deleteEnrollment = `-- name: DeleteEnrollment :execrows
+DELETE FROM enrollments WHERE teacher_id = $1 AND student_id = $2
+`
+
+type DeleteEnrollmentParams struct {
+	TeacherID uuid.UUID `json:"teacher_id"`
+	StudentID uuid.UUID `json:"student_id"`
+}
+
+// Drops the teacher↔student link ("отчислить"). History (attempts,
+// assignments) is untouched; other teachers' enrollments stay.
+func (q *Queries) DeleteEnrollment(ctx context.Context, arg DeleteEnrollmentParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteEnrollment, arg.TeacherID, arg.StudentID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const deleteUser = `-- name: DeleteUser :execrows
 DELETE FROM users WHERE id = $1
 `
@@ -353,6 +372,45 @@ func (q *Queries) ListTeacherIDsForStudent(ctx context.Context, studentID uuid.U
 			return nil, err
 		}
 		items = append(items, teacher_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTeachersForStudent = `-- name: ListTeachersForStudent :many
+SELECT u.id, u.role, u.telegram_id, u.name, u.created_at, u.username, u.password_hash, u.is_active, u.subject FROM users u
+JOIN enrollments e ON e.teacher_id = u.id
+WHERE e.student_id = $1
+ORDER BY u.name
+`
+
+// All teachers a student is enrolled to (a student may have several — school
+// teacher + репетитор). Powers the student profile's "мои учителя".
+func (q *Queries) ListTeachersForStudent(ctx context.Context, studentID uuid.UUID) ([]User, error) {
+	rows, err := q.db.Query(ctx, listTeachersForStudent, studentID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []User{}
+	for rows.Next() {
+		var i User
+		if err := rows.Scan(
+			&i.ID,
+			&i.Role,
+			&i.TelegramID,
+			&i.Name,
+			&i.CreatedAt,
+			&i.Username,
+			&i.PasswordHash,
+			&i.IsActive,
+			&i.Subject,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
