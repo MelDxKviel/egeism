@@ -310,6 +310,23 @@ func (s *Store) ListTasks(ctx context.Context, f TaskFilter) ([]domain.Task, err
 	return toDomainTasks(rows)
 }
 
+// TaskCountsByNumber returns per-номер bank availability for a subject (active +
+// total), номер-ordered — feeds the composed-variant builder so the teacher sees
+// which numbers can be filled and by how many.
+func (s *Store) TaskCountsByNumber(ctx context.Context, subjectID uuid.UUID) ([]domain.NumberAvailability, error) {
+	rows, err := s.q.TaskCountsByNumber(ctx, subjectID)
+	if err != nil {
+		return nil, mapErr(err)
+	}
+	out := make([]domain.NumberAvailability, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, domain.NumberAvailability{
+			Number: int(r.Number), Active: int(r.Active), Total: int(r.Total),
+		})
+	}
+	return out, nil
+}
+
 // PracticeTasks returns active tasks for a subject the student hasn't mastered
 // (solved correctly < `mastered` times), in random order — so mastered tasks
 // stop repeating in practice.

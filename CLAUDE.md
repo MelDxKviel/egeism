@@ -181,7 +181,24 @@ in `web/src/profile.tsx`) call the real API. Auth: a login-only screen
 (`web/src/Login.tsx` — no signup) stores the JWT and sends it as
 `Authorization: Bearer`; the role comes from the account, no toggle. `vite dev`
 proxies `/api` and `/health` to `:8080`. The random-variant generator
-(`POST /api/admin/tests/generate`) is the teacher's one-click test builder.
+(`POST /api/admin/tests/generate`) is the teacher's one-click test builder,
+with three kinds: **classic** (one random active task per номер, exam-shaped),
+**drill** (N random tasks of ONE номер) and **composed** — a teacher-defined
+mix (`domain.TestComposed`). The composed builder (`ComposedBuilder` in
+`web/src/teacher.tsx`) takes `slots: [{number, count}]` — «сколько заданий
+каждого номера» — so a вариант can hold e.g. 3×№1 + 3×№2 + 3×№3. Its UI is a
+range-fill bar («задания с N по M · по k каждого» → `Заполнить`) plus a per-номер
+grid of steppers tinted by **live bank availability**
+(`GET /api/admin/tasks/summary?subject=` → per-номер active/total counts, `useTaskSummary`):
+green «в банке» when the bank can fill the slot, amber when thin, grey «доберём»
+when empty. The server (`normalizeSlots` in `internal/api/admin_read.go`) drops
+empty slots, sums duplicate номера preserving first-seen order (so the web must
+send `slots` **ascending**), and caps the total at 100 tasks; it tops up the
+bank per-номер concurrently (`fetchNumbersAndIngest`, bounded fan-out + single
+ingest) before drawing via `RandomTasksForNumber`. `GenerateVariantLike` clones
+composed structure for free, so `individual:true` class assignments already give
+every student their own «3×№1, 3×№2, 3×№3» вариант. The response's `requested`
+(aggregate) vs `task_count` lets the UI warn when a thin bank came up short.
 
 **Dialogs:** the ONE portaled `Modal` lives in `web/src/ui.tsx` — it re-wraps its
 overlay in `.app` + `data-theme` because the design tokens are scoped there and a
@@ -365,7 +382,9 @@ local dev (one token can't long-poll from two places).
 
 Done: Phase 0, checker + full test suite, student solve flow (M1 backbone),
 the assigned-test flow (assign → solve the exact variant → done + notify toggle),
-stats + feeds endpoints, random-variant generator, bot conversation, scheduler
+stats + feeds endpoints, random-variant generator (classic/drill/**composed** —
+pick a range of номера and how many tasks of each, with live bank-availability
+hints), bot conversation, scheduler
 (asynq), dataset ingest (file/URL, JSON/JSONL), score-forecast placeholder,
 docker stack incl. web, the full React frontend (all 11 screens wired), and
 real JWT auth (register/login per role, bot on tokens), and the media pipeline

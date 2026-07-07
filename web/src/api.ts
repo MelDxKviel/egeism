@@ -6,7 +6,7 @@ export type Role = "student" | "teacher" | "admin";
 export type SubjectCode = "rus" | "math" | "inf" | "soc";
 export type AnswerKind = "number" | "string" | "set" | "sequence";
 export type TaskStatus = "draft" | "active" | "rejected";
-export type TestKind = "classic" | "drill";
+export type TestKind = "classic" | "drill" | "composed";
 
 export interface User {
   id: string; role: Role; name: string; username?: string; telegram_id?: number;
@@ -108,6 +108,12 @@ export interface Test {
   created_by: string; created_at: string;
 }
 export interface TestDetail { test: Test; tasks: Task[]; }
+
+// Composed builder: one slot = «N заданий номера number».
+export interface VariantSlot { number: number; count: number; }
+// Per-номер bank availability (active = usable in a generated variant).
+export interface NumberAvailability { number: number; active: number; total: number; }
+export interface TaskSummary { subject: SubjectCode; numbers: NumberAvailability[]; }
 
 // --- session token ---
 const TOKEN_KEY = "egeism.token";
@@ -299,8 +305,14 @@ export const api = {
     req<{ updated: number; scanned: number; by_subject: Record<string, number> }>("POST", "/api/admin/tasks/refetch-formulas"),
   addItem: (testId: string, task_id: string, position: number) =>
     req("POST", `/api/admin/tests/${testId}/items`, { task_id, position }),
-  generateVariant: (subject: SubjectCode, kind: TestKind, opts: { number?: number; count?: number; title?: string } = {}) =>
-    req<{ test: Test; task_count: number; source: string }>("POST", "/api/admin/tests/generate", { subject, kind, ...opts }),
+  taskSummary: (subject: SubjectCode) =>
+    req<TaskSummary>("GET", `/api/admin/tasks/summary?subject=${subject}`),
+  generateVariant: (
+    subject: SubjectCode,
+    kind: TestKind,
+    opts: { number?: number; count?: number; title?: string; slots?: VariantSlot[] } = {},
+  ) =>
+    req<{ test: Test; task_count: number; requested?: number; source: string }>("POST", "/api/admin/tests/generate", { subject, kind, ...opts }),
   // Assign to one student OR fan out to a whole class (exactly one target).
   // individual=true generates every target their own random variant of the
   // picked test (same numbers, random bank tasks) — the anti-cheating mode.
@@ -365,6 +377,8 @@ export const useAdminTasks = (q: string) =>
   useQuery({ queryKey: ["admin-tasks", q], queryFn: () => api.adminTasks(q) });
 export const useTests = (subject?: SubjectCode) =>
   useQuery({ queryKey: ["tests", subject], queryFn: () => api.tests(subject) });
+export const useTaskSummary = (subject: SubjectCode) =>
+  useQuery({ queryKey: ["task-summary", subject], queryFn: () => api.taskSummary(subject) });
 export const useTestDetail = (id: string | null) =>
   useQuery({ queryKey: ["test-detail", id], queryFn: () => api.testDetail(id!), enabled: !!id });
 

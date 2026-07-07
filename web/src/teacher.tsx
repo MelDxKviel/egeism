@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid } from "recharts";
 import {
-  api, SubjectCode, TestKind, Task, TaskStatus, AnswerSchema, AttemptSummary, AttemptReviewItem,
+  api, SubjectCode, TestKind, VariantSlot, Task, TaskStatus, AnswerSchema, AttemptSummary, AttemptReviewItem,
   StudentSummary, User, uploadTasks, downloadTestPDF,
   useForecast, useHeatmap, useWeakSpots, useMastery, useMasterySeries, useAttempts, useAssignments,
-  useAdminTasks, useTests, useTestDetail, useInvalidate, useClasses, useClassDetail, useClassOverview, useStudents,
+  useAdminTasks, useTests, useTestDetail, useTaskSummary, useInvalidate, useClasses, useClassDetail, useClassOverview, useStudents,
 } from "./api";
 import { useApp } from "./state";
 import { Card, Label, Pill, Button, Async, Empty, Loading, Modal, PasswordInput, accColor, SUBJECT_TITLES, testTitle, MediaBlock, StatementView, AttemptReviewGrid } from "./ui";
@@ -21,6 +21,25 @@ const SOURCE_TITLE: Record<SubjectCode, string> = {
   rus: "РЕШУ ЕГЭ", math: "РЕШУ ЕГЭ", soc: "РЕШУ ЕГЭ", inf: "открытый банк ФИПИ (openfipi)",
 };
 const grid = { display: "grid", gap: "var(--gap)", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))" } as const;
+
+// Composed-variant builder bounds (mirror the backend caps in admin_read.go).
+const MAX_NUMBER = 99;       // matches backend maxTaskNumber
+const MAX_PER_NUMBER = 30;   // soft per-номер cap in the стёпперы
+const MAX_COMPOSED = 100;    // matches backend maxComposedTasks (total tasks)
+// Sensible «по какой номер» default for the range field per subject (part 1
+// auto-checkable задания). Only a first-paint hint — the teacher types any range,
+// and live bank availability overrides it as the grid grows.
+const DEFAULT_MAX_NUMBER: Record<SubjectCode, number> = { rus: 26, math: 12, inf: 27, soc: 16 };
+// Human labels for the test-kind Pill (raw enum values read poorly).
+const KIND_RU: Record<TestKind, string> = { classic: "классический", drill: "дрилл", composed: "составной" };
+
+// ruPlural picks the correct Russian plural form (1 задание / 2 задания / 5 заданий).
+function ruPlural(n: number, one: string, few: string, many: string): string {
+  const m10 = n % 10, m100 = n % 100;
+  if (m10 === 1 && m100 !== 11) return one;
+  if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return few;
+  return many;
+}
 
 // Builder prefill handoff (set before navigating to the builder). Lets the
 // student page's "Прокачать" open the builder already in drill mode, pre-aimed
@@ -787,6 +806,176 @@ export function StudentStatsPage() {
 let viewTestId = "";
 export const requestTestView = (id: string) => { viewTestId = id; };
 
+// NumStepper — a compact −[n]+ control for the composed builder's number grid.
+function NumStepper({ value, onChange, min = 0, max = MAX_PER_NUMBER }: {
+  value: number; onChange: (v: number) => void; min?: number; max?: number;
+}) {
+  const btn: React.CSSProperties = {
+    width: 26, height: 26, borderRadius: 8, border: "1px solid var(--border-2)",
+    background: "var(--surface)", color: "var(--text)", fontSize: 16, lineHeight: 1,
+    display: "inline-flex", alignItems: "center", justifyContent: "center",
+    opacity: 1, cursor: "pointer",
+  };
+  return (
+    <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+      <button type="button" style={{ ...btn, opacity: value <= min ? 0.4 : 1 }} disabled={value <= min}
+        onClick={() => onChange(Math.max(min, value - 1))} aria-label="меньше">−</button>
+      <span className="mono" style={{ minWidth: 18, textAlign: "center", fontWeight: 700, fontSize: 15 }}>{value}</span>
+      <button type="button" style={{ ...btn, opacity: value >= max ? 0.4 : 1 }} disabled={value >= max}
+        onClick={() => onChange(Math.min(max, value + 1))} aria-label="больше">+</button>
+    </div>
+  );
+}
+
+// ComposedBuilder — the «составной вариант» panel. The teacher picks a RANGE of
+// задания and how MANY tasks of each go into one test (e.g. 3×№1 + 3×№2 + 3×№3).
+// A number grid with live bank availability (green/amber/grey) makes the mix
+// visible before building; a range-fill bar stamps «по k каждого» across a span
+// in two clicks. Range-select and «несколько одного номера» are the same thing —
+// a per-номер count list — so both requests are one panel.
+function ComposedBuilder({ subject }: { subject: SubjectCode }) {
+  const { showToast } = useApp();
+  const invalidate = useInvalidate();
+  const summary = useTaskSummary(subject);
+
+  const [slots, setSlots] = useState<Record<number, number>>({});
+  const [from, setFrom] = useState(1);
+  const [to, setTo] = useState(DEFAULT_MAX_NUMBER[subject]);
+  const [each, setEach] = useState(3);
+  const [busy, setBusy] = useState(false);
+
+  // Subject switch → fresh composition + range default (availability differs).
+  useEffect(() => { setSlots({}); setFrom(1); setTo(DEFAULT_MAX_NUMBER[subject]); }, [subject]);
+
+  const avail = useMemo(() => {
+    const m: Record<number, number> = {};
+    (summary.data?.numbers || []).forEach((n) => { m[n.number] = n.active; });
+    return m;
+  }, [summary.data]);
+  const bankEmpty = (summary.data?.numbers.length ?? 0) === 0;
+  const availMax = useMemo(
+    () => (summary.data?.numbers || []).reduce((mx, n) => Math.max(mx, n.number), 0),
+    [summary.data],
+  );
+
+  const slotNums = useMemo(() => Object.keys(slots).map(Number).sort((a, b) => a - b), [slots]);
+  const slotMax = slotNums.length ? slotNums[slotNums.length - 1] : 0;
+  const maxToShow = Math.min(MAX_NUMBER, Math.max(availMax, slotMax, DEFAULT_MAX_NUMBER[subject]));
+  const total = useMemo(() => Object.values(slots).reduce((a, b) => a + b, 0), [slots]);
+  const overCap = total > MAX_COMPOSED;
+
+  const setCount = (n: number, c: number) => setSlots((s) => {
+    const next = { ...s };
+    if (c <= 0) delete next[n]; else next[n] = Math.min(c, MAX_PER_NUMBER);
+    return next;
+  });
+  const fillRange = () => {
+    const lo = Math.max(1, Math.min(from, to));
+    const hi = Math.min(MAX_NUMBER, Math.max(from, to));
+    const k = Math.max(1, Math.min(each, MAX_PER_NUMBER));
+    setSlots((s) => {
+      const next = { ...s };
+      for (let n = lo; n <= hi; n++) next[n] = k;
+      return next;
+    });
+  };
+  const applyEach = (k: number) => setSlots((s) => {
+    const next: Record<number, number> = {};
+    Object.keys(s).forEach((key) => { next[+key] = Math.min(k, MAX_PER_NUMBER); });
+    return next;
+  });
+  const clear = () => setSlots({});
+
+  const generate = async () => {
+    const list: VariantSlot[] = slotNums.map((n) => ({ number: n, count: slots[n] }));
+    if (!list.length) { showToast("Добавь хотя бы одно задание в набор"); return; }
+    if (overCap) { showToast(`Слишком много заданий: ${total} (максимум ${MAX_COMPOSED})`); return; }
+    setBusy(true);
+    try {
+      const res = await api.generateVariant(subject, "composed", { slots: list });
+      const requested = res.requested ?? total;
+      const short = res.task_count < requested
+        ? ` — просили ${requested}, в банке хватило на ${res.task_count} (собери ещё раз, чтобы дотянуть)`
+        : "";
+      showToast(`Составной вариант собран: ${res.task_count} ${ruPlural(res.task_count, "задача", "задачи", "задач")}${short}`);
+      invalidate("tests"); invalidate("admin-tasks"); invalidate("task-summary");
+    } catch (e) { showToast(String((e as Error).message)); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      {/* RANGE FILL — «выбрать диапазон заданий» + «по k каждого» */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center", padding: "12px 14px", background: "var(--surface-2)", borderRadius: 12 }}>
+        <span style={{ fontSize: 13, color: "var(--text-2)", fontWeight: 600 }}>Задания с</span>
+        <input type="number" min={1} max={MAX_NUMBER} value={from} onChange={(e) => setFrom(+e.target.value)} style={{ width: 60 }} />
+        <span style={{ fontSize: 13, color: "var(--text-2)" }}>по</span>
+        <input type="number" min={1} max={MAX_NUMBER} value={to} onChange={(e) => setTo(+e.target.value)} style={{ width: 60 }} />
+        <span style={{ fontSize: 13, color: "var(--text-2)" }}>· по</span>
+        <input type="number" min={1} max={MAX_PER_NUMBER} value={each} onChange={(e) => setEach(+e.target.value)} style={{ width: 56 }} />
+        <span style={{ fontSize: 13, color: "var(--text-2)" }}>каждого</span>
+        <Button variant="soft" style={{ padding: "8px 14px", fontSize: 13 }} onClick={fillRange}>Заполнить</Button>
+        {slotNums.length > 0 && (
+          <button type="button" onClick={clear} style={{ background: "transparent", border: "none", color: "var(--text-3)", fontSize: 13, textDecoration: "underline", cursor: "pointer" }}>очистить</button>
+        )}
+      </div>
+
+      {/* quick «каждого по N» multipliers, active only with a selection */}
+      {slotNums.length > 0 && (
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", fontSize: 13, color: "var(--text-2)" }}>
+          <span>Каждого выбранного:</span>
+          {[1, 2, 3, 5].map((k) => (
+            <button key={k} type="button" onClick={() => applyEach(k)} style={{
+              padding: "4px 12px", borderRadius: 999, fontSize: 13, fontWeight: 600, cursor: "pointer",
+              border: "1px solid var(--border-2)", background: "transparent", color: "var(--text-2)",
+            }}>по {k}</button>
+          ))}
+        </div>
+      )}
+
+      {bankEmpty && (
+        <div style={{ fontSize: 13, color: "var(--text-3)" }}>
+          Банк по «{SUBJECT_TITLES[subject]}» пуст — выбери номера, задания доберутся с источника ({SOURCE_TITLE[subject]}) при сборке.
+        </div>
+      )}
+
+      {/* NUMBER GRID — per-номер count + live availability */}
+      <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fill, minmax(132px, 1fr))" }}>
+        {Array.from({ length: maxToShow }, (_, i) => i + 1).map((n) => {
+          const cnt = slots[n] || 0;
+          const a = avail[n] ?? 0;
+          const on = cnt > 0;
+          const availColor = on && a < cnt && a > 0 ? "var(--warn)" : a > 0 ? "var(--text-2)" : "var(--text-3)";
+          return (
+            <div key={n} style={{
+              display: "flex", flexDirection: "column", gap: 8, padding: "10px 12px", borderRadius: 12,
+              background: on ? "var(--accent-soft)" : "var(--surface-2)",
+              border: "1px solid " + (on ? "var(--accent)" : "var(--border-2)"),
+            }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span className="mono" style={{ fontWeight: 700, fontSize: 14, color: on ? "var(--accent-2)" : "var(--text)" }}>№{n}</span>
+                <span className="mono" style={{ fontSize: 11, color: availColor }}>{a > 0 ? `${a} в банке` : "нет — доберём"}</span>
+              </div>
+              <NumStepper value={cnt} onChange={(v) => setCount(n, v)} />
+            </div>
+          );
+        })}
+      </div>
+
+      {/* FOOTER — total + build */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ fontSize: 14, color: overCap ? "var(--bad)" : "var(--text-2)" }}>
+          Всего: <b style={{ color: overCap ? "var(--bad)" : "var(--text)" }}>{total}</b>{" "}
+          {ruPlural(total, "задание", "задания", "заданий")} из {slotNums.length}{" "}
+          {ruPlural(slotNums.length, "номера", "номеров", "номеров")}
+          {overCap && <span> · максимум {MAX_COMPOSED}</span>}
+        </div>
+        <Button onClick={generate} disabled={busy || total === 0 || overCap}>{busy ? "Собираю…" : "Собрать составной вариант"}</Button>
+      </div>
+    </div>
+  );
+}
+
 export function Builder() {
   const { subject, setSubject, showToast, go } = useApp();
   const invalidate = useInvalidate();
@@ -830,24 +1019,32 @@ export function Builder() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
       <SubjectTabs value={subject} onChange={setSubject} />
-      <Section title="Собрать вариант в один клик">
+      <Section title="Собрать вариант">
         <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
           <ChoiceTab active={kind === "classic"} onClick={() => setKind("classic")}>Классический (по одному на номер)</ChoiceTab>
+          <ChoiceTab active={kind === "composed"} onClick={() => setKind("composed")}>Составной (свой набор)</ChoiceTab>
           <ChoiceTab active={kind === "drill"} onClick={() => setKind("drill")}>Дрилл (N одного номера)</ChoiceTab>
         </div>
-        {kind === "drill" && (
-          <div style={{ display: "flex", gap: 12, marginBottom: 14, alignItems: "center" }}>
-            <label className="mono" style={{ fontSize: 13, color: "var(--text-2)" }}>Номер
-              <input type="number" min={1} value={number} onChange={(e) => setNumber(+e.target.value)} style={{ width: 70, marginLeft: 8 }} /></label>
-            <label className="mono" style={{ fontSize: 13, color: "var(--text-2)" }}>Сколько
-              <input type="number" min={1} value={count} onChange={(e) => setCount(+e.target.value)} style={{ width: 70, marginLeft: 8 }} /></label>
-          </div>
+        {kind === "composed" ? <ComposedBuilder subject={subject} /> : (
+          <>
+            {kind === "drill" && (
+              <div style={{ display: "flex", gap: 12, marginBottom: 14, alignItems: "center" }}>
+                <label className="mono" style={{ fontSize: 13, color: "var(--text-2)" }}>Номер
+                  <input type="number" min={1} value={number} onChange={(e) => setNumber(+e.target.value)} style={{ width: 70, marginLeft: 8 }} /></label>
+                <label className="mono" style={{ fontSize: 13, color: "var(--text-2)" }}>Сколько
+                  <input type="number" min={1} value={count} onChange={(e) => setCount(+e.target.value)} style={{ width: 70, marginLeft: 8 }} /></label>
+              </div>
+            )}
+            <div style={{ color: "var(--text-2)", fontSize: 14, marginBottom: 14 }}>
+              {kind === "classic"
+                ? "По одному случайному заданию на каждый номер — вариант как на ЕГЭ."
+                : "N случайных заданий одного номера — прокачать слабое место."}
+              {" "}Сам подтянет нужные задания с источника ({SOURCE_TITLE[subject]}), сохранит их в банк
+              и соберёт вариант. Может занять несколько секунд.
+            </div>
+            <Button onClick={generate} disabled={busy}>{busy ? "Собираю…" : "Собрать вариант"}</Button>
+          </>
         )}
-        <div style={{ color: "var(--text-2)", fontSize: 14, marginBottom: 14 }}>
-          Сам подтянет нужные задания с источника ({SOURCE_TITLE[subject]}), сохранит их в банк
-          и соберёт вариант. То есть тесты наполняют банк, а не наоборот. Может занять несколько секунд.
-        </div>
-        <Button onClick={generate} disabled={busy}>{busy ? "Собираю…" : "Собрать вариант"}</Button>
       </Section>
 
       <Section title="Готовые тесты">
@@ -857,7 +1054,7 @@ export function Builder() {
               <div key={t.id} onClick={() => { requestTestView(t.id); go("t-test"); }} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", background: "var(--surface-2)", borderRadius: 10, cursor: "pointer" }}>
                 <div><div style={{ fontWeight: 600 }}>{t.title}</div><div className="mono" style={{ color: "var(--text-3)", fontSize: 12 }}>{new Date(t.created_at).toLocaleString("ru", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}</div></div>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <Pill>{t.kind}</Pill>
+                  <Pill>{KIND_RU[t.kind] ?? t.kind}</Pill>
                   <button onClick={(e) => { e.stopPropagation(); del(t.id, t.title); }} disabled={deleting === t.id}
                     title="Удалить тест" aria-label="Удалить тест"
                     style={{ display: "inline-flex", alignItems: "center", background: "transparent", border: "none", color: "var(--text-3)", padding: 4, opacity: deleting === t.id ? 0.4 : 1 }}>
@@ -956,7 +1153,7 @@ export function TestDetailPage() {
         <>
           <Card>
             <EditableTitle id={d.test.id} title={d.test.title} />
-            <div className="mono" style={{ color: "var(--text-3)", fontSize: 13, marginTop: 4 }}>{d.test.kind} · {d.tasks.length} задач</div>
+            <div className="mono" style={{ color: "var(--text-3)", fontSize: 13, marginTop: 4 }}>{KIND_RU[d.test.kind] ?? d.test.kind} · {d.tasks.length} задач</div>
             {d.tasks.length > 0 && <PdfExportButtons id={d.test.id} title={d.test.title} />}
           </Card>
           {d.tasks.length === 0 ? <Empty title="В тесте пока нет заданий" /> : (
