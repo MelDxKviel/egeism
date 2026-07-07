@@ -699,7 +699,7 @@ export function StudentStatsPage() {
               </div>
               <div style={{ color: "var(--text-2)", fontSize: 13, marginTop: 10, textAlign: "center" }}>{f.note}</div>
               <div style={{ marginTop: 12 }}>
-                <Async q={heat}>{(h) => <Pill tone="accent"><StreakBadge>{computeStreak(h)} дней подряд</StreakBadge></Pill>}</Async>
+                <Async q={heat}>{(h) => <Pill tone="accent"><StreakBadge days={computeStreak(h)} /></Pill>}</Async>
               </div>
             </div>
           )}</Async>

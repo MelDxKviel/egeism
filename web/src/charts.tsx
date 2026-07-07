@@ -59,7 +59,7 @@ export function Heatmap({ cells, onDay, big }: { cells: HeatCell[]; onDay?: (c: 
       {weeks.map((wk, wi) => (
         <div key={wi} style={{ display: "flex", flexDirection: "column", gap }}>
           {wk.map((c, di) => (
-            <div key={di} title={`${c.day.slice(0, 10)} · ${c.total} задач`} onClick={() => onDay?.(c)}
+            <div key={di} title={`${c.day.slice(0, 10)} · ${c.total} задач${c.total ? ` · ${c.correct} верно` : ""}`} onClick={() => onDay?.(c)}
               style={{ width: size, height: size, borderRadius: 3, background: heatColor(c.total), cursor: onDay ? "pointer" : "default" }} />
           ))}
         </div>

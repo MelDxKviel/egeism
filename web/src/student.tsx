@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   api, SubjectCode, TaskView, DayAnswer, AssignmentCard, AttemptReviewItem, useForecast, useHeatmap, useWeakSpots,
   useMastery, useMasterySeries, useAssignments, useAttempts, useInvalidate,
@@ -10,10 +10,20 @@ import { AnswerInput } from "./answer";
 import { Icon } from "./icons";
 import { deadlineInfo } from "./deadline";
 
-// A flame glyph + label, sized for use inside a <Pill> streak badge.
-export function StreakBadge({ children }: { children: ReactNode }) {
+// Russian plural for «день» (1 день · 2 дня · 5 дней).
+function pluralDays(n: number): string {
+  const m10 = n % 10, m100 = n % 100;
+  if (m10 === 1 && m100 !== 11) return "день";
+  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return "дня";
+  return "дней";
+}
+
+// A flame glyph + streak label, sized for use inside a <Pill>. The flame comes
+// alive (a gentle flicker + glow) once the streak is non-zero, so an active
+// streak reads as "burning" while a broken one (0 days) sits cold.
+export function StreakBadge({ days }: { days: number }) {
   return <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-    <Icon name="flame" size={13} /> {children}
+    <Icon name="flame" size={13} className={days > 0 ? "flame-live" : undefined} /> {days} {pluralDays(days)} подряд
   </span>;
 }
 
@@ -143,7 +153,7 @@ export function Dashboard() {
         <Card>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
             <Label>Активность</Label>
-            <Async q={heat}>{(h) => <Pill tone="accent"><StreakBadge>{computeStreak(h)} дней подряд</StreakBadge></Pill>}</Async>
+            <Async q={heat}>{(h) => <Pill tone="accent"><StreakBadge days={computeStreak(h)} /></Pill>}</Async>
           </div>
           <Async q={heat}>{(h) => <Heatmap cells={h} onDay={() => go("history")} />}</Async>
           <div style={{ color: "var(--text-3)", fontSize: 12, marginTop: 10 }}>Клетки — активность по дням. Открой историю для разбора.</div>
@@ -259,6 +269,9 @@ export function Solve() {
   const [draft, setDraft] = useState("");
   const [submitted, setSubmitted] = useState<{ ok: boolean; solution?: string[] } | null>(null);
   const [done, setDone] = useState<Answered[]>([]);
+  // Consecutive-correct run, shown as «серия ×N» once it reaches 2. Resets on a
+  // wrong answer; drives the in-session momentum without any server state.
+  const [combo, setCombo] = useState(0);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string>();
   const taskStart = useRef(Date.now());
@@ -311,6 +324,7 @@ export function Solve() {
     try {
       const r = await api.submit(attemptId, task.id, draft, dt);
       setSubmitted({ ok: r.is_correct, solution: r.solution });
+      setCombo((c) => (r.is_correct ? c + 1 : 0));
       setDone((d) => [...d.filter((x) => x.taskId !== task.id), { taskId: task.id, number: task.number, correct: r.is_correct }]);
     } catch (e) { showToast(String((e as Error).message)); }
   };
@@ -348,14 +362,20 @@ export function Solve() {
         <MediaBlock media={task.media} />
         {!submitted && <AnswerInput kind={task.answer_kind} value={draft} onChange={setDraft} />}
         {submitted && (
-          <div style={{
+          <div className={submitted.ok ? "celebrate" : undefined} style={{
             padding: 16, borderRadius: 12, marginTop: 4,
             background: submitted.ok ? "var(--accent-soft)" : "var(--bad-soft)",
             color: submitted.ok ? "var(--accent-2)" : "var(--bad)",
           }}>
             <div style={{ display: "flex", alignItems: "center", gap: 7, fontWeight: 700, marginBottom: submitted.solution?.length ? 8 : 0 }}>
-              {submitted.ok && <Icon name="check" size={18} />}
+              {submitted.ok && <Icon name="check" size={18} className="checkpop" />}
               {submitted.ok ? "Верно!" : "Пока неверно"}
+              {submitted.ok && combo >= 2 && (
+                <span className="mono" style={{
+                  marginLeft: "auto", background: "var(--warn-soft)", color: "var(--warn)",
+                  borderRadius: 999, padding: "2px 10px", fontSize: 12, fontWeight: 700,
+                }}>серия ×{combo}</span>
+              )}
             </div>
             {!submitted.ok && submitted.solution && submitted.solution.length > 0 && (
               <div className="mono" style={{ fontSize: 14 }}>Правильный ответ: {submitted.solution.join(" / ")}</div>
