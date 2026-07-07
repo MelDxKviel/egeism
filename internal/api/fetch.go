@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sync"
 	"time"
 
 	"egeism/internal/domain"
@@ -81,13 +82,64 @@ func (s *Server) fetchAndIngest(ctx context.Context, subject domain.SubjectCode,
 	if err != nil {
 		return ingest.Result{}, "", err
 	}
+	res, err := s.ingestRaws(ctx, subject, raws, status)
+	return res, mode, err
+}
+
+// ingestRaws runs already-fetched RawTasks through the shared ingest pipeline
+// (media → MinIO, dedup, status). Split out of fetchAndIngest so a multi-number
+// top-up can fetch concurrently but ingest once.
+func (s *Server) ingestRaws(ctx context.Context, subject domain.SubjectCode, raws []ingest.RawTask, status domain.TaskStatus) (ingest.Result, error) {
 	runner := ingest.NewRunner(s.store)
 	if s.media != nil {
 		runner.WithMedia(s.media)
 	}
 	runner.Status = status
-	res, err := runner.Ingest(ctx, "fetch:"+string(subject), raws)
-	return res, mode, err
+	return runner.Ingest(ctx, "fetch:"+string(subject), raws)
+}
+
+// fetchNumbersAndIngest tops up the bank for a composed variant: it fetches each
+// requested задание-номер CONCURRENTLY (the fetcher is a ThreadingHTTPServer)
+// under one shared wall-time budget, then ingests everything in a SINGLE pass
+// (concurrent ingest could race on dedup). Best-effort — numbers that fail or
+// time out just don't contribute; the variant assembles from whatever the bank
+// ends up with. perNumber bounds how many tasks to pull for each номер.
+func (s *Server) fetchNumbersAndIngest(ctx context.Context, subject domain.SubjectCode, numbers []int, perNumber int, status domain.TaskStatus) (ingest.Result, error) {
+	if s.fetcherURL == "" || len(numbers) == 0 {
+		return ingest.Result{}, nil
+	}
+	fetchCtx, cancel := context.WithTimeout(ctx, 75*time.Second)
+	defer cancel()
+	const workers = 4
+	sem := make(chan struct{}, workers)
+	var mu sync.Mutex
+	var all []ingest.RawTask
+	var wg sync.WaitGroup
+	for _, n := range numbers {
+		wg.Add(1)
+		go func(n int) {
+			defer wg.Done()
+			select {
+			case sem <- struct{}{}:
+			case <-fetchCtx.Done():
+				return
+			}
+			defer func() { <-sem }()
+			raws, _, err := s.callFetcher(fetchCtx, subject, perNumber, n)
+			if err != nil {
+				return
+			}
+			mu.Lock()
+			all = append(all, raws...)
+			mu.Unlock()
+		}(n)
+	}
+	wg.Wait()
+	if len(all) == 0 {
+		return ingest.Result{}, nil
+	}
+	// Ingest under the parent ctx, not the (possibly expired) fetch budget.
+	return s.ingestRaws(ctx, subject, all, status)
 }
 
 // fetchResp is the ingest result plus the fetch mode reported by the fetcher

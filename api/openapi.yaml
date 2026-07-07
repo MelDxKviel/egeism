@@ -796,9 +796,45 @@ paths:
           content:
             application/pdf: {}
 
+  /api/admin/tasks/summary:
+    get:
+      summary: Per-номер bank availability for a subject (active + total counts)
+      description: >
+        Feeds the composed-variant builder: for each задание-номер the subject
+        has in the bank, how many tasks total and how many are ACTIVE (usable in
+        a generated variant). A subject-scoped teacher's subject overrides the
+        query param.
+      parameters:
+        - { name: subject, in: query, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: subject + номер-ordered availability
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  subject: { type: string }
+                  numbers:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        number: { type: integer }
+                        active: { type: integer }
+                        total: { type: integer }
+
   /api/admin/tests/generate:
     post:
-      summary: Auto-build a random variant from the active bank (classic|drill)
+      summary: Auto-build a random variant from the active bank (classic|drill|composed)
+      description: >
+        classic = one random active task per номер (exam-shaped); drill = N
+        random tasks of ONE номер; composed = a teacher-defined mix — `slots`
+        gives, per номер, how many tasks to include (e.g. 3× задание1 + 3×
+        задание2 + 3× задание3), laid out grouped by номер in the order given.
+        Each kind first tops up the bank from the source (best-effort) then
+        assembles from active tasks; a номер whose bank ran short yields fewer
+        tasks (response `task_count` < `requested`).
       requestBody:
         required: true
         content:
@@ -808,12 +844,22 @@ paths:
               required: [subject, kind]
               properties:
                 subject: { type: string }
-                kind: { type: string, enum: [classic, drill] }
+                kind: { type: string, enum: [classic, drill, composed] }
                 title: { type: string }
                 number: { type: integer, description: "drill only" }
                 count: { type: integer, description: "drill only" }
+                slots:
+                  type: array
+                  description: "composed only: per-номер counts; total capped at 100"
+                  items:
+                    type: object
+                    required: [number, count]
+                    properties:
+                      number: { type: integer }
+                      count: { type: integer }
       responses:
-        '201': { description: generated test + task_count }
+        '201': { description: "generated test + task_count (+ requested for composed)" }
+        '400': { description: bad kind or invalid composed slots }
         '422': { description: no active tasks match }
 
   /api/admin/tests/{testID}/items:

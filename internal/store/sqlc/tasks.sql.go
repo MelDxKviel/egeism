@@ -342,6 +342,45 @@ func (q *Queries) SetTaskStatus(ctx context.Context, arg SetTaskStatusParams) (T
 	return i, err
 }
 
+const taskCountsByNumber = `-- name: TaskCountsByNumber :many
+SELECT number,
+       COUNT(*) FILTER (WHERE status = 'active')::bigint AS active,
+       COUNT(*)::bigint AS total
+FROM tasks
+WHERE subject_id = $1
+GROUP BY number
+ORDER BY number
+`
+
+type TaskCountsByNumberRow struct {
+	Number int32 `json:"number"`
+	Active int64 `json:"active"`
+	Total  int64 `json:"total"`
+}
+
+// Per-номер bank availability for a subject: how many tasks total and how many
+// are ACTIVE (usable in a generated variant). Powers the composed-variant
+// builder's availability hints.
+func (q *Queries) TaskCountsByNumber(ctx context.Context, subjectID uuid.UUID) ([]TaskCountsByNumberRow, error) {
+	rows, err := q.db.Query(ctx, taskCountsByNumber, subjectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []TaskCountsByNumberRow{}
+	for rows.Next() {
+		var i TaskCountsByNumberRow
+		if err := rows.Scan(&i.Number, &i.Active, &i.Total); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const taskExistsBySource = `-- name: TaskExistsBySource :one
 SELECT EXISTS (
     SELECT 1 FROM tasks

@@ -71,6 +71,18 @@ WHERE source ->> 'provider'  = sqlc.arg('provider')::text
 -- name: CountTasksBySubject :one
 SELECT COUNT(*) FROM tasks WHERE subject_id = $1;
 
+-- name: TaskCountsByNumber :many
+-- Per-номер bank availability for a subject: how many tasks total and how many
+-- are ACTIVE (usable in a generated variant). Powers the composed-variant
+-- builder's availability hints.
+SELECT number,
+       COUNT(*) FILTER (WHERE status = 'active')::bigint AS active,
+       COUNT(*)::bigint AS total
+FROM tasks
+WHERE subject_id = $1
+GROUP BY number
+ORDER BY number;
+
 -- name: DeleteTestItemsForUnansweredTasksBySubject :exec
 -- Detach the about-to-be-cleared bank tasks from any tests first: test_items
 -- has no ON DELETE CASCADE to tasks, so it must go before the task delete.

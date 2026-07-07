@@ -39,12 +39,14 @@ const (
 	TaskRejected TaskStatus = "rejected"
 )
 
-// TestKind distinguishes an exam-like test from a single-number drill.
+// TestKind distinguishes an exam-like test from a single-number drill or a
+// teacher-composed mix.
 type TestKind string
 
 const (
-	TestClassic TestKind = "classic" // как на ЕГЭ
-	TestDrill   TestKind = "drill"   // N задач одного номера
+	TestClassic  TestKind = "classic"  // как на ЕГЭ
+	TestDrill    TestKind = "drill"    // N задач одного номера
+	TestComposed TestKind = "composed" // произвольная смесь: по N заданий выбранных номеров
 )
 
 // AssignmentStatus tracks a teacher-scheduled test through its lifecycle.
@@ -166,6 +168,16 @@ type TestItem struct {
 	TestID   uuid.UUID `json:"test_id"`
 	TaskID   uuid.UUID `json:"task_id"`
 	Position int       `json:"position"`
+}
+
+// NumberAvailability reports, for one задание-номер, how many bank tasks the
+// subject has and how many are ACTIVE (usable in a generated variant). It feeds
+// the composed-variant builder so a teacher sees which numbers can actually be
+// filled and by how many before composing.
+type NumberAvailability struct {
+	Number int `json:"number"`
+	Active int `json:"active"`
+	Total  int `json:"total"`
 }
 
 // Assignment is a teacher scheduling a test for a student at a time.

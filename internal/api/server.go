@@ -142,6 +142,7 @@ func (s *Server) Router() http.Handler {
 			r.Post("/admin/tasks/import", s.handleImportTasks)
 			r.Post("/admin/tasks/fetch", s.handleFetchTasks)
 			r.Post("/admin/tasks/refetch-formulas", s.handleRefetchFormulas)
+			r.Get("/admin/tasks/summary", s.handleTaskSummary) // per-номер bank availability
 			r.Patch("/admin/tasks/{taskID}/answer", s.handleUpdateTaskAnswer)
 			r.Patch("/admin/tasks/{taskID}/status", s.handleSetTaskStatus)
 			r.Get("/admin/tests", s.handleListTests)

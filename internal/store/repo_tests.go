@@ -171,6 +171,44 @@ func (s *Store) GenerateDrillVariant(ctx context.Context, subjectID uuid.UUID, n
 	return s.assembleVariant(ctx, subjectID, domain.TestDrill, title, createdBy, ids, nil)
 }
 
+// VariantSlot requests Count random active tasks of задание Number for a
+// composed variant.
+type VariantSlot struct {
+	Number int
+	Count  int
+}
+
+// GenerateComposedVariant builds a teacher-composed test: for each requested
+// number it draws Count random ACTIVE bank tasks, laid out grouped by number in
+// the order given (so "3 первых, 3 вторых, 3 третьих" comes out exactly that
+// way). Numbers repeated across slots are summed and drawn once, so a task never
+// appears twice. A number whose bank ran short simply yields fewer tasks (no
+// padding) — the caller compares TaskCount to what was asked and warns.
+func (s *Store) GenerateComposedVariant(ctx context.Context, subjectID uuid.UUID, slots []VariantSlot, createdBy uuid.UUID, title string) (GeneratedVariant, error) {
+	need := map[int]int{}
+	order := make([]int, 0, len(slots))
+	for _, sl := range slots {
+		if sl.Count <= 0 {
+			continue
+		}
+		if _, ok := need[sl.Number]; !ok {
+			order = append(order, sl.Number)
+		}
+		need[sl.Number] += sl.Count
+	}
+	taskIDs := make([]uuid.UUID, 0)
+	for _, number := range order {
+		ids, err := s.q.RandomTasksForNumber(ctx, sqlc.RandomTasksForNumberParams{
+			SubjectID: subjectID, Number: int32(number), Limit: int32(need[number]),
+		})
+		if err != nil {
+			return GeneratedVariant{}, mapErr(err)
+		}
+		taskIDs = append(taskIDs, ids...)
+	}
+	return s.assembleVariant(ctx, subjectID, domain.TestComposed, title, createdBy, taskIDs, nil)
+}
+
 // GenerateVariantLike builds a personal clone of a source test: the same
 // subject, kind and number structure (position for position), but each slot
 // drawn randomly from the ACTIVE bank — so a class assignment can hand every
