@@ -64,7 +64,11 @@ type AssignmentCard struct {
 	ScheduledAt time.Time        `json:"scheduled_at"`
 	NotifiedAt  *time.Time       `json:"notified_at,omitempty"`
 	Status      AssignmentStatus `json:"status"`
-	TaskCount   int64            `json:"task_count"`
+	// DueAt is the optional deadline (NULL = no deadline). The UI marks an
+	// assignment overdue when due_at < now and still unsolved; "late" when it
+	// was solved after due_at.
+	DueAt    *time.Time `json:"due_at,omitempty"`
+	TaskCount int64     `json:"task_count"`
 	// Result of the latest finished attempt (the assigned test's history).
 	AttemptID  *uuid.UUID `json:"attempt_id,omitempty"`
 	FinishedAt *time.Time `json:"finished_at,omitempty"`

@@ -132,6 +132,7 @@ components:
         student_id: { type: string, format: uuid }
         student_name: { type: string }
         scheduled_at: { type: string, format: date-time }
+        due_at: { type: string, format: date-time, nullable: true, description: Optional deadline (absent = no deadline) }
         assignment_status: { type: string, enum: [scheduled, done, missed] }
         read_at: { type: string, format: date-time, nullable: true }
         created_at: { type: string, format: date-time }
@@ -598,7 +599,10 @@ paths:
         Each card includes the result of the assignment's latest finished attempt —
         attempt_id, finished_at, correct, total — so the assigned-tests history can
         show whether, what, and how each test was solved. Those fields are absent /
-        zero until the assignment has been solved at least once.
+        zero until the assignment has been solved at least once. due_at carries the
+        optional deadline (absent = no deadline); the UI marks an assignment
+        "overdue" when due_at < now and still unsolved, "late" when solved after
+        due_at.
       parameters:
         - { name: studentID, in: path, required: true, schema: { type: string, format: uuid } }
       responses:
@@ -825,7 +829,11 @@ paths:
   # member). individual=true clones the picked test into a personal random
   # variant per student (same number structure, random bank tasks,
   # tests.variant_of = source) — the anti-cheating mode; on a generation
-  # failure the student gets the shared test. Response: { created, assignments }.
+  # failure the student gets the shared test. due_at is the optional deadline
+  # (absent = no deadline); when set it must be after scheduled_at, and the
+  # worker's overdue sweep flips a still-unsolved assignment to "missed" once
+  # it passes (a missed assignment stays solvable — finish flips it to done).
+  # Response: { created, assignments }.
   /api/admin/assignments:
     post:
       summary: Assign a test to a student at a time (enqueues TG notification)

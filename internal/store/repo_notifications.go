@@ -82,6 +82,7 @@ func (s *Store) ListNotifications(ctx context.Context, userID uuid.UUID, limit i
 		if r.ScheduledAt != nil {
 			n.ScheduledAt = *r.ScheduledAt
 		}
+		n.DueAt = r.DueAt
 		if r.AssignmentStatus != nil {
 			n.AssignmentStatus = domain.AssignmentStatus(*r.AssignmentStatus)
 		}

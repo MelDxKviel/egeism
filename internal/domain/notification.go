@@ -35,6 +35,7 @@ type Notification struct {
 	StudentID        uuid.UUID        `json:"student_id"`
 	StudentName      string           `json:"student_name"`
 	ScheduledAt      time.Time        `json:"scheduled_at"`
+	DueAt            *time.Time       `json:"due_at,omitempty"`
 	AssignmentStatus AssignmentStatus `json:"assignment_status"`
 	SubjectUserID    uuid.UUID        `json:"subject_user_id,omitzero"`
 	SubjectUserName  string           `json:"subject_user_name,omitempty"`

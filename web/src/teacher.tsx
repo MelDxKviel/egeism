@@ -10,6 +10,7 @@ import { useApp } from "./state";
 import { Card, Label, Pill, Button, Async, Empty, Loading, Modal, PasswordInput, accColor, SUBJECT_TITLES, testTitle, MediaBlock, StatementView, AttemptReviewGrid } from "./ui";
 import { ScoreGauge, computeStreak, WeakSpotsList, Section, MasteryChart } from "./charts";
 import { StreakBadge, ASSIGNMENT_STATUS_RU } from "./student";
+import { deadlineInfo } from "./deadline";
 import { Icon } from "./icons";
 import { ResetLinkModal } from "./reset";
 
@@ -713,12 +714,17 @@ export function StudentStatsPage() {
             {list.map((a) => {
               const solved = !!a.finished_at;
               const pct = a.total ? Math.round((Number(a.correct) / Number(a.total)) * 100) : 0;
+              const dl = deadlineInfo(a);
               return (
                 <div key={a.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "10px 12px", background: "var(--surface-2)", borderRadius: 10 }}>
                   <div>
-                    <div style={{ fontWeight: 600 }}>{testTitle(a.title)}</div>
+                    <div style={{ fontWeight: 600, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                      {testTitle(a.title)}
+                      {dl.pill && <Pill tone={dl.pill.tone}>{dl.pill.label}</Pill>}
+                    </div>
                     <div className="mono" style={{ color: "var(--text-3)", fontSize: 12 }}>
-                      {new Date(a.scheduled_at).toLocaleString("ru")} · {ASSIGNMENT_STATUS_RU[a.status] || a.status}
+                      {new Date(a.scheduled_at).toLocaleString("ru")}
+                      {solved && a.finished_at ? ` · решён ${new Date(a.finished_at).toLocaleString("ru")}` : dl.kind === "none" ? ` · ${ASSIGNMENT_STATUS_RU[a.status] || a.status}` : ` · ${dl.text}`}
                     </div>
                   </div>
                   {solved && <span className="mono" style={{ color: accColor(pct), fontWeight: 700 }}>{a.correct}/{a.total}</span>}
@@ -979,6 +985,14 @@ export function TestDetailPage() {
 
 // ---------- Assign ----------
 
+// toLocalInput formats a Date as the local "YYYY-MM-DDTHH:MM" string that an
+// <input type="datetime-local"> expects (the preset chips build deadline values
+// from it).
+function toLocalInput(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 // Assign — назначение теста ученику ИЛИ целому классу (переработка №2): при
 // назначении на класс сервер создаёт назначение каждому участнику.
 export function Assign() {
@@ -993,6 +1007,7 @@ export function Assign() {
   const [classId, setClassId] = useState(prefill?.classId ?? "");
   const [testId, setTestId] = useState("");
   const [when, setWhen] = useState("");
+  const [due, setDue] = useState("");
   const [notify, setNotify] = useState(true);
   // Каждому свой вариант (анти-списывание): по умолчанию ВКЛ для класса —
   // одинаковый тест классу почти гарантирует обмен ответами.
@@ -1009,10 +1024,15 @@ export function Assign() {
     if (mode === "student" && !studentId) { showToast("Выбери ученика"); return; }
     if (!testId) { showToast("Выбери тест"); return; }
     if (!when) { showToast("Укажи время"); return; }
+    const dueISO = due ? new Date(due).toISOString() : undefined;
+    if (dueISO && dueISO <= new Date(when).toISOString()) {
+      showToast("Срок сдачи должен быть позже времени назначения");
+      return;
+    }
     setBusy(true);
     try {
       const indiv = mode === "class" && individual;
-      const r = await api.createAssignment(testId, target, new Date(when).toISOString(), notify, indiv);
+      const r = await api.createAssignment(testId, target, new Date(when).toISOString(), { notify, individual: indiv, due_at: dueISO });
       const who = mode === "class" ? `классу (${r.created} уч.${indiv ? ", у каждого свой вариант" : ""})` : "ученику";
       showToast(notify ? `Назначено ${who} · уведомления в Telegram запланированы` : `Назначено ${who} · без уведомлений`);
       invalidate("assignments"); // the student pages' «Назначенные тесты» feed
@@ -1068,6 +1088,31 @@ export function Assign() {
           </label>
           <label><Label>Когда</Label>
             <input type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} style={{ width: "100%", marginTop: 6 }} /></label>
+          <div>
+            <Label>Срок сдачи <span style={{ textTransform: "none", letterSpacing: 0 }}>· необязательно</span></Label>
+            <input type="datetime-local" value={due} onChange={(e) => setDue(e.target.value)} style={{ width: "100%", marginTop: 6 }} />
+            <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
+              {[["+1 день", 1], ["+3 дня", 3], ["+1 неделя", 7]].map(([label, days]) => (
+                <button key={label as string} type="button" onClick={() => {
+                  const base = when ? new Date(when) : new Date();
+                  base.setDate(base.getDate() + (days as number));
+                  setDue(toLocalInput(base));
+                }} style={{
+                  background: "var(--surface-2)", border: "1px solid var(--border-2)", color: "var(--text-2)",
+                  borderRadius: 999, padding: "4px 12px", fontSize: 12.5, cursor: "pointer",
+                }}>{label}</button>
+              ))}
+              {due && (
+                <button type="button" onClick={() => setDue("")} style={{
+                  background: "transparent", border: "1px solid var(--border-2)", color: "var(--text-3)",
+                  borderRadius: 999, padding: "4px 12px", fontSize: 12.5, cursor: "pointer",
+                }}>без срока</button>
+              )}
+            </div>
+            <div style={{ color: "var(--text-3)", fontSize: 12.5, marginTop: 6 }}>
+              Без срока ученик решает в любое время. Со сроком — просроченные задания подсвечиваются у ученика и в твоём списке.
+            </div>
+          </div>
           {mode === "class" && (
             <label style={{ display: "flex", alignItems: "flex-start", gap: 10, fontSize: 14 }}>
               <input type="checkbox" checked={individual} onChange={(e) => setIndividual(e.target.checked)} style={{ width: "auto", marginTop: 3 }} />

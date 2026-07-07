@@ -20,7 +20,7 @@ WHERE NOT EXISTS (
 -- LEFT JOINs because password_reset_requested rows carry no assignment — they
 -- reference a user instead (subject_user_id → «N забыл пароль»).
 SELECT n.id, n.kind, n.assignment_id, n.read_at, n.created_at,
-       a.test_id, a.student_id, a.scheduled_at, a.status AS assignment_status,
+       a.test_id, a.student_id, a.scheduled_at, a.due_at, a.status AS assignment_status,
        t.title AS test_title, t.subject_id,
        su.name AS student_name,
        n.subject_user_id, ru.name AS subject_user_name

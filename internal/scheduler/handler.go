@@ -96,6 +96,9 @@ func (h *Handlers) handleNotifyAssignment(ctx context.Context, task *asynq.Task)
 	// time.Local honors the TZ env (compose sets Europe/Moscow); timestamps from
 	// pg are UTC instants and must be shown in the family's local time.
 	fmt.Fprintf(&msg, "\n🗓 на %s", a.ScheduledAt.In(time.Local).Format("02.01 в 15:04"))
+	if a.DueAt != nil {
+		fmt.Fprintf(&msg, "\n⏰ сдать до %s", a.DueAt.In(time.Local).Format("02.01 в 15:04"))
+	}
 	msg.WriteString("\n\nУдачи! 💪")
 
 	// "Решать тут" is a callback the bot handles (same bot identity as the
@@ -167,6 +170,22 @@ func (h *Handlers) SweepDueAssignments(ctx context.Context, enq *Enqueuer) error
 		if err := enq.ScheduleAssignmentNotification(ctx, a.ID, time.Now()); err != nil {
 			slog.Error("sweep enqueue", "assignment", a.ID, "err", err)
 		}
+	}
+	return nil
+}
+
+// SweepOverdueAssignments flips still-scheduled assignments whose deadline
+// passed to "missed", so the teacher's roster and the student's feed reflect
+// what's overdue. Soft deadline: a missed assignment stays solvable; finishing
+// it flips missed → done. Run periodically from the worker alongside the
+// notify sweep.
+func (h *Handlers) SweepOverdueAssignments(ctx context.Context) error {
+	n, err := h.store.MarkOverdueAssignments(ctx, time.Now())
+	if err != nil {
+		return err
+	}
+	if n > 0 {
+		slog.Info("marked overdue assignments", "count", n)
 	}
 	return nil
 }
