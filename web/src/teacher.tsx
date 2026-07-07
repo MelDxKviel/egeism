@@ -9,7 +9,8 @@ import {
 import { useApp } from "./state";
 import { Card, Label, Pill, Button, Async, Empty, Loading, Modal, PasswordInput, accColor, SUBJECT_TITLES, testTitle, MediaBlock, StatementView, AttemptReviewGrid } from "./ui";
 import { ScoreGauge, computeStreak, WeakSpotsList, Section, MasteryChart } from "./charts";
-import { StreakBadge, ASSIGNMENT_STATUS_RU, deadlineInfo } from "./student";
+import { StreakBadge, ASSIGNMENT_STATUS_RU } from "./student";
+import { deadlineInfo } from "./deadline";
 import { Icon } from "./icons";
 import { ResetLinkModal } from "./reset";
 

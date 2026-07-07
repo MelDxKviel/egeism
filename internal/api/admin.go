@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -418,9 +419,9 @@ type createAssignmentReq struct {
 	TestID uuid.UUID `json:"test_id"`
 	// Exactly one target: a single student (must be the teacher's) or one of
 	// the teacher's classes — the class fans out to every member.
-	StudentID *uuid.UUID `json:"student_id,omitempty"`
-	ClassID   *uuid.UUID `json:"class_id,omitempty"`
-	ScheduledAt time.Time `json:"scheduled_at"`
+	StudentID   *uuid.UUID `json:"student_id,omitempty"`
+	ClassID     *uuid.UUID `json:"class_id,omitempty"`
+	ScheduledAt time.Time  `json:"scheduled_at"`
 	// DueAt is the optional deadline. NULL = no deadline (self-paced). When set
 	// it must be after ScheduledAt, and the worker's overdue sweep flips a
 	// still-unsolved assignment to "missed" once it passes.
@@ -440,6 +441,17 @@ type createAssignmentResp struct {
 	Assignments []domain.Assignment `json:"assignments"`
 }
 
+// validateDeadline returns an error when an optional deadline is set but not
+// strictly later than the scheduled (notify) time. A nil deadline (no deadline,
+// self-paced) is always valid. The handler runs this before any target lookup
+// or fan-out, so a bad deadline rejects the whole request with no side effects.
+func validateDeadline(scheduledAt time.Time, dueAt *time.Time) error {
+	if dueAt != nil && !dueAt.After(scheduledAt) {
+		return errors.New("срок сдачи должен быть позже времени назначения")
+	}
+	return nil
+}
+
 func (s *Server) handleCreateAssignment(w http.ResponseWriter, r *http.Request) {
 	teacher, ok := s.requireTeacher(w, r)
 	if !ok {
@@ -455,8 +467,8 @@ func (s *Server) handleCreateAssignment(w http.ResponseWriter, r *http.Request) 
 	}
 	// A deadline before the notify time makes no sense — guard it early so the
 	// whole fan-out is rejected, not just some members.
-	if req.DueAt != nil && !req.DueAt.After(req.ScheduledAt) {
-		writeErr(w, http.StatusBadRequest, "срок сдачи должен быть позже времени назначения")
+	if err := validateDeadline(req.ScheduledAt, req.DueAt); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	test, ok := s.testInScope(w, r, teacher, req.TestID)

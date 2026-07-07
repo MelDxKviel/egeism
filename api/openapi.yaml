@@ -132,6 +132,7 @@ components:
         student_id: { type: string, format: uuid }
         student_name: { type: string }
         scheduled_at: { type: string, format: date-time }
+        due_at: { type: string, format: date-time, nullable: true, description: Optional deadline (absent = no deadline) }
         assignment_status: { type: string, enum: [scheduled, done, missed] }
         read_at: { type: string, format: date-time, nullable: true }
         created_at: { type: string, format: date-time }

@@ -850,7 +850,7 @@ func statusRU(s string) string {
 	case "done":
 		return "выполнено"
 	case "missed":
-		return "пропущено"
+		return "просрочен"
 	default:
 		return "запланировано"
 	}
