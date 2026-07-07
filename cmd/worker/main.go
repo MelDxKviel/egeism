@@ -92,6 +92,9 @@ func sweepLoop(ctx context.Context, h *scheduler.Handlers, enq *scheduler.Enqueu
 			if err := h.SweepDueAssignments(ctx, enq); err != nil {
 				slog.Error("sweep due assignments", "err", err)
 			}
+			if err := h.SweepOverdueAssignments(ctx); err != nil {
+				slog.Error("sweep overdue assignments", "err", err)
+			}
 		}
 	}
 }

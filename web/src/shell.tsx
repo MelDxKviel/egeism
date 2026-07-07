@@ -148,9 +148,12 @@ function notifText(n: NotificationItem, subjectCode?: string): { title: string; 
   const subj = subjectCode ? SUBJECT_TITLES[subjectCode] : undefined;
   if (n.kind === "assignment_created") {
     const due = new Date(n.scheduled_at).toLocaleString("ru", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+    const deadline = n.due_at
+      ? new Date(n.due_at).toLocaleString("ru", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
+      : undefined;
     return {
       title: `Тебе назначен тест «${testTitle(n.test_title)}»`,
-      sub: [subj, `на ${due}`].filter(Boolean).join(" · "),
+      sub: [subj, `на ${due}`, deadline ? `сдать до ${deadline}` : undefined].filter(Boolean).join(" · "),
     };
   }
   if (n.kind === "password_reset_requested") {

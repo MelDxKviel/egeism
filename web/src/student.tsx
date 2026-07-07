@@ -32,8 +32,38 @@ export function requestSolve(r: SolveRequest) { solveRequest = r; }
 
 // Assignment statuses come from the API in English; the UI speaks Russian.
 export const ASSIGNMENT_STATUS_RU: Record<string, string> = {
-  scheduled: "запланирован", done: "решён", missed: "пропущен",
+  scheduled: "запланирован", done: "решён", missed: "просрочен",
 };
+
+// fmtDue formats a deadline compactly for the meta line: "15.07, 18:00".
+const fmtDue = (iso: string) =>
+  new Date(iso).toLocaleString("ru", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+
+// deadlineInfo derives the deadline state for an assignment card so both the
+// student's list and the teacher's roster render it consistently. The deadline
+// is soft: "overdue" still lets the student solve (the button stays), and a
+// later solve shows as "late". The status flag may lag the sweep by up to a
+// minute, so "overdue" is computed from due_at < now regardless of status.
+export function deadlineInfo(card: AssignmentCard): {
+  kind: "none" | "upcoming" | "overdue" | "late" | "ontime";
+  text: string;
+  pill?: { tone: "bad" | "warn" | "accent"; label: string };
+} {
+  if (!card.due_at) return { kind: "none", text: "" };
+  const due = new Date(card.due_at);
+  const now = Date.now();
+  const text = `до ${fmtDue(card.due_at)}`;
+  if (card.finished_at) {
+    const solvedLate = new Date(card.finished_at) > due;
+    return solvedLate
+      ? { kind: "late", text, pill: { tone: "warn", label: "с опозданием" } }
+      : { kind: "ontime", text, pill: { tone: "accent", label: "вовремя" } };
+  }
+  if (due.getTime() <= now) {
+    return { kind: "overdue", text, pill: { tone: "bad", label: "просрочен" } };
+  }
+  return { kind: "upcoming", text };
+}
 
 const grid12 = { display: "grid", gap: "var(--gap)", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))" } as const;
 
@@ -73,15 +103,21 @@ function AssignedTestsList({ cards, onSolve, onReview }: {
         // (which the finish handler sets best-effort) — the honest «решал ли».
         const solved = !!a.finished_at;
         const pct = a.total ? Math.round((a.correct / a.total) * 100) : 0;
+        const dl = deadlineInfo(a);
         return (
           <div key={a.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: 12, background: "var(--surface-2)", borderRadius: 12 }}>
             <div>
-              <div style={{ fontWeight: 600 }}>{testTitle(a.title)}</div>
+              <div style={{ fontWeight: 600, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                {testTitle(a.title)}
+                {dl.pill && <Pill tone={dl.pill.tone}>{dl.pill.label}</Pill>}
+              </div>
               <div className="mono" style={{ color: "var(--text-3)", fontSize: 12 }}>
                 {new Date(a.scheduled_at).toLocaleString("ru")} · {a.task_count} зад.
                 {solved && a.finished_at
                   ? ` · решён ${new Date(a.finished_at).toLocaleString("ru")}`
-                  : ` · ${ASSIGNMENT_STATUS_RU[a.status] || a.status}`}
+                  : dl.kind === "none"
+                    ? ` · ${ASSIGNMENT_STATUS_RU[a.status] || a.status}`
+                    : ` · ${dl.text}`}
               </div>
             </div>
             {solved

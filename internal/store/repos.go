@@ -466,9 +466,9 @@ func (s *Store) ListAnswersForAttempt(ctx context.Context, attemptID uuid.UUID) 
 
 // ---- Assignments ----
 
-func (s *Store) CreateAssignment(ctx context.Context, testID, studentID, assignedBy uuid.UUID, at time.Time) (domain.Assignment, error) {
+func (s *Store) CreateAssignment(ctx context.Context, testID, studentID, assignedBy uuid.UUID, at time.Time, dueAt *time.Time) (domain.Assignment, error) {
 	a, err := s.q.CreateAssignment(ctx, sqlc.CreateAssignmentParams{
-		TestID: testID, StudentID: studentID, AssignedBy: assignedBy, ScheduledAt: at,
+		TestID: testID, StudentID: studentID, AssignedBy: assignedBy, ScheduledAt: at, DueAt: dueAt,
 	})
 	if err != nil {
 		return domain.Assignment{}, mapErr(err)
@@ -513,6 +513,7 @@ func (s *Store) ListAssignmentCards(ctx context.Context, studentID uuid.UUID) ([
 			ScheduledAt: r.ScheduledAt,
 			NotifiedAt:  r.NotifiedAt,
 			Status:      domain.AssignmentStatus(r.Status),
+			DueAt:       r.DueAt,
 			TaskCount:   r.TaskCount,
 		}
 		// A finished attempt exists iff attempt_finished_at is set; only then is
@@ -591,6 +592,14 @@ func (s *Store) ListDueAssignments(ctx context.Context, t time.Time) ([]domain.A
 	return out, nil
 }
 
+// MarkOverdueAssignments flips every still-scheduled assignment whose deadline
+// passed by t to "missed" (the worker's periodic sweep). Returns the number of
+// rows that changed. A missed assignment stays solvable; finishing it flips it
+// back to done, and "late" is derivable (finished_at > due_at).
+func (s *Store) MarkOverdueAssignments(ctx context.Context, t time.Time) (int64, error) {
+	return s.q.MarkOverdueAssignments(ctx, &t)
+}
+
 func toDomainAssignment(a sqlc.Assignment) domain.Assignment {
 	return domain.Assignment{
 		ID:          a.ID,
@@ -600,5 +609,6 @@ func toDomainAssignment(a sqlc.Assignment) domain.Assignment {
 		ScheduledAt: a.ScheduledAt,
 		NotifiedAt:  a.NotifiedAt,
 		Status:      domain.AssignmentStatus(a.Status),
+		DueAt:       a.DueAt,
 	}
 }

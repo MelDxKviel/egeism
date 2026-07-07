@@ -169,6 +169,10 @@ type TestItem struct {
 }
 
 // Assignment is a teacher scheduling a test for a student at a time.
+// ScheduledAt is when the student is notified/the work is set; DueAt is the
+// optional deadline (NULL = no deadline, self-paced). The deadline is soft:
+// passing it flips a still-unsolved assignment to "missed", but the student
+// can still solve it late (finish then flips missed → done).
 type Assignment struct {
 	ID          uuid.UUID        `json:"id"`
 	TestID      uuid.UUID        `json:"test_id"`
@@ -177,6 +181,7 @@ type Assignment struct {
 	ScheduledAt time.Time        `json:"scheduled_at"`
 	NotifiedAt  *time.Time       `json:"notified_at,omitempty"`
 	Status      AssignmentStatus `json:"status"`
+	DueAt       *time.Time       `json:"due_at,omitempty"`
 }
 
 // Attempt is a student working through a test. AssignmentID is nullable so a

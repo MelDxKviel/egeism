@@ -1,6 +1,6 @@
 -- name: CreateAssignment :one
-INSERT INTO assignments (test_id, student_id, assigned_by, scheduled_at)
-VALUES ($1, $2, $3, $4)
+INSERT INTO assignments (test_id, student_id, assigned_by, scheduled_at, due_at)
+VALUES ($1, $2, $3, $4, $5)
 RETURNING *;
 
 -- name: GetAssignment :one
@@ -21,7 +21,7 @@ ORDER BY scheduled_at DESC;
 -- (it only pointer-izes attempt_finished_at, which is nullable in the schema),
 -- so COALESCE the id/counts to keep the scan safe for not-yet-solved rows;
 -- attempt_finished_at stays the reliable "was it solved" signal (NULL = not).
-SELECT a.id, a.test_id, a.scheduled_at, a.notified_at, a.status,
+SELECT a.id, a.test_id, a.scheduled_at, a.notified_at, a.status, a.due_at,
        t.title, t.kind, t.subject_id,
        (SELECT count(*) FROM test_items ti WHERE ti.test_id = t.id) AS task_count,
        COALESCE(res.attempt_id, '00000000-0000-0000-0000-000000000000'::uuid) AS attempt_id,
@@ -55,3 +55,12 @@ UPDATE assignments SET status = $2 WHERE id = $1 RETURNING *;
 SELECT * FROM assignments
 WHERE notified_at IS NULL AND scheduled_at <= $1
 ORDER BY scheduled_at;
+
+-- name: MarkOverdueAssignments :execrows
+-- Worker overdue sweep: any still-scheduled assignment whose deadline passed
+-- flips to 'missed' (one pass, all rows). A soft deadline — a missed
+-- assignment can still be solved later (finish flips missed → done); "late"
+-- is derivable at read time (finished_at > due_at).
+UPDATE assignments
+SET status = 'missed'
+WHERE status = 'scheduled' AND due_at IS NOT NULL AND due_at <= $1;

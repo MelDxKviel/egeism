@@ -77,6 +77,10 @@ export interface AttemptReviewItem {
 export interface AssignmentCard {
   id: string; test_id: string; title: string; kind: TestKind; subject_id: string;
   scheduled_at: string; notified_at?: string; status: string; task_count: number;
+  // Optional deadline (absent = no deadline, self-paced). The UI marks an
+  // assignment overdue when due_at < now and still unsolved, "late" when
+  // solved after due_at.
+  due_at?: string;
   // Result of the latest finished attempt (the assigned test's history): present
   // only once solved. finished_at is the reliable "was it solved" signal.
   attempt_id?: string; finished_at?: string; correct: number; total: number;
@@ -94,7 +98,7 @@ export interface NotificationItem {
   id: string; kind: NotificationKind; assignment_id: string;
   test_id: string; test_title: string; subject_id: string;
   student_id: string; student_name: string;
-  scheduled_at: string; assignment_status: string;
+  scheduled_at: string; due_at?: string; assignment_status: string;
   subject_user_id?: string; subject_user_name?: string;
   read_at?: string; created_at: string;
 }
@@ -300,8 +304,20 @@ export const api = {
   // Assign to one student OR fan out to a whole class (exactly one target).
   // individual=true generates every target their own random variant of the
   // picked test (same numbers, random bank tasks) — the anti-cheating mode.
-  createAssignment: (test_id: string, target: { student_id?: string; class_id?: string }, scheduled_at: string, notify = true, individual = false) =>
-    req<{ created: number }>("POST", "/api/admin/assignments", { test_id, ...target, scheduled_at, notify, individual }),
+  // due_at is the optional deadline (absent = no deadline); must be after
+  // scheduled_at.
+  createAssignment: (
+    test_id: string,
+    target: { student_id?: string; class_id?: string },
+    scheduled_at: string,
+    opts: { notify?: boolean; individual?: boolean; due_at?: string } = {},
+  ) =>
+    req<{ created: number }>("POST", "/api/admin/assignments", {
+      test_id, ...target, scheduled_at,
+      notify: opts.notify ?? true,
+      individual: opts.individual ?? false,
+      ...(opts.due_at ? { due_at: opts.due_at } : {}),
+    }),
 };
 
 // --- hooks ---

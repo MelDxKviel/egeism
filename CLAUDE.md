@@ -196,6 +196,19 @@ assignment `scheduled → done` (shown as «решён ✓»). The assign form's
 в Telegram» toggle is real: `notify=false` pre-stamps `notified_at` so neither
 the queue nor the worker sweep ever messages the student.
 
+**Deadlines (срок сдачи):** `assignments.due_at` (nullable timestamptz,
+migration 00008) is the optional deadline the teacher sets in the assign form
+(«Срок сдачи» + quick presets +1/+3/+7 дней; NULL = no deadline, self-paced,
+validated `due_at > scheduled_at`). The deadline is **soft**: the worker's
+per-minute `SweepOverdueAssignments` flips still-`scheduled` assignments whose
+`due_at` passed to `missed` (partial index `idx_assignments_overdue`), but a
+missed assignment stays solvable — finishing it flips `missed → done` and
+"late" is derived at read time (`finished_at > due_at`). The UI computes
+overdue defensively (`due_at < now && unsolved`, regardless of the status flag
+which may lag the sweep up to a minute): a red «просрочен» pill, an orange
+«с опозданием» pill when solved late, a green «вовремя» when on time. The bell
+notification and the Telegram assignment message carry «сдать до …» when set.
+
 **In-app notifications (the header bell):** a `notifications` table (migration
 00004) records assignment events — `assignment_created` for the student when
 the teacher assigns (always, independent of the Telegram toggle), and
@@ -369,7 +382,10 @@ unsupported `<text>`, degrades to alt text instead of an invisible strip), and
 WebP/BMP/TIFF rasters decode too; web buttons «PDF для ученика» / «PDF с
 ответами» on the test detail page — never hand the answers file to a student),
 and password recovery (the login eye toggle + «забыл пароль» → teacher/admin
-bell notification → one-hour one-time reset link, see the auth section).
+bell notification → one-hour one-time reset link, see the auth section), and
+optional assignment deadlines (soft `due_at` — the overdue sweep flips
+unsolved ones to `missed`, but they stay solvable; red/orange/green pills in
+the lists + «сдать до …» in the bell and Telegram message).
 TODO: run/validate the Python fetcher against live РЕШУ/FIPI (it's a template),
 Telegram deep-link handoff, LLM-assisted answers + progressive hints
 (part-2), real ФИПИ primary→test score tables.

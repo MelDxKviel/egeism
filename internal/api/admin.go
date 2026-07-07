@@ -418,9 +418,13 @@ type createAssignmentReq struct {
 	TestID uuid.UUID `json:"test_id"`
 	// Exactly one target: a single student (must be the teacher's) or one of
 	// the teacher's classes — the class fans out to every member.
-	StudentID   *uuid.UUID `json:"student_id,omitempty"`
-	ClassID     *uuid.UUID `json:"class_id,omitempty"`
-	ScheduledAt time.Time  `json:"scheduled_at"`
+	StudentID *uuid.UUID `json:"student_id,omitempty"`
+	ClassID   *uuid.UUID `json:"class_id,omitempty"`
+	ScheduledAt time.Time `json:"scheduled_at"`
+	// DueAt is the optional deadline. NULL = no deadline (self-paced). When set
+	// it must be after ScheduledAt, and the worker's overdue sweep flips a
+	// still-unsolved assignment to "missed" once it passes.
+	DueAt *time.Time `json:"due_at,omitempty"`
 	// Notify controls the Telegram notification (design §4.4 toggle). Absent =
 	// true, so older clients keep the previous always-notify behavior.
 	Notify *bool `json:"notify,omitempty"`
@@ -447,6 +451,12 @@ func (s *Server) handleCreateAssignment(w http.ResponseWriter, r *http.Request) 
 	}
 	if (req.StudentID == nil) == (req.ClassID == nil) {
 		writeErr(w, http.StatusBadRequest, "укажи ровно одну цель: student_id или class_id")
+		return
+	}
+	// A deadline before the notify time makes no sense — guard it early so the
+	// whole fan-out is rejected, not just some members.
+	if req.DueAt != nil && !req.DueAt.After(req.ScheduledAt) {
+		writeErr(w, http.StatusBadRequest, "срок сдачи должен быть позже времени назначения")
 		return
 	}
 	test, ok := s.testInScope(w, r, teacher, req.TestID)
@@ -499,7 +509,7 @@ func (s *Server) handleCreateAssignment(w http.ResponseWriter, r *http.Request) 
 				testID = gv.Test.ID
 			}
 		}
-		assignment, err := s.createAssignmentFor(r.Context(), testID, student.ID, teacher.ID, req.ScheduledAt, req.Notify)
+		assignment, err := s.createAssignmentFor(r.Context(), testID, student.ID, teacher.ID, req.ScheduledAt, req.DueAt, req.Notify)
 		if err != nil {
 			// Partial fan-out: log and keep going; report what was created.
 			slog.Warn("create assignment failed mid-fanout", "student", student.ID, "err", err)
@@ -517,8 +527,8 @@ func (s *Server) handleCreateAssignment(w http.ResponseWriter, r *http.Request) 
 
 // createAssignmentFor creates one assignment plus its in-app notification and
 // Telegram scheduling — the single-student unit the class fan-out loops over.
-func (s *Server) createAssignmentFor(ctx context.Context, testID, studentID, teacherID uuid.UUID, at time.Time, notify *bool) (domain.Assignment, error) {
-	assignment, err := s.store.CreateAssignment(ctx, testID, studentID, teacherID, at)
+func (s *Server) createAssignmentFor(ctx context.Context, testID, studentID, teacherID uuid.UUID, at time.Time, dueAt *time.Time, notify *bool) (domain.Assignment, error) {
+	assignment, err := s.store.CreateAssignment(ctx, testID, studentID, teacherID, at, dueAt)
 	if err != nil {
 		return domain.Assignment{}, err
 	}
