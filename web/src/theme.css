@@ -39,6 +39,22 @@ input, select, textarea { font-family: inherit; }
 @keyframes popdown { from { opacity: 0; transform: translateY(-6px) scale(.985); } to { opacity: 1; transform: none; } }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes shim { 0% { background-position: -420px 0; } 100% { background-position: 420px 0; } }
+
+/* Motivational motion — celebrate a correct answer and let an active streak
+   flame flicker. Kept subtle and switched off under prefers-reduced-motion. */
+@keyframes celebrate { 0% { opacity: 0; transform: scale(.92); } 55% { opacity: 1; transform: scale(1.03); } 100% { transform: scale(1); } }
+@keyframes checkpop { 0% { transform: scale(0); } 60% { transform: scale(1.25); } 100% { transform: scale(1); } }
+@keyframes flamelive { 0%, 100% { transform: scale(1) rotate(-1deg); } 30% { transform: scale(1.08, .96) rotate(1.5deg); } 60% { transform: scale(.95, 1.06) rotate(-2deg); } }
+.celebrate { animation: celebrate .42s cubic-bezier(.2,1.25,.5,1) both; }
+.checkpop { animation: checkpop .5s cubic-bezier(.2,1.4,.5,1) both; transform-origin: center; }
+/* The glow rides in a currentColor drop-shadow, so the flame burns in whatever
+   token color it inherits (the accent pill) and needs no extra element. */
+.flame-live { animation: flamelive 1.7s ease-in-out infinite; transform-origin: 50% 85%; filter: drop-shadow(0 0 3px currentColor); }
+
+@media (prefers-reduced-motion: reduce) {
+  .fade, .popdown, .skel, .celebrate, .checkpop, .flame-live { animation: none !important; }
+}
+
 .fade { animation: fade .3s ease both; }
 /* Anchored dropdown (the notifications popover) — drops in from just under its
    trigger. transform-origin is set inline so it scales from the right edge. */
