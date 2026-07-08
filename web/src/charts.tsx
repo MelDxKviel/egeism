@@ -20,10 +20,11 @@ export function ScoreGauge({ score, max = 100 }: { score: number; max?: number }
           <path d={`M ${sx} ${sy} A ${r} ${r} 0 0 1 ${ex} ${ey}`} fill="none" stroke={accColor((score / max) * 100)} strokeWidth={12} strokeLinecap="round" />
         )}
       </svg>
-      <div style={{ position: "absolute", inset: 0, top: 22, textAlign: "center" }}>
-        <div className="mono" style={{ fontSize: 46, fontWeight: 800, lineHeight: 1 }}>{score}</div>
-        <div className="mono" style={{ fontSize: 12, color: "var(--text-3)" }}>из {max}</div>
-      </div>
+      {/* The number sits ON the arc's baseline (cy=96), well clear of the apex
+          (y=18): digits end at y≈92, «из N» tucks under the baseline. A top-
+          anchored block used to shove the digits into the arc. */}
+      <div className="mono" style={{ position: "absolute", left: 0, right: 0, bottom: 24, textAlign: "center", fontSize: 42, fontWeight: 800, lineHeight: 1 }}>{score}</div>
+      <div className="mono" style={{ position: "absolute", left: 0, right: 0, bottom: 6, textAlign: "center", fontSize: 12, color: "var(--text-3)" }}>из {max}</div>
     </div>
   );
 }
