@@ -288,6 +288,68 @@ func (s *Store) assembleVariant(ctx context.Context, subjectID uuid.UUID, kind d
 	return GeneratedVariant{Test: toDomainTest(test), TaskCount: len(taskIDs)}, nil
 }
 
+// SelfVariants lists the student's own generated пробники for a subject
+// (newest first), each with its task count and — once solved — the latest
+// finished attempt's score. The hidden __practice__ test never shows here.
+func (s *Store) SelfVariants(ctx context.Context, studentID, subjectID uuid.UUID, limit int) ([]domain.SelfVariant, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	rows, err := s.q.SelfVariantsForStudent(ctx, sqlc.SelfVariantsForStudentParams{
+		StudentID: studentID, SubjectID: subjectID, Lim: int32(limit),
+	})
+	if err != nil {
+		return nil, mapErr(err)
+	}
+	out := make([]domain.SelfVariant, 0, len(rows))
+	for _, r := range rows {
+		v := domain.SelfVariant{
+			ID:         r.ID,
+			SubjectID:  r.SubjectID,
+			Kind:       domain.TestKind(r.Kind),
+			Title:      r.Title,
+			CreatedAt:  r.CreatedAt,
+			TaskCount:  r.TaskCount,
+			FinishedAt: r.FinishedAt,
+			Correct:    r.Correct,
+			Total:      r.Total,
+		}
+		// The query folds a missing attempt to the zero uuid (sqlc can't type a
+		// LEFT-JOINed PK as nullable); map it back to nil here.
+		if r.AttemptID != uuid.Nil {
+			id := r.AttemptID
+			v.AttemptID = &id
+		}
+		out = append(out, v)
+	}
+	return out, nil
+}
+
+// CountSelfClassicTests counts the пробники a student generated for a subject —
+// numbers the next default title.
+func (s *Store) CountSelfClassicTests(ctx context.Context, studentID, subjectID uuid.UUID) (int, error) {
+	n, err := s.q.CountSelfClassicTests(ctx, sqlc.CountSelfClassicTestsParams{
+		CreatedBy: studentID, SubjectID: subjectID,
+	})
+	if err != nil {
+		return 0, mapErr(err)
+	}
+	return int(n), nil
+}
+
+// CountUnsolvedSelfVariants counts the student's generated-but-never-finished
+// пробники for a subject. The generation cap uses this, so solving a пробник
+// always unlocks another — the count self-heals.
+func (s *Store) CountUnsolvedSelfVariants(ctx context.Context, studentID, subjectID uuid.UUID) (int, error) {
+	n, err := s.q.CountUnsolvedSelfVariants(ctx, sqlc.CountUnsolvedSelfVariantsParams{
+		CreatedBy: studentID, SubjectID: subjectID,
+	})
+	if err != nil {
+		return 0, mapErr(err)
+	}
+	return int(n), nil
+}
+
 func toDomainTest(t sqlc.Test) domain.Test {
 	return domain.Test{
 		ID:        t.ID,

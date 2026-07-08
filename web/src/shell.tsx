@@ -19,6 +19,7 @@ function useIsMobile() {
 
 const STUDENT_NAV: { v: View; label: string; icon: IconName }[] = [
   { v: "dashboard", label: "Дашборд", icon: "dashboard" },
+  { v: "train", label: "Тренировка", icon: "dumbbell" },
   { v: "subject", label: "Предмет", icon: "target" },
   { v: "history", label: "История", icon: "history" },
   { v: "profile", label: "Профиль", icon: "user" },

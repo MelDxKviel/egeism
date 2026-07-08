@@ -31,8 +31,10 @@ LIMIT $3;
 -- name: PracticeTasks :many
 -- Active tasks for a subject that the student has NOT yet solved correctly
 -- `mastered` times — so mastered tasks stop repeating in practice. Random order.
+-- An optional number narrows the pool to one задание (the server-side drill).
 SELECT t.* FROM tasks t
 WHERE t.subject_id = sqlc.arg('subject_id') AND t.status = 'active'
+  AND (sqlc.narg('number')::int IS NULL OR t.number = sqlc.narg('number'))
   AND (
     SELECT count(*) FROM answers a
     JOIN attempts att ON att.id = a.attempt_id
@@ -40,6 +42,58 @@ WHERE t.subject_id = sqlc.arg('subject_id') AND t.status = 'active'
   ) < sqlc.arg('mastered')::bigint
 ORDER BY random()
 LIMIT sqlc.arg('lim');
+
+-- name: MistakeTasks :many
+-- «Работа над ошибками»: active tasks whose LATEST answer by this student is
+-- wrong — answering one correctly (anywhere) drops it out of the queue.
+-- Oldest mistakes first, so nothing rots at the bottom.
+SELECT t.* FROM tasks t
+JOIN LATERAL (
+    SELECT a.is_correct, a.answered_at
+    FROM answers a
+    JOIN attempts att ON att.id = a.attempt_id
+    WHERE att.student_id = sqlc.arg('student_id') AND a.task_id = t.id
+    ORDER BY a.answered_at DESC
+    LIMIT 1
+) last ON NOT last.is_correct
+WHERE t.subject_id = sqlc.arg('subject_id') AND t.status = 'active'
+ORDER BY last.answered_at
+LIMIT sqlc.arg('lim');
+
+-- name: CountMistakeTasks :one
+-- Size of the «работа над ошибками» queue (the dashboard badge).
+SELECT count(*) FROM tasks t
+JOIN LATERAL (
+    SELECT a.is_correct
+    FROM answers a
+    JOIN attempts att ON att.id = a.attempt_id
+    WHERE att.student_id = sqlc.arg('student_id') AND a.task_id = t.id
+    ORDER BY a.answered_at DESC
+    LIMIT 1
+) last ON NOT last.is_correct
+WHERE t.subject_id = sqlc.arg('subject_id') AND t.status = 'active';
+
+-- name: PracticeNumbers :many
+-- The student's training map: per задание-номер, how many active tasks the bank
+-- holds, how many of those the student has mastered (solved correctly >=
+-- `mastered` times), and their lifetime answer accuracy on the number. Numbers
+-- whose tasks are all inactive still show as long as the rows exist, so history
+-- never disappears from the map.
+SELECT t.number,
+       COUNT(*) FILTER (WHERE t.status = 'active')::bigint AS bank_active,
+       COUNT(*) FILTER (WHERE t.status = 'active' AND st.correct_cnt >= sqlc.arg('mastered')::bigint)::bigint AS mastered,
+       COALESCE(SUM(st.total_cnt), 0)::bigint   AS answers_total,
+       COALESCE(SUM(st.correct_cnt), 0)::bigint AS answers_correct
+FROM tasks t
+LEFT JOIN LATERAL (
+    SELECT count(*) AS total_cnt, count(*) FILTER (WHERE a.is_correct) AS correct_cnt
+    FROM answers a
+    JOIN attempts att ON att.id = a.attempt_id
+    WHERE a.task_id = t.id AND att.student_id = sqlc.arg('student_id')
+) st ON TRUE
+WHERE t.subject_id = sqlc.arg('subject_id')
+GROUP BY t.number
+ORDER BY t.number;
 
 -- name: UpdateTaskAnswer :one
 UPDATE tasks SET answer_schema = $2 WHERE id = $1 RETURNING *;

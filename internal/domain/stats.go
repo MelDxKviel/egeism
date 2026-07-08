@@ -90,6 +90,32 @@ type AttemptSummary struct {
 	TimeMS     int64      `json:"time_ms"`
 }
 
+// PracticeNumber is one row of the student's training map: per задание-номер,
+// what the bank offers and how far the student got. Mastered counts active
+// tasks solved correctly enough times to leave the practice pool.
+type PracticeNumber struct {
+	Number         int   `json:"number"`
+	BankActive     int64 `json:"bank_active"`
+	Mastered       int64 `json:"mastered"`
+	AnswersTotal   int64 `json:"answers_total"`
+	AnswersCorrect int64 `json:"answers_correct"`
+}
+
+// SelfVariant is a пробник the student generated for themselves, with the
+// latest finished attempt's score once solved (AttemptID/FinishedAt nil until).
+type SelfVariant struct {
+	ID         uuid.UUID  `json:"id"`
+	SubjectID  uuid.UUID  `json:"subject_id"`
+	Kind       TestKind   `json:"kind"`
+	Title      string     `json:"title"`
+	CreatedAt  time.Time  `json:"created_at"`
+	TaskCount  int64      `json:"task_count"`
+	AttemptID  *uuid.UUID `json:"attempt_id,omitempty"`
+	FinishedAt *time.Time `json:"finished_at,omitempty"`
+	Correct    int64      `json:"correct"`
+	Total      int64      `json:"total"`
+}
+
 // MasteryPoint is one (number, week) success bucket for the mastery line.
 type MasteryPoint struct {
 	Number  int       `json:"number"`

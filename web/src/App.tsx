@@ -4,13 +4,14 @@ import { Shell } from "./shell";
 import { Login } from "./Login";
 import { ResetPasswordPage } from "./reset";
 import { Dashboard, SubjectScreen, Solve, History } from "./student";
+import { TrainingHub } from "./train";
 import { TeacherDashboard, ClassPage, StudentStatsPage, Builder, Assign, Bank, TestDetailPage } from "./teacher";
 import { AdminStats, AdminUsers } from "./admin";
 import { ProfilePage } from "./profile";
 import { Loading } from "./ui";
 
 const TITLES: Record<string, string> = {
-  dashboard: "Дашборд", subject: "Предмет", solve: "Решение", results: "Итоги", history: "История",
+  dashboard: "Дашборд", train: "Тренировка", subject: "Предмет", solve: "Решение", results: "Итоги", history: "История",
   "t-dashboard": "Ученики и классы", "t-class": "Класс", "t-student": "Ученик",
   "t-builder": "Конструктор тестов",
   "t-test": "Просмотр теста", "t-assign": "Назначение", "t-bank": "Банк задач",
@@ -47,6 +48,7 @@ export default function App() {
   let screen: React.ReactNode;
   switch (view) {
     case "dashboard": screen = <Dashboard />; break;
+    case "train": screen = <TrainingHub />; break;
     case "subject": screen = <SubjectScreen />; break;
     case "solve": case "results": screen = <Solve />; break;
     case "history": screen = <History />; break;
