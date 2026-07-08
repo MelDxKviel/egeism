@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Role, SubjectCode, User, api, setToken, clearToken, hasToken } from "./api";
 
 export type View =
-  | "dashboard" | "subject" | "solve" | "results" | "history"
+  | "dashboard" | "train" | "subject" | "solve" | "results" | "history"
   | "t-dashboard" | "t-class" | "t-student" | "t-builder" | "t-assign" | "t-bank" | "t-test"
   | "a-stats" | "a-users"
   | "profile";
@@ -37,7 +37,7 @@ const homeView = (r: Role): View =>
 // Nav tabs that are safe to restore after a reload (solve/results and the
 // detail pages are excluded — their handoff state doesn't survive a refresh).
 const RESTORABLE: Record<Role, View[]> = {
-  student: ["dashboard", "subject", "history", "profile"],
+  student: ["dashboard", "train", "subject", "history", "profile"],
   teacher: ["t-dashboard", "t-builder", "t-assign", "t-bank", "profile"],
   admin: ["a-stats", "a-users", "profile"],
 };

@@ -109,6 +109,23 @@ export interface Test {
 }
 export interface TestDetail { test: Test; tasks: Task[]; }
 
+// One row of the student's training map: what the bank offers for a номер and
+// how far the student got (mastered = solved correctly enough times to leave
+// the practice pool).
+export interface PracticeNumber {
+  number: number; bank_active: number; mastered: number;
+  answers_total: number; answers_correct: number;
+}
+// The «Тренировка» hub payload: mistake-queue size + per-номер map.
+export interface PracticeOverview { subject: SubjectCode; mistakes: number; numbers: PracticeNumber[]; }
+// The «умная тренировка» session: tasks plus a breakdown for the context line.
+export interface RecommendedSet { tasks: TaskView[]; mistakes: number; weak_numbers: number[]; }
+// A пробник the student generated for themselves; attempt fields appear once solved.
+export interface SelfVariant {
+  id: string; subject_id: string; kind: TestKind; title: string; created_at: string;
+  task_count: number; attempt_id?: string; finished_at?: string; correct: number; total: number;
+}
+
 // Composed builder: one slot = «N заданий номера number».
 export interface VariantSlot { number: number; count: number; }
 // Per-номер bank availability (active = usable in a generated variant).
@@ -254,8 +271,20 @@ export const api = {
   tasks: (q: string) => req<TaskView[]>("GET", `/api/tasks${q}`),
   startPractice: (subject: SubjectCode) =>
     req<{ test_id: string; attempt_id: string }>("POST", "/api/practice", { subject }),
-  practiceTasks: (subject: SubjectCode, limit: number) =>
-    req<TaskView[]>("GET", `/api/practice/tasks?subject=${subject}&limit=${limit}`),
+  // number narrows the pool to one задание — the server-side drill.
+  practiceTasks: (subject: SubjectCode, limit: number, number?: number) =>
+    req<TaskView[]>("GET", `/api/practice/tasks?subject=${subject}&limit=${limit}${number ? `&number=${number}` : ""}`),
+  practiceOverview: (subject: SubjectCode) =>
+    req<PracticeOverview>("GET", `/api/practice/overview?subject=${subject}`),
+  mistakeTasks: (subject: SubjectCode, limit: number) =>
+    req<TaskView[]>("GET", `/api/practice/mistakes?subject=${subject}&limit=${limit}`),
+  recommended: (subject: SubjectCode, limit: number) =>
+    req<RecommendedSet>("GET", `/api/practice/recommended?subject=${subject}&limit=${limit}`),
+  // Generate a пробник for yourself from the existing bank (no external fetch).
+  createSelfVariant: (subject: SubjectCode) =>
+    req<{ test: Test; task_count: number }>("POST", "/api/practice/variant", { subject }),
+  selfVariants: (subject: SubjectCode) =>
+    req<SelfVariant[]>("GET", `/api/practice/variants?subject=${subject}`),
   // Student-safe task list of a composed/assigned test (no answers).
   testTasks: (testId: string) => req<TaskView[]>("GET", `/api/tests/${testId}/tasks`),
   startAttempt: (test_id: string, assignment_id?: string) =>
@@ -373,6 +402,11 @@ export const useNotifications = (uid: string) =>
   });
 export const useAttempts = (sid: string) =>
   useQuery({ queryKey: ["attempts", sid], queryFn: () => api.attempts(sid), enabled: !!sid });
+// Keyed by the acting user id so a logout→login never shows another student's map.
+export const usePracticeOverview = (uid: string, s: SubjectCode) =>
+  useQuery({ queryKey: ["practice-overview", uid, s], queryFn: () => api.practiceOverview(s), enabled: !!uid });
+export const useSelfVariants = (uid: string, s: SubjectCode) =>
+  useQuery({ queryKey: ["self-variants", uid, s], queryFn: () => api.selfVariants(s), enabled: !!uid });
 export const useAdminTasks = (q: string) =>
   useQuery({ queryKey: ["admin-tasks", q], queryFn: () => api.adminTasks(q) });
 export const useTests = (subject?: SubjectCode) =>

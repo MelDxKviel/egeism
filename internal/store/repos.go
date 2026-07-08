@@ -329,18 +329,74 @@ func (s *Store) TaskCountsByNumber(ctx context.Context, subjectID uuid.UUID) ([]
 
 // PracticeTasks returns active tasks for a subject the student hasn't mastered
 // (solved correctly < `mastered` times), in random order — so mastered tasks
-// stop repeating in practice.
-func (s *Store) PracticeTasks(ctx context.Context, studentID, subjectID uuid.UUID, mastered, limit int) ([]domain.Task, error) {
+// stop repeating in practice. A non-nil number narrows the pool to one задание
+// (the server-side drill).
+func (s *Store) PracticeTasks(ctx context.Context, studentID, subjectID uuid.UUID, number *int, mastered, limit int) ([]domain.Task, error) {
 	if limit <= 0 {
 		limit = 15
 	}
+	var num *int32
+	if number != nil {
+		n := int32(*number)
+		num = &n
+	}
 	rows, err := s.q.PracticeTasks(ctx, sqlc.PracticeTasksParams{
-		SubjectID: subjectID, StudentID: studentID, Mastered: int64(mastered), Lim: int32(limit),
+		SubjectID: subjectID, Number: num, StudentID: studentID, Mastered: int64(mastered), Lim: int32(limit),
 	})
 	if err != nil {
 		return nil, mapErr(err)
 	}
 	return toDomainTasks(rows)
+}
+
+// MistakeTasks returns the student's «работа над ошибками» queue for a subject:
+// active tasks whose latest answer is wrong, oldest mistakes first. Answering a
+// task correctly (anywhere) removes it from the queue.
+func (s *Store) MistakeTasks(ctx context.Context, studentID, subjectID uuid.UUID, limit int) ([]domain.Task, error) {
+	if limit <= 0 {
+		limit = 15
+	}
+	rows, err := s.q.MistakeTasks(ctx, sqlc.MistakeTasksParams{
+		StudentID: studentID, SubjectID: subjectID, Lim: int32(limit),
+	})
+	if err != nil {
+		return nil, mapErr(err)
+	}
+	return toDomainTasks(rows)
+}
+
+// CountMistakeTasks returns the size of the student's mistake queue for a
+// subject (the dashboard badge).
+func (s *Store) CountMistakeTasks(ctx context.Context, studentID, subjectID uuid.UUID) (int, error) {
+	n, err := s.q.CountMistakeTasks(ctx, sqlc.CountMistakeTasksParams{
+		StudentID: studentID, SubjectID: subjectID,
+	})
+	if err != nil {
+		return 0, mapErr(err)
+	}
+	return int(n), nil
+}
+
+// PracticeNumbers returns the student's training map for a subject: per номер,
+// bank availability, how many active tasks they mastered, and lifetime accuracy.
+func (s *Store) PracticeNumbers(ctx context.Context, studentID, subjectID uuid.UUID, mastered int) ([]domain.PracticeNumber, error) {
+	rows, err := s.q.PracticeNumbers(ctx, sqlc.PracticeNumbersParams{
+		Mastered: int64(mastered), StudentID: studentID, SubjectID: subjectID,
+	})
+	if err != nil {
+		return nil, mapErr(err)
+	}
+	out := make([]domain.PracticeNumber, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, domain.PracticeNumber{
+			Number:         int(r.Number),
+			BankActive:     r.BankActive,
+			Mastered:       r.Mastered,
+			AnswersTotal:   r.AnswersTotal,
+			AnswersCorrect: r.AnswersCorrect,
+		})
+	}
+	return out, nil
 }
 
 func (s *Store) SetTaskStatus(ctx context.Context, id uuid.UUID, status domain.TaskStatus) (domain.Task, error) {

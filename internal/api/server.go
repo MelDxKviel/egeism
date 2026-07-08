@@ -107,9 +107,16 @@ func (s *Server) Router() http.Handler {
 			r.Delete("/classes/{classID}/members/{studentID}", s.handleRemoveClassMember)
 			r.Get("/classes/{classID}/overview", s.handleClassOverview)
 
-			// Student solve flow (§6 WS-A).
+			// Student solve flow (§6 WS-A) + self-study: the training hub
+			// (per-номер map + mistake queue), server-side drills, smart
+			// sessions and self-generated пробники.
 			r.Post("/practice", s.handleStartPractice)
 			r.Get("/practice/tasks", s.handlePracticeTasks)
+			r.Get("/practice/overview", s.handlePracticeOverview)
+			r.Get("/practice/mistakes", s.handleMistakeTasks)
+			r.Get("/practice/recommended", s.handleRecommendedTasks)
+			r.Post("/practice/variant", s.handleCreateSelfVariant)
+			r.Get("/practice/variants", s.handleListSelfVariants)
 			r.Get("/tests/{testID}/tasks", s.handleListTestTasks) // student-safe: solve an assigned variant
 			r.Post("/attempts", s.handleStartAttempt)
 			r.Post("/attempts/{attemptID}/answers", s.handleSubmitAnswer)

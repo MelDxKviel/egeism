@@ -34,6 +34,32 @@ func (q *Queries) ActivateDraftTaskBySource(ctx context.Context, arg ActivateDra
 	return result.RowsAffected(), nil
 }
 
+const countMistakeTasks = `-- name: CountMistakeTasks :one
+SELECT count(*) FROM tasks t
+JOIN LATERAL (
+    SELECT a.is_correct
+    FROM answers a
+    JOIN attempts att ON att.id = a.attempt_id
+    WHERE att.student_id = $1 AND a.task_id = t.id
+    ORDER BY a.answered_at DESC
+    LIMIT 1
+) last ON NOT last.is_correct
+WHERE t.subject_id = $2 AND t.status = 'active'
+`
+
+type CountMistakeTasksParams struct {
+	StudentID uuid.UUID `json:"student_id"`
+	SubjectID uuid.UUID `json:"subject_id"`
+}
+
+// Size of the «работа над ошибками» queue (the dashboard badge).
+func (q *Queries) CountMistakeTasks(ctx context.Context, arg CountMistakeTasksParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countMistakeTasks, arg.StudentID, arg.SubjectID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countTasksBySubject = `-- name: CountTasksBySubject :one
 SELECT COUNT(*) FROM tasks WHERE subject_id = $1
 `
@@ -193,20 +219,139 @@ func (q *Queries) ListTasks(ctx context.Context, arg ListTasksParams) ([]Task, e
 	return items, nil
 }
 
+const mistakeTasks = `-- name: MistakeTasks :many
+SELECT t.id, t.subject_id, t.number, t.statement, t.media, t.answer_schema, t.source, t.status, t.created_at FROM tasks t
+JOIN LATERAL (
+    SELECT a.is_correct, a.answered_at
+    FROM answers a
+    JOIN attempts att ON att.id = a.attempt_id
+    WHERE att.student_id = $1 AND a.task_id = t.id
+    ORDER BY a.answered_at DESC
+    LIMIT 1
+) last ON NOT last.is_correct
+WHERE t.subject_id = $2 AND t.status = 'active'
+ORDER BY last.answered_at
+LIMIT $3
+`
+
+type MistakeTasksParams struct {
+	StudentID uuid.UUID `json:"student_id"`
+	SubjectID uuid.UUID `json:"subject_id"`
+	Lim       int32     `json:"lim"`
+}
+
+// «Работа над ошибками»: active tasks whose LATEST answer by this student is
+// wrong — answering one correctly (anywhere) drops it out of the queue.
+// Oldest mistakes first, so nothing rots at the bottom.
+func (q *Queries) MistakeTasks(ctx context.Context, arg MistakeTasksParams) ([]Task, error) {
+	rows, err := q.db.Query(ctx, mistakeTasks, arg.StudentID, arg.SubjectID, arg.Lim)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Task{}
+	for rows.Next() {
+		var i Task
+		if err := rows.Scan(
+			&i.ID,
+			&i.SubjectID,
+			&i.Number,
+			&i.Statement,
+			&i.Media,
+			&i.AnswerSchema,
+			&i.Source,
+			&i.Status,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const practiceNumbers = `-- name: PracticeNumbers :many
+SELECT t.number,
+       COUNT(*) FILTER (WHERE t.status = 'active')::bigint AS bank_active,
+       COUNT(*) FILTER (WHERE t.status = 'active' AND st.correct_cnt >= $1::bigint)::bigint AS mastered,
+       COALESCE(SUM(st.total_cnt), 0)::bigint   AS answers_total,
+       COALESCE(SUM(st.correct_cnt), 0)::bigint AS answers_correct
+FROM tasks t
+LEFT JOIN LATERAL (
+    SELECT count(*) AS total_cnt, count(*) FILTER (WHERE a.is_correct) AS correct_cnt
+    FROM answers a
+    JOIN attempts att ON att.id = a.attempt_id
+    WHERE a.task_id = t.id AND att.student_id = $2
+) st ON TRUE
+WHERE t.subject_id = $3
+GROUP BY t.number
+ORDER BY t.number
+`
+
+type PracticeNumbersParams struct {
+	Mastered  int64     `json:"mastered"`
+	StudentID uuid.UUID `json:"student_id"`
+	SubjectID uuid.UUID `json:"subject_id"`
+}
+
+type PracticeNumbersRow struct {
+	Number         int32 `json:"number"`
+	BankActive     int64 `json:"bank_active"`
+	Mastered       int64 `json:"mastered"`
+	AnswersTotal   int64 `json:"answers_total"`
+	AnswersCorrect int64 `json:"answers_correct"`
+}
+
+// The student's training map: per задание-номер, how many active tasks the bank
+// holds, how many of those the student has mastered (solved correctly >=
+// `mastered` times), and their lifetime answer accuracy on the number. Numbers
+// whose tasks are all inactive still show as long as the rows exist, so history
+// never disappears from the map.
+func (q *Queries) PracticeNumbers(ctx context.Context, arg PracticeNumbersParams) ([]PracticeNumbersRow, error) {
+	rows, err := q.db.Query(ctx, practiceNumbers, arg.Mastered, arg.StudentID, arg.SubjectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []PracticeNumbersRow{}
+	for rows.Next() {
+		var i PracticeNumbersRow
+		if err := rows.Scan(
+			&i.Number,
+			&i.BankActive,
+			&i.Mastered,
+			&i.AnswersTotal,
+			&i.AnswersCorrect,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const practiceTasks = `-- name: PracticeTasks :many
 SELECT t.id, t.subject_id, t.number, t.statement, t.media, t.answer_schema, t.source, t.status, t.created_at FROM tasks t
 WHERE t.subject_id = $1 AND t.status = 'active'
+  AND ($2::int IS NULL OR t.number = $2)
   AND (
     SELECT count(*) FROM answers a
     JOIN attempts att ON att.id = a.attempt_id
-    WHERE att.student_id = $2 AND a.task_id = t.id AND a.is_correct
-  ) < $3::bigint
+    WHERE att.student_id = $3 AND a.task_id = t.id AND a.is_correct
+  ) < $4::bigint
 ORDER BY random()
-LIMIT $4
+LIMIT $5
 `
 
 type PracticeTasksParams struct {
 	SubjectID uuid.UUID `json:"subject_id"`
+	Number    *int32    `json:"number"`
 	StudentID uuid.UUID `json:"student_id"`
 	Mastered  int64     `json:"mastered"`
 	Lim       int32     `json:"lim"`
@@ -214,9 +359,11 @@ type PracticeTasksParams struct {
 
 // Active tasks for a subject that the student has NOT yet solved correctly
 // `mastered` times — so mastered tasks stop repeating in practice. Random order.
+// An optional number narrows the pool to one задание (the server-side drill).
 func (q *Queries) PracticeTasks(ctx context.Context, arg PracticeTasksParams) ([]Task, error) {
 	rows, err := q.db.Query(ctx, practiceTasks,
 		arg.SubjectID,
+		arg.Number,
 		arg.StudentID,
 		arg.Mastered,
 		arg.Lim,

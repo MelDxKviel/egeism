@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   api, SubjectCode, TaskView, DayAnswer, AssignmentCard, AttemptReviewItem, useForecast, useHeatmap, useWeakSpots,
-  useMastery, useMasterySeries, useAssignments, useAttempts, useInvalidate,
+  useMastery, useMasterySeries, useAssignments, useAttempts, useInvalidate, usePracticeOverview,
 } from "./api";
 import { useApp } from "./state";
 import { Card, Label, Pill, Button, Async, Empty, Loading, Modal, accColor, SUBJECT_TITLES, testTitle, MediaBlock, StatementView, AttemptReviewGrid } from "./ui";
@@ -27,13 +27,16 @@ export function StreakBadge({ days }: { days: number }) {
   </span>;
 }
 
-// Solve request handoff (set before navigating to the solve view). Two modes:
-// free practice (subject [+ number] — tasks come from the practice pool) and an
-// assigned/composed test (testId — tasks are exactly the variant's items, and
-// assignmentId marks the assignment done on finish).
+// Solve request handoff (set before navigating to the solve view). Modes:
+// free practice (subject — random unmastered tasks), a drill (+number — one
+// задание, server-filtered), mode:"mistakes" (the wrong-answer queue),
+// mode:"recommended" (the smart mix: ошибки → слабые номера → новое), and a
+// test (testId — tasks are exactly the variant's items; assignmentId, when it
+// came from a teacher, marks the assignment done on finish).
 export interface SolveRequest {
   subject: SubjectCode;
   number?: number;
+  mode?: "mistakes" | "recommended";
   testId?: string;
   assignmentId?: string;
   title?: string;
@@ -52,9 +55,9 @@ const grid12 = { display: "grid", gap: "var(--gap)", gridTemplateColumns: "repea
 // «как решил» drill-down. It owns the modal, so a screen just renders `modal` and
 // calls `open(card)`. Shared by the dashboard's assigned cards and the History
 // screen's assigned-tests list.
-function useAttemptReview() {
+export function useAttemptReview() {
   const [review, setReview] = useState<{ title: string; items: AttemptReviewItem[] } | null>(null);
-  const open = async (card: AssignmentCard) => {
+  const open = async (card: { attempt_id?: string; title: string }) => {
     if (!card.attempt_id) return;
     const title = testTitle(card.title);
     try { const items = await api.attemptReview(card.attempt_id); setReview({ title, items }); }
@@ -124,10 +127,13 @@ export function Dashboard() {
   const heat = useHeatmap(sid);
   const weak = useWeakSpots(sid, subject);
   const assignments = useAssignments(sid);
+  const overview = usePracticeOverview(sid, subject);
   const { open: openReview, modal: reviewModal } = useAttemptReview();
 
   const startPractice = () => { requestSolve({ subject }); go("solve"); };
-  const drill = (n: number) => { requestSolve({ subject, number: n }); go("solve"); };
+  const startMistakes = () => { requestSolve({ subject, mode: "mistakes", title: "Работа над ошибками" }); go("solve"); };
+  const startRecommended = () => { requestSolve({ subject, mode: "recommended", title: "Умная тренировка" }); go("solve"); };
+  const drill = (n: number) => { requestSolve({ subject, number: n, title: `Тренировка №${n}` }); go("solve"); };
   const solveAssigned = (a: AssignmentCard) => {
     requestSolve({ subject, testId: a.test_id, assignmentId: a.id, title: testTitle(a.title) });
     go("solve");
@@ -158,6 +164,22 @@ export function Dashboard() {
           <Async q={heat}>{(h) => <Heatmap cells={h} onDay={() => go("history")} />}</Async>
           <div style={{ color: "var(--text-3)", fontSize: 12, marginTop: 10 }}>Клетки — активность по дням. Открой историю для разбора.</div>
         </Card>
+
+        <Card>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+            <Label>Тренировка</Label>
+            <Button variant="ghost" style={{ padding: "6px 12px", fontSize: 13 }} onClick={() => go("train")}>Все тренировки</Button>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <div style={{ color: "var(--text-2)", fontSize: 13, lineHeight: 1.45 }}>
+              Умная тренировка соберёт сессию под тебя: сначала ошибки, потом слабые номера, потом новое.
+            </div>
+            <Button onClick={startRecommended}>Умная тренировка</Button>
+            <Async q={overview}>{(o) => o.mistakes > 0
+              ? <Button variant="soft" onClick={startMistakes}>Работа над ошибками · {o.mistakes}</Button>
+              : <div style={{ color: "var(--text-3)", fontSize: 12 }}>Ошибок на разбор нет — так держать!</div>}</Async>
+          </div>
+        </Card>
       </div>
 
       <div style={grid12}>
@@ -184,7 +206,7 @@ export function SubjectScreen() {
   const series = useMasterySeries(sid, subject);
   const [open, setOpen] = useState<number | null>(null);
 
-  const drill = (n: number) => { requestSolve({ subject, number: n }); go("solve"); };
+  const drill = (n: number) => { requestSolve({ subject, number: n, title: `Тренировка №${n}` }); go("solve"); };
   const seriesByNumber = useMemo(() => {
     const m = new Map<number, number[]>();
     (series.data || []).forEach((p) => {
@@ -291,11 +313,21 @@ export function Solve() {
           setAttemptId(att.id); setTasks(list);
         } else {
           const { attempt_id } = await api.startPractice(req.subject);
-          // practiceTasks excludes tasks the student already mastered (solved
-          // correctly ≥2×), so they don't repeat. Drill pulls more, then filters.
-          let list = await api.practiceTasks(req.subject, req.number ? 60 : 20);
-          if (req.number) list = list.filter((t) => t.number === req.number);
-          if (list.length === 0) { setErr(req.number ? "Ты уже освоил все задания этого номера — молодец!" : "Пока нет новых заданий: либо всё освоено, либо банк пуст. Учитель может собрать вариант — он подтянет задания."); setLoading(false); return; }
+          // The pools are assembled server-side and all exclude what's already
+          // mastered (solved correctly ≥2×): the mistake queue, the smart mix,
+          // the per-номер drill, or free practice across the subject.
+          let list: TaskView[];
+          if (req.mode === "mistakes") list = await api.mistakeTasks(req.subject, 15);
+          else if (req.mode === "recommended") list = (await api.recommended(req.subject, 12)).tasks;
+          else list = await api.practiceTasks(req.subject, req.number ? 15 : 20, req.number);
+          if (list.length === 0) {
+            setErr(req.mode === "mistakes"
+              ? "Ошибок на разбор нет — так держать!"
+              : req.number
+                ? "Ты уже освоил все задания этого номера — молодец!"
+                : "Пока нет новых заданий: либо всё освоено, либо банк пуст. Учитель может собрать вариант — он подтянет задания.");
+            setLoading(false); return;
+          }
           setAttemptId(attempt_id); setTasks(list.slice(0, 15));
         }
         setLoading(false);
@@ -310,6 +342,10 @@ export function Solve() {
     // An assigned test just became "done" — refresh the dashboard feed.
     if (req?.assignmentId) invalidate("assignments");
     invalidate("attempts");
+    // The session just moved the training state: mistakes solved correctly left
+    // the queue, drilled tasks may be mastered now, a пробник got its score.
+    invalidate("practice-overview");
+    invalidate("self-variants");
     setFinished(true);
   };
 

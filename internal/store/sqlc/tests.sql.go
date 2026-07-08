@@ -7,6 +7,7 @@ package sqlc
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -33,6 +34,50 @@ func (q *Queries) AddTestItem(ctx context.Context, arg AddTestItemParams) (TestI
 		&i.Position,
 	)
 	return i, err
+}
+
+const countSelfClassicTests = `-- name: CountSelfClassicTests :one
+SELECT count(*) FROM tests
+WHERE created_by = $1 AND subject_id = $2 AND kind = 'classic'
+`
+
+type CountSelfClassicTestsParams struct {
+	CreatedBy uuid.UUID `json:"created_by"`
+	SubjectID uuid.UUID `json:"subject_id"`
+}
+
+// How many пробники the student has generated for a subject already — numbers
+// the next default title.
+func (q *Queries) CountSelfClassicTests(ctx context.Context, arg CountSelfClassicTestsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countSelfClassicTests, arg.CreatedBy, arg.SubjectID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countUnsolvedSelfVariants = `-- name: CountUnsolvedSelfVariants :one
+SELECT count(*) FROM tests te
+WHERE te.created_by = $1 AND te.subject_id = $2 AND te.kind = 'classic'
+  AND EXISTS (SELECT 1 FROM test_items ti WHERE ti.test_id = te.id)
+  AND NOT EXISTS (
+    SELECT 1 FROM attempts a
+    WHERE a.test_id = te.id AND a.student_id = $1 AND a.finished_at IS NOT NULL
+  )
+`
+
+type CountUnsolvedSelfVariantsParams struct {
+	CreatedBy uuid.UUID `json:"created_by"`
+	SubjectID uuid.UUID `json:"subject_id"`
+}
+
+// Пробники the student generated but never finished — the generation cap
+// counts THESE, so solving one (as the cap message instructs) always unlocks
+// another. Empty husks (no items) are unsolvable and don't count.
+func (q *Queries) CountUnsolvedSelfVariants(ctx context.Context, arg CountUnsolvedSelfVariantsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countUnsolvedSelfVariants, arg.CreatedBy, arg.SubjectID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
 }
 
 const createTest = `-- name: CreateTest :one
@@ -191,11 +236,15 @@ const listTests = `-- name: ListTests :many
 SELECT id, subject_id, kind, title, created_by, created_at, variant_of FROM tests
 WHERE ($1::uuid IS NULL OR subject_id = $1)
   AND variant_of IS NULL
+  AND NOT EXISTS (
+    SELECT 1 FROM users u WHERE u.id = tests.created_by AND u.role = 'student'
+  )
 ORDER BY created_at DESC
 `
 
-// Per-student variant clones (variant_of set) are working copies, not the
-// teacher's library — keep them out of the builder/assign lists.
+// Per-student variant clones (variant_of set) are working copies, and tests a
+// student generated for themselves (пробники, __practice__) are private — the
+// teacher's builder/assign library holds neither.
 func (q *Queries) ListTests(ctx context.Context, subjectID *uuid.UUID) ([]Test, error) {
 	rows, err := q.db.Query(ctx, listTests, subjectID)
 	if err != nil {
@@ -213,6 +262,87 @@ func (q *Queries) ListTests(ctx context.Context, subjectID *uuid.UUID) ([]Test, 
 			&i.CreatedBy,
 			&i.CreatedAt,
 			&i.VariantOf,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const selfVariantsForStudent = `-- name: SelfVariantsForStudent :many
+SELECT te.id, te.subject_id, te.kind, te.title, te.created_at,
+       (SELECT count(*) FROM test_items ti WHERE ti.test_id = te.id)::bigint AS task_count,
+       -- LEFT JOIN makes att.id nullable but sqlc types it by the base column;
+       -- fold NULL to the zero uuid and let the store map that back to nil.
+       COALESCE(att.id, '00000000-0000-0000-0000-000000000000'::uuid) AS attempt_id,
+       att.finished_at,
+       COALESCE(ans.total, 0)::bigint   AS total,
+       COALESCE(ans.correct, 0)::bigint AS correct
+FROM tests te
+LEFT JOIN LATERAL (
+    SELECT a.id, a.finished_at FROM attempts a
+    WHERE a.test_id = te.id AND a.student_id = $1 AND a.finished_at IS NOT NULL
+    ORDER BY a.finished_at DESC
+    LIMIT 1
+) att ON TRUE
+LEFT JOIN LATERAL (
+    SELECT count(*) AS total, count(*) FILTER (WHERE an.is_correct) AS correct
+    FROM answers an WHERE an.attempt_id = att.id
+) ans ON TRUE
+WHERE te.created_by = $1
+  AND te.subject_id = $2
+  AND te.title <> '__practice__'
+  -- a husk left by a failed empty-bank cleanup has no items — never show it
+  AND EXISTS (SELECT 1 FROM test_items ti WHERE ti.test_id = te.id)
+ORDER BY te.created_at DESC
+LIMIT $3
+`
+
+type SelfVariantsForStudentParams struct {
+	StudentID uuid.UUID `json:"student_id"`
+	SubjectID uuid.UUID `json:"subject_id"`
+	Lim       int32     `json:"lim"`
+}
+
+type SelfVariantsForStudentRow struct {
+	ID         uuid.UUID  `json:"id"`
+	SubjectID  uuid.UUID  `json:"subject_id"`
+	Kind       string     `json:"kind"`
+	Title      string     `json:"title"`
+	CreatedAt  time.Time  `json:"created_at"`
+	TaskCount  int64      `json:"task_count"`
+	AttemptID  uuid.UUID  `json:"attempt_id"`
+	FinishedAt *time.Time `json:"finished_at"`
+	Total      int64      `json:"total"`
+	Correct    int64      `json:"correct"`
+}
+
+// The student's own generated пробники for a subject, newest first, each with
+// its task count and — once solved — the latest finished attempt's score.
+func (q *Queries) SelfVariantsForStudent(ctx context.Context, arg SelfVariantsForStudentParams) ([]SelfVariantsForStudentRow, error) {
+	rows, err := q.db.Query(ctx, selfVariantsForStudent, arg.StudentID, arg.SubjectID, arg.Lim)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SelfVariantsForStudentRow{}
+	for rows.Next() {
+		var i SelfVariantsForStudentRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.SubjectID,
+			&i.Kind,
+			&i.Title,
+			&i.CreatedAt,
+			&i.TaskCount,
+			&i.AttemptID,
+			&i.FinishedAt,
+			&i.Total,
+			&i.Correct,
 		); err != nil {
 			return nil, err
 		}

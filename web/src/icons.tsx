@@ -6,7 +6,7 @@ import { CSSProperties, ReactNode } from "react";
 // over emoji/unicode glyphs for anything chrome-level (nav, buttons, badges).
 
 export type IconName =
-  | "dashboard" | "target" | "history"        // student nav
+  | "dashboard" | "target" | "history" | "dumbbell"  // student nav
   | "overview" | "user" | "tests" | "assign" | "bank"  // teacher nav
   | "moon" | "sun" | "logout" | "logo"        // shell chrome
   | "flame" | "paperclip" | "bot" | "image" | "check"  // inline markers
@@ -35,6 +35,14 @@ const PATHS: Record<IconName, ReactNode> = {
     <>
       <circle cx="12" cy="12" r="9" />
       <path d="M12 7.5V12l3 1.8" />
+    </>
+  ),
+  dumbbell: (
+    <>
+      <path d="M7.5 8v8M16.5 8v8" />
+      <rect x="4" y="9.5" width="3.5" height="5" rx="1" />
+      <rect x="16.5" y="9.5" width="3.5" height="5" rx="1" />
+      <path d="M7.5 12h9" />
     </>
   ),
   overview: <path d="M3 12h4l2.5 7 5-14 2.5 7H21" />,

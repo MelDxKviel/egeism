@@ -200,6 +200,33 @@ composed structure for free, so `individual:true` class assignments already give
 every student their own «3×№1, 3×№2, 3×№3» вариант. The response's `requested`
 (aggregate) vs `task_count` lets the UI warn when a thin bank came up short.
 
+**Самоподготовка ученика (the «Тренировка» hub).** A student never has to wait
+for the teacher: the sidebar «Тренировка» (`web/src/train.tsx`, view `train`)
+plus the dashboard «Тренировка» card give four self-study loops, all served by
+student-side `/api/practice/*` endpoints (`internal/api/practice.go`, acting
+user only): **(1) работа над ошибками** — `GET /api/practice/mistakes` returns
+active tasks whose LATEST answer is wrong (oldest first, `MistakeTasks`);
+solving one correctly drops it from the queue, the badge count rides on the hub
+payload; **(2) тренировка по номерам** — `GET /api/practice/tasks?number=`
+filters the practice pool server-side (the old client-side filter over 60
+random tasks gave stunted drills), and `GET /api/practice/overview` returns the
+карта номеров (`PracticeNumbers`: per номер — active bank size, mastered count,
+lifetime accuracy) the hub renders as clickable progress tiles; **(3) умная
+тренировка** — `GET /api/practice/recommended` assembles a session server-side:
+mistakes first, then ≤2 tasks from each weak номер (accuracy < 0.7), then fresh
+unmastered tasks, deduplicated (`recommendPlan`, unit-tested); **(4) пробник
+самому себе** — `POST /api/practice/variant` generates a classic variant
+(«Пробник N») from the EXISTING active bank only — unlike the teacher's
+generator it never calls the fetcher, an empty bank 422s without leaving a
+husk test row, the endpoint is student-role-only (a teacher's пробник would
+leak into the shared builder library), and ≥10 UNSOLVED пробники → 409 — a
+self-healing cap: solving one always frees a slot; `GET /api/practice/variants`
+lists «Мои пробники» with the latest finished score (`SelfVariants`). Mastery everywhere = solved correctly
+≥2× (`masteredThreshold`). Student-created tests (пробники + `__practice__`)
+are **excluded from the teacher's `ListTests`** (creator-role filter), so the
+builder/assign library stays clean. The bot's `POST /api/practice` +
+`GET /api/practice/tasks` contracts are unchanged.
+
 **Dialogs:** the ONE portaled `Modal` lives in `web/src/ui.tsx` — it re-wraps its
 overlay in `.app` + `data-theme` because the design tokens are scoped there and a
 bare `createPortal` to `<body>` loses them (transparent panel, system font — the
@@ -404,7 +431,10 @@ and password recovery (the login eye toggle + «забыл пароль» → te
 bell notification → one-hour one-time reset link, see the auth section), and
 optional assignment deadlines (soft `due_at` — the overdue sweep flips
 unsolved ones to `missed`, but they stay solvable; red/orange/green pills in
-the lists + «сдать до …» in the bell and Telegram message).
+the lists + «сдать до …» in the bell and Telegram message), and the student
+self-study hub (the «Тренировка» screen: работа над ошибками, server-side
+дриллы по номерам with the progress map, умная тренировка, self-generated
+пробники — see the web section).
 TODO: run/validate the Python fetcher against live РЕШУ/FIPI (it's a template),
 Telegram deep-link handoff, LLM-assisted answers + progressive hints
 (part-2), real ФИПИ primary→test score tables.
