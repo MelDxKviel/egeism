@@ -335,52 +335,64 @@ export const SUBJECT_TITLES: Record<string, string> = {
 export function Seg({ children, className, style }:
   { children: ReactNode; className?: string; style?: CSSProperties }) {
   const ref = useRef<HTMLDivElement>(null);
-  const [knob, setKnob] = useState<{ x: number; w: number } | null>(null);
-  // Last knob position — auto-scroll only when the active segment MOVED, so a
-  // background re-render never yanks a hand-scrolled control back into view.
-  const prevX = useRef<number | null>(null);
+  const knobRef = useRef<HTMLDivElement>(null);
+  // Last placed knob geometry. null = not placed yet (fresh mount, or no
+  // active segment) — the next placement snaps into place without a slide.
+  const prev = useRef<{ x: number; w: number } | null>(null);
 
-  // Measure after every render: callers mark the active button via data-active,
-  // so any click / options change / theme flip lands here before paint.
-  useLayoutEffect(() => {
-    const wrap = ref.current;
-    if (!wrap) return;
+  // The knob is positioned IMPERATIVELY — style writes on the DOM node, never
+  // setState. The previous version kept {x,w} in state and set it from this
+  // layout effect on every commit; in production React ONE real knob move
+  // primed the hook's update queue so that each following commit scheduled
+  // another nested synchronous update, and ~50 commits later React threw
+  // «Maximum update depth exceeded» (#185) — the stable «переключил раздел,
+  // дёрнул тумблер → белый экран» crash. Dev builds masked it (a different
+  // eager-bailout path), so it only reproduced on the deployed bundle.
+  const place = () => {
+    const wrap = ref.current, kn = knobRef.current;
+    if (!wrap || !kn) return;
     const el = wrap.querySelector<HTMLElement>('button[data-active="1"]');
-    if (!el) { setKnob(null); prevX.current = null; return; }
+    if (!el) { kn.style.opacity = "0"; prev.current = null; return; }
     const x = el.offsetLeft, w = el.offsetWidth;
-    setKnob((k) => (k && k.x === x && k.w === w ? k : { x, w }));
-    if (prevX.current !== x) {
+    const first = prev.current === null;
+    if (!first && prev.current!.x === x && prev.current!.w === w) return;
+    if (first) kn.style.transition = "none"; // land silently, no slide-in from 0
+    kn.style.width = `${w}px`;
+    kn.style.transform = `translateX(${x}px)`;
+    kn.style.opacity = "1";
+    if (first) { void kn.offsetWidth; kn.style.transition = ""; } // re-arm the spring
+    if (first || prev.current!.x !== x) {
       // Keep the active segment visible inside the scrollable control. The
       // first placement snaps (no animation yet); later moves glide.
       const right = x + w;
       if (x < wrap.scrollLeft || right > wrap.scrollLeft + wrap.clientWidth) {
-        const still = prevX.current === null ||
-          window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        const still = first || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
         wrap.scrollTo({ left: Math.max(0, x - 24), behavior: still ? "auto" : "smooth" });
       }
-      prevX.current = x;
     }
-  });
+    prev.current = { x, w };
+  };
 
-  // Re-measure when the container itself resizes (viewport, font swap, …).
+  // Re-place after every render: callers mark the active button via
+  // data-active, so any click / options change / theme flip lands here before
+  // paint.
+  useLayoutEffect(place);
+
+  // Re-place when the container itself resizes (viewport, font swap, …) — the
+  // reset makes the new geometry apply as a snap, not a cross-screen slide.
   useEffect(() => {
     const wrap = ref.current;
     if (!wrap) return;
-    const ro = new ResizeObserver(() => {
-      const el = wrap.querySelector<HTMLElement>('button[data-active="1"]');
-      if (!el) return;
-      const x = el.offsetLeft, w = el.offsetWidth;
-      setKnob((k) => (k && k.x === x && k.w === w ? k : { x, w }));
-    });
+    const ro = new ResizeObserver(() => { prev.current = null; place(); });
     ro.observe(wrap);
     return () => ro.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
     <div ref={ref} className={["seg", className].filter(Boolean).join(" ")} style={style}>
-      {/* Mounted only once measured, with transform already set — so the first
-          paint places it silently and only later moves animate. */}
-      {knob && <div className="seg-knob" style={{ width: knob.w, transform: `translateX(${knob.x}px)` }} />}
+      {/* Hidden until the first placement writes its geometry (opacity 1). */}
+      <div ref={knobRef} className="seg-knob" style={{ opacity: 0 }} />
       {children}
     </div>
   );
