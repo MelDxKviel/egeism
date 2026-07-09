@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+import { ReactNode, useEffect, useRef, useState } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { HeatCell, WeakSpot, MasteryPoint } from "./api";
 import { accColor, heatColor, Card, Label, Button } from "./ui";
@@ -41,30 +41,59 @@ export function Sparkline({ data, w = 84, h = 26, color }: { data: number[]; w?:
   return <svg width={w} height={h}><polyline points={pts} fill="none" stroke={color || "var(--accent)"} strokeWidth={1.8} strokeLinejoin="round" strokeLinecap="round" /></svg>;
 }
 
-// Heatmap — a year of activity, github-style. Returns cells grouped into weeks.
+// Heatmap — daily activity, github-style. The grid is RESPONSIVE: it measures
+// its container and shows exactly as many trailing weeks as fit (ending today),
+// stretching the cells to fill the row edge-to-edge — so it never grows a
+// horizontal scrollbar. `big` raises the cap to a full year (the History page);
+// the compact dashboard card tops out at half a year.
 export function Heatmap({ cells, onDay, big }: { cells: HeatCell[]; onDay?: (c: HeatCell) => void; big?: boolean }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(0);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver((es) => setWidth(es[0].contentRect.width));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const gap = 3;
+  const base = big ? 13 : 11;      // preferred cell size, px
+  const maxWeeks = big ? 53 : 26;  // a year / half a year
+  const weeks = width > 0 ? Math.max(4, Math.min(maxWeeks, Math.floor((width + gap) / (base + gap)))) : 0;
+  // Grow the cells a touch (up to +5px) to consume the leftover width, so the
+  // grid lands flush with the card edge instead of a ragged right gutter.
+  const cell = weeks > 0 ? Math.min(base + 5, (width - (weeks - 1) * gap) / weeks) : base;
+
   const byDay = new Map(cells.map((c) => [c.day.slice(0, 10), c]));
-  const size = big ? 13 : 11, gap = 3;
   const today = new Date();
   const days: HeatCell[] = [];
-  const total = big ? 371 : 182;
-  for (let i = total - 1; i >= 0; i--) {
+  for (let i = weeks * 7 - 1; i >= 0; i--) {
     const d = new Date(today); d.setDate(d.getDate() - i);
     const key = d.toISOString().slice(0, 10);
     days.push(byDay.get(key) || { day: d.toISOString(), total: 0, correct: 0 });
   }
-  const weeks: HeatCell[][] = [];
-  for (let i = 0; i < days.length; i += 7) weeks.push(days.slice(i, i + 7));
+  const cols: HeatCell[][] = [];
+  for (let i = 0; i < days.length; i += 7) cols.push(days.slice(i, i + 7));
+
   return (
-    <div style={{ display: "flex", gap, overflowX: "auto" }} className="scroll">
-      {weeks.map((wk, wi) => (
-        <div key={wi} style={{ display: "flex", flexDirection: "column", gap }}>
-          {wk.map((c, di) => (
-            <div key={di} title={`${c.day.slice(0, 10)} · ${c.total} задач${c.total ? ` · ${c.correct} верно` : ""}`} onClick={() => onDay?.(c)}
-              style={{ width: size, height: size, borderRadius: 3, background: heatColor(c.total), cursor: onDay ? "pointer" : "default" }} />
-          ))}
-        </div>
-      ))}
+    <div ref={ref}>
+      {weeks === 0
+        ? <div style={{ height: 7 * (base + gap) - gap }} /> /* pre-measure placeholder, keeps the card height stable */
+        : (
+          <div style={{ display: "flex", gap }}>
+            {cols.map((wk, wi) => (
+              <div key={wi} style={{ display: "flex", flexDirection: "column", gap, flex: "none" }}>
+                {wk.map((c, di) => (
+                  <div key={di} className={onDay ? "hm-cell hm-tap" : "hm-cell"}
+                    title={`${c.day.slice(0, 10)} · ${c.total} задач${c.total ? ` · ${c.correct} верно` : ""}`}
+                    onClick={() => onDay?.(c)}
+                    style={{ width: cell, height: cell, borderRadius: cell >= 13 ? 4 : 3, background: heatColor(c.total), cursor: onDay ? "pointer" : "default" }} />
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
     </div>
   );
 }

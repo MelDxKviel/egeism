@@ -1,6 +1,6 @@
 import { CSSProperties, ReactNode, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { AttemptReviewItem, Media, mediaUrl } from "./api";
+import { AttemptReviewItem, Media, mediaUrl, SubjectCode } from "./api";
 import { useApp } from "./state";
 import { Icon } from "./icons";
 
@@ -312,6 +312,22 @@ export function Async<T>({ q, children, loading }:
 export const SUBJECT_TITLES: Record<string, string> = {
   rus: "Русский язык", math: "Математика", inf: "Информатика", soc: "Обществознание",
 };
+
+// SubjectSwitch — THE segmented subject picker. One shared control so the
+// dashboard, the training hub and the subject screen all switch the same
+// app-wide subject in the same place, styled identically (.seg in theme.css).
+export function SubjectSwitch() {
+  const { subject, setSubject } = useApp();
+  return (
+    <div className="seg" style={{ alignSelf: "flex-start" }}>
+      {(["rus", "math", "inf", "soc"] as SubjectCode[]).map((c) => (
+        <button key={c} onClick={() => setSubject(c)} data-active={subject === c ? "1" : undefined}>
+          {SUBJECT_TITLES[c]}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 // The internal practice test carries a sentinel title; show it nicely in feeds.
 export const testTitle = (t: string) => (t === "__practice__" ? "Свободное решение" : t);
