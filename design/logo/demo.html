@@ -1,0 +1,579 @@
+<title>ЕГЭизм — 5 концептов логотипа</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  /* Tokens lifted from the product's theme.css so logos are judged in situ. */
+  :root {
+    --bg: #F5F5F7; --surface: #FFFFFF; --surface-2: #F5F5F7;
+    --border: rgba(0,0,0,.09); --border-2: rgba(0,0,0,.18);
+    --text: #1D1D1F; --text-2: #55555B; --text-3: #86868B;
+    --accent: #0071E3; --accent-2: #0066CC; --accent-soft: rgba(0,113,227,.10);
+    --violet: #AF52DE;
+    --shadow: 0 1px 2px rgba(0,0,0,.04), 0 6px 16px -10px rgba(0,0,0,.10);
+    --shadow-2: 0 2px 4px rgba(0,0,0,.05), 0 12px 28px -14px rgba(0,0,0,.16);
+    --edge: inset 0 1px 0 rgba(255,255,255,.55);
+    --glow-a: rgba(0,113,227,.07); --glow-b: rgba(175,82,222,.05);
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #000000; --surface: #1C1C1E; --surface-2: #2C2C2E;
+      --border: rgba(255,255,255,.10); --border-2: rgba(255,255,255,.24);
+      --text: #F5F5F7; --text-2: #A1A1A6; --text-3: #8A8A90;
+      --accent: #0A84FF; --accent-2: #409CFF; --accent-soft: rgba(10,132,255,.18);
+      --violet: #BF5AF2;
+      --shadow: 0 1px 2px rgba(0,0,0,.5), 0 16px 40px -20px rgba(0,0,0,.75);
+      --shadow-2: 0 2px 6px rgba(0,0,0,.55), 0 22px 52px -20px rgba(0,0,0,.8);
+      --edge: inset 0 1px 0 rgba(255,255,255,.06);
+      --glow-a: rgba(10,132,255,.12); --glow-b: rgba(191,90,242,.08);
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="light"] {
+    --bg: #F5F5F7; --surface: #FFFFFF; --surface-2: #F5F5F7;
+    --border: rgba(0,0,0,.09); --border-2: rgba(0,0,0,.18);
+    --text: #1D1D1F; --text-2: #55555B; --text-3: #86868B;
+    --accent: #0071E3; --accent-2: #0066CC; --accent-soft: rgba(0,113,227,.10);
+    --violet: #AF52DE;
+    --shadow: 0 1px 2px rgba(0,0,0,.04), 0 6px 16px -10px rgba(0,0,0,.10);
+    --shadow-2: 0 2px 4px rgba(0,0,0,.05), 0 12px 28px -14px rgba(0,0,0,.16);
+    --edge: inset 0 1px 0 rgba(255,255,255,.55);
+    --glow-a: rgba(0,113,227,.07); --glow-b: rgba(175,82,222,.05);
+    color-scheme: light;
+  }
+  :root[data-theme="dark"] {
+    --bg: #000000; --surface: #1C1C1E; --surface-2: #2C2C2E;
+    --border: rgba(255,255,255,.10); --border-2: rgba(255,255,255,.24);
+    --text: #F5F5F7; --text-2: #A1A1A6; --text-3: #8A8A90;
+    --accent: #0A84FF; --accent-2: #409CFF; --accent-soft: rgba(10,132,255,.18);
+    --violet: #BF5AF2;
+    --shadow: 0 1px 2px rgba(0,0,0,.5), 0 16px 40px -20px rgba(0,0,0,.75);
+    --shadow-2: 0 2px 6px rgba(0,0,0,.55), 0 22px 52px -20px rgba(0,0,0,.8);
+    --edge: inset 0 1px 0 rgba(255,255,255,.06);
+    --glow-a: rgba(10,132,255,.12); --glow-b: rgba(191,90,242,.08);
+    color-scheme: dark;
+  }
+
+  body {
+    margin: 0; color: var(--text);
+    background:
+      radial-gradient(1100px 560px at 84% -180px, var(--glow-a), transparent 70%),
+      radial-gradient(900px 520px at -180px 14%, var(--glow-b), transparent 70%),
+      var(--bg);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+      "Helvetica Neue", "Segoe UI", Roboto, Inter, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 48px 24px 80px; }
+
+  /* ---- intro ---- */
+  .eyebrow { font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--accent-2); }
+  h1 { font-size: clamp(28px, 5vw, 40px); font-weight: 700; letter-spacing: -0.02em; margin: 10px 0 12px; text-wrap: balance; }
+  .lede { font-size: 16px; line-height: 1.55; color: var(--text-2); max-width: 62ch; margin: 0; }
+  .lede b { color: var(--text); font-weight: 600; }
+
+  /* quick-jump strip: all five marks side by side */
+  .strip { display: flex; flex-wrap: wrap; gap: 12px; margin: 30px 0 8px; }
+  .strip a {
+    display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--text);
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+    padding: 9px 16px 9px 10px; font-size: 14px; font-weight: 600;
+    box-shadow: var(--edge), var(--shadow);
+    transition: transform .18s cubic-bezier(.34,1.25,.44,1), box-shadow .18s ease, border-color .18s ease;
+  }
+  .strip a:hover { transform: translateY(-2px); box-shadow: var(--edge), var(--shadow-2); border-color: var(--border-2); }
+  .strip a:focus-visible { outline: none; box-shadow: 0 0 0 4px var(--accent-soft), var(--shadow); }
+  .strip svg { width: 28px; height: 28px; border-radius: 7px; display: block; }
+  .strip .n { color: var(--text-3); font-weight: 500; margin-right: 2px; }
+
+  /* ---- concept card ---- */
+  .concept {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 22px;
+    box-shadow: var(--edge), var(--shadow); padding: clamp(20px, 4vw, 34px);
+    margin-top: 28px; scroll-margin-top: 20px;
+  }
+  .c-head { display: flex; gap: clamp(18px, 4vw, 34px); align-items: flex-start; flex-wrap: wrap; }
+  .c-hero { flex: none; }
+  .c-hero svg { width: clamp(140px, 22vw, 200px); height: auto; border-radius: 22.6%; display: block;
+    box-shadow: 0 10px 30px -12px rgba(0,40,120,.35); }
+  .c-copy { flex: 1 1 300px; min-width: 260px; }
+  .c-num { font-size: 12px; font-weight: 700; letter-spacing: .08em; color: var(--accent-2);
+    background: var(--accent-soft); border-radius: 999px; padding: 4px 11px; display: inline-block; }
+  .c-copy h2 { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; margin: 12px 0 8px; }
+  .c-copy p { font-size: 15px; line-height: 1.55; color: var(--text-2); margin: 0 0 10px; max-width: 58ch; }
+  .c-dark { font-size: 13px; color: var(--text-3); }
+  .c-dark::before { content: "◐ "; }
+
+  /* ---- context grid ---- */
+  .ctx { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; margin-top: 24px; }
+  .panel { border-radius: 16px; border: 1px solid var(--border); overflow: hidden; }
+  .panel-label { font-size: 11px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase;
+    color: var(--text-3); padding: 10px 14px 0; }
+  .p-light { background: #F5F5F7; color: #1D1D1F; }
+  .p-light .panel-label { color: #86868B; }
+  .p-dark { background: #000; color: #F5F5F7; border-color: rgba(255,255,255,.14); }
+  .p-dark .panel-label { color: #8A8A90; }
+  .p-body { padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+
+  /* browser tab mock */
+  .tab { display: flex; align-items: center; gap: 8px; border-radius: 10px 10px 0 0; padding: 8px 12px;
+    font-size: 12.5px; max-width: 250px; white-space: nowrap; overflow: hidden; }
+  .p-light .tab { background: #FFFFFF; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+  .p-dark .tab { background: #2C2C2E; }
+  .tab svg { width: 16px; height: 16px; border-radius: 4px; flex: none; }
+  .tab .x { margin-left: auto; color: currentColor; opacity: .4; font-size: 13px; }
+
+  /* sidebar lockup mock (exactly shell.tsx) */
+  .lockup { display: flex; align-items: center; gap: 11px; }
+  .tile { width: 34px; height: 34px; border-radius: 10px; flex: none;
+    display: flex; align-items: center; justify-content: center; color: #fff; }
+  .p-light .tile { background: linear-gradient(180deg, #1E86E8, #0071E3); box-shadow: 0 2px 8px rgba(0,113,227,.35); }
+  .p-dark .tile { background: linear-gradient(180deg, #3396FF, #0A84FF); box-shadow: 0 2px 8px rgba(10,132,255,.35); }
+  .tile svg { width: 19px; height: 19px; display: block; }
+  .lockup-txt { display: flex; flex-direction: column; line-height: 1.15; }
+  .lockup-txt b { font-weight: 700; font-size: 17px; letter-spacing: -0.02em; }
+  .lockup-txt span { font-size: 11px; font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+  .p-light .lockup-txt span { color: #86868B; }
+  .p-dark .lockup-txt span { color: #8A8A90; }
+
+  /* full-color lockup (login screen style) */
+  .lockup .mark-sm svg { width: 34px; height: 34px; border-radius: 9px; display: block; }
+
+  /* telegram chat mock */
+  .tg { display: flex; align-items: center; gap: 10px; }
+  .tg-ava { width: 44px; height: 44px; border-radius: 50%; overflow: hidden; flex: none; position: relative; }
+  .tg-ava svg { width: 62px; height: 62px; position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); }
+  .tg-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .tg-txt b { font-size: 14px; font-weight: 600; }
+  .tg-txt span { font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .p-light .tg-txt span { color: #86868B; }
+  .p-dark .tg-txt span { color: #8A8A90; }
+
+  /* scale row */
+  .scales { display: flex; align-items: flex-end; gap: 22px; padding: 16px 14px 14px; flex-wrap: wrap; }
+  .scale { display: flex; flex-direction: column; align-items: center; gap: 7px; }
+  .scale svg { display: block; border-radius: 22.6%; }
+  .scale i { font-style: normal; font-size: 10.5px; font-family: ui-monospace, "SF Mono", Menlo, monospace; color: var(--text-3); }
+  .s128 svg { width: 128px; height: 128px; }
+  .s64 svg { width: 64px; height: 64px; }
+  .s32 svg { width: 32px; height: 32px; border-radius: 8px; }
+  .s16 svg { width: 16px; height: 16px; border-radius: 4px; }
+
+  /* footer / how to choose */
+  .choose {
+    margin-top: 36px; background: var(--accent-soft); border: 1px solid transparent;
+    border-radius: 18px; padding: 22px 26px; font-size: 15px; line-height: 1.55; color: var(--text);
+  }
+  .choose b { color: var(--accent-2); }
+
+  @media (max-width: 620px) {
+    .c-head { flex-direction: column; }
+    .scales { gap: 14px; }
+    .s128 svg { width: 96px; height: 96px; }
+  }
+</style>
+
+<div class="wrap">
+  <div class="eyebrow">ЕГЭизм · айдентика</div>
+  <h1>Пять концептов логотипа</h1>
+  <p class="lede">Каждый концепт показан там, где ему жить: <b>вкладка браузера</b> (16&nbsp;px — самый жёсткий тест), <b>шапка сайта</b> в светлой и тёмной теме, <b>аватар телеграм-бота</b> и линейка размеров. Палитра — родная, из дизайн-системы платформы.</p>
+
+  <nav class="strip" aria-label="Быстрый переход">
+    <a href="#v1"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#m-v1"/></svg><span class="n">1</span>Монограмма «Э»</a>
+    <a href="#v2"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#m-v2"/></svg><span class="n">2</span>Галочка на бланке</a>
+    <a href="#v3"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#m-v3"/></svg><span class="n">3</span>Траектория к сотке</a>
+    <a href="#v4"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#m-v4"/></svg><span class="n">4</span>Сотка</a>
+    <a href="#v5"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#m-v5"/></svg><span class="n">5</span>Е-ступени</a>
+  </nav>
+
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><symbol id="m-v1" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="v1grad" x1="0" y1="0" x2="0" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2E90EE"/>
+      <stop offset="1" stop-color="#0066CC"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14.5" fill="url(#v1grad)"/>
+  <g fill="none" stroke="#FFFFFF" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M 19.9 19.71 A 15 15 0 1 1 19.9 44.29"/>
+    <path d="M 24.5 32 H 52.5"/>
+  </g>
+</symbol><symbol id="g-v1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M 6.59 6.27 A 7 7 0 1 1 6.59 17.73"/>
+  <path d="M 8.6 12 H 20.2"/>
+</symbol><symbol id="m-v2" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="v2bg" x1="0" y1="0" x2="0.25" y2="1">
+      <stop offset="0" stop-color="#2E90F2"/>
+      <stop offset="1" stop-color="#0063D5"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14.5" fill="url(#v2bg)"/>
+  <g fill="#FFFFFF" fill-opacity="0.6">
+    <rect x="12" y="44.5" width="11" height="11" rx="3"/>
+    <rect x="26.5" y="44.5" width="11" height="11" rx="3"/>
+    <rect x="41" y="44.5" width="11" height="11" rx="3"/>
+  </g>
+  <path d="M15 22.5 L26.5 34 L48.5 11.5" fill="none" stroke="#FFFFFF" stroke-width="9.5" stroke-linecap="round" stroke-linejoin="round"/>
+</symbol><symbol id="g-v2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M4.8 10.4 L9 14.6 L19.2 4.2"/>
+  <path d="M4.9 19.4 h4.2 M14.9 19.4 h4.2"/>
+</symbol><symbol id="m-v3" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="v3grad" x1="0" y1="64" x2="64" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0071E3"/>
+      <stop offset="0.45" stop-color="#2E6EE4"/>
+      <stop offset="1" stop-color="#AF52DE"/>
+    </linearGradient>
+    <radialGradient id="v3glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.32"/>
+      <stop offset="0.55" stop-color="#FFFFFF" stop-opacity="0.13"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <clipPath id="v3clip"><rect width="64" height="64" rx="14.5"/></clipPath>
+  </defs>
+  <rect width="64" height="64" rx="14.5" fill="url(#v3grad)"/>
+  <g clip-path="url(#v3clip)">
+    <circle cx="48.4" cy="16.6" r="13.5" fill="url(#v3glow)"/>
+    <path d="M11.4 51.8 Q22.4 49.5 30 42.6" fill="none" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round"/>
+    <circle cx="35.8" cy="36.6" r="2.7" fill="#FFFFFF"/>
+    <circle cx="41.6" cy="28.9" r="3.7" fill="#FFFFFF"/>
+    <circle cx="48.4" cy="16.6" r="6.8" fill="#FFFFFF"/>
+  </g>
+</symbol><symbol id="g-v3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M3.4 20.2 Q8.4 19.3 11.6 16.4"/>
+  <circle cx="14.2" cy="12.4" r="0.5"/>
+  <circle cx="18" cy="6.3" r="2.6"/>
+</symbol><symbol id="m-v4" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="v4grad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#369BF4"/>
+      <stop offset="1" stop-color="#0063CD"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14.5" fill="url(#v4grad)"/>
+  <path d="M10.5 21 L17 15 L17 39" fill="none" stroke="#FFFFFF" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="27.75" y="15" width="13" height="24" rx="6.5" fill="none" stroke="#FFFFFF" stroke-width="5.5"/>
+  <rect x="40.75" y="15" width="13" height="24" rx="6.5" fill="none" stroke="#FFFFFF" stroke-width="5.5"/>
+  <rect x="10.5" y="46.5" width="43" height="5.5" rx="2.75" fill="#40D666"/>
+</symbol><symbol id="g-v4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M3.4 8.2 L6.1 5.7 L6.1 14.5"/>
+  <rect x="10.1" y="5.7" width="5.2" height="8.8" rx="2.6"/>
+  <rect x="15.3" y="5.7" width="5.2" height="8.8" rx="2.6"/>
+  <path d="M4.4 18.3 L19.5 18.3"/>
+</symbol><symbol id="m-v5" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="v5bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2A8CEC"/>
+      <stop offset="1" stop-color="#0068D6"/>
+    </linearGradient>
+    <radialGradient id="v5glow" cx="0.82" cy="0.08" r="0.9">
+      <stop offset="0" stop-color="#AF52DE" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#AF52DE" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="v5sheen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.14"/>
+      <stop offset="0.32" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14.5" fill="url(#v5bg)"/>
+  <rect width="64" height="64" rx="14.5" fill="url(#v5glow)"/>
+  <rect width="64" height="64" rx="14.5" fill="url(#v5sheen)"/>
+  <g fill="#FFFFFF">
+    <rect x="15" y="13.5" width="8" height="37" rx="4"/>
+    <rect x="15" y="13.5" width="19" height="8" rx="4"/>
+    <rect x="15" y="28" width="27" height="8" rx="4"/>
+    <rect x="15" y="42.5" width="35" height="8" rx="4"/>
+  </g>
+  <circle cx="46" cy="46.5" r="4" fill="#34C759"/>
+</symbol><symbol id="g-v5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M5 5v14"/>
+  <path d="M5 5h7"/>
+  <path d="M5 12h10"/>
+  <path d="M5 19h9.5"/>
+  <path d="M19 19h0"/>
+</symbol></defs></svg>
+
+  <section class="concept" id="v1">
+    <div class="c-head">
+      <div class="c-hero"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#m-v1"/></svg></div>
+      <div class="c-copy">
+        <span class="c-num">ВАРИАНТ 1</span>
+        <h2>Монограмма «Э»</h2>
+        <p>Кастомная циркульная монограмма «Э» — сердце аббревиатуры ЕГЭ и первый звук имени. Дуга в 250° с раскрытием влево и горизонтальный штрих, который рождается внутри чаши, проходит сквозь дугу и решительно выступает справа — «знание входит и идёт дальше»; выступ наследует стрелку старого логотипа, переплавленную в саму букву. Терминалы штриха держат воздух от устья дуги, поэтому «Э» не схлопывается в «евро» или тету даже в фавиконе: силуэт проверен попиксельно на 16 px. Правое поле сознательно уже левого — тонкий хвост требует выноса, и композиция читается как движение вперёд, а не как смещение.</p>
+        <div class="c-dark">Иконка несёт собственную подложку: на чёрном #000 нижний стоп #0066CC сохраняет читаемую кромку контейнера, белая форма не тускнеет — проверено рендером на #F5F5F7 и #000.</div>
+      </div>
+    </div>
+    <div class="ctx">
+      
+      <div class="panel p-light">
+        <div class="panel-label">Светлая тема</div>
+        <div class="p-body">
+          <div class="tab"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#m-v1"/></svg><span>ЕГЭизм · подготовка к ЕГЭ</span><span class="x">✕</span></div>
+          <div class="lockup">
+            <div class="tile"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#g-v1"/></svg></div>
+            <div class="lockup-txt"><b>ЕГЭизм</b><span>подготовка · ЕГЭ</span></div>
+          </div>
+          <div class="lockup">
+            <span class="mark-sm"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#m-v1"/></svg></span>
+            <div class="lockup-txt"><b>ЕГЭизм</b><span>подготовка · ЕГЭ</span></div>
+          </div>
+          <div class="tg">
+            <div class="tg-ava"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#m-v1"/></svg></div>
+            <div class="tg-txt"><b>ЕГЭизм</b><span>Новое задание: «Вариант · Математика»…</span></div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="panel p-dark">
+        <div class="panel-label">Тёмная тема</div>
+        <div class="p-body">
+          <div class="tab"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#m-v1"/></svg><span>ЕГЭизм · подготовка к ЕГЭ</span><span class="x">✕</span></div>
+          <div class="lockup">
+            <div class="tile"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#g-v1"/></svg></div>
+            <div class="lockup-txt"><b>ЕГЭизм</b><span>подготовка · ЕГЭ</span></div>
+          </div>
+          <div class="lockup">
+            <span class="mark-sm"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#m-v1"/></svg></span>
+            <div class="lockup-txt"><b>ЕГЭизм</b><span>подготовка · ЕГЭ</span></div>
+          </div>
+          <div class="tg">
+            <div class="tg-ava"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#m-v1"/></svg></div>
+            <div class="tg-txt"><b>ЕГЭизм</b><span>Новое задание: «Вариант · Математика»…</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel" style="margin-top:14px">
+      <div class="panel-label">Масштабы</div>
+      <div class="scales"><div class="scale s128"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#m-v1"/></svg><i>128</i></div><div class="scale s64"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#m-v1"/></svg><i>64</i></div><div class="scale s32"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#m-v1"/></svg><i>32</i></div><div class="scale s16"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#m-v1"/></svg><i>16</i></div></div>
+    </div>
+  </section>
+
+  <section class="concept" id="v2">
+    <div class="c-head">
+      <div class="c-hero"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#m-v2"/></svg></div>
+      <div class="c-copy">
+        <span class="c-num">ВАРИАНТ 2</span>
+        <h2>Галочка на бланке</h2>
+        <p>Знак — момент автопроверки: крупная уверенная галочка чекера выносит вердикт над ответным полем бланка ЕГЭ. Поле — три сплошные скруглённые клетки-символа, а не контурная рамка с делениями: одна пластика с галочкой (белое на белом полупрозрачном), никакого прочтения «батарейка», и на 16px клетки честно сжимаются в спокойную пунктирную полоску-основание, оставляя галочку абсолютно читаемой. Иерархия задана прозрачностью: вердикт — 100% белый, бланк — 60%. Белое на фирменном синем градиенте — родной язык дизайн-системы платформы.</p>
+        <div class="c-dark">Икона несёт собственный синий градиент, поэтому на #000 и #F5F5F7 читается одинаково; глиф — currentColor и наследует белый на любой тёмной плашке.</div>
+      </div>
+    </div>
+    <div class="ctx">
+      
+      <div class="panel p-light">
+        <div class="panel-label">Светлая тема</div>
+        <div class="p-body">
+          <div class="tab"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#m-v2"/></svg><span>ЕГЭизм · подготовка к ЕГЭ</span><span class="x">✕</span></div>
+          <div class="lockup">
+            <div class="tile"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#g-v2"/></svg></div>
+            <div class="lockup-txt"><b>ЕГЭизм</b><span>подготовка · ЕГЭ</span></div>
+          </div>
+          <div class="lockup">
+            <span class="mark-sm"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#m-v2"/></svg></span>
+            <div class="lockup-txt"><b>ЕГЭизм</b><span>подготовка · ЕГЭ</span></div>
+          </div>
+          <div class="tg">
+            <div class="tg-ava"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#m-v2"/></svg></div>
+            <div class="tg-txt"><b>ЕГЭизм</b><span>Новое задание: «Вариант · Математика»…</span></div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="panel p-dark">
+        <div class="panel-label">Тёмная тема</div>
+        <div class="p-body">
+          <div class="tab"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#m-v2"/></svg><span>ЕГЭизм · подготовка к ЕГЭ</span><span class="x">✕</span></div>
+          <div class="lockup">
+            <div class="tile"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#g-v2"/></svg></div>
+            <div class="lockup-txt"><b>ЕГЭизм</b><span>подготовка · ЕГЭ</span></div>
+          </div>
+          <div class="lockup">
+            <span class="mark-sm"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#m-v2"/></svg></span>
+            <div class="lockup-txt"><b>ЕГЭизм</b><span>подготовка · ЕГЭ</span></div>
+          </div>
+          <div class="tg">
+            <div class="tg-ava"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#m-v2"/></svg></div>
+            <div class="tg-txt"><b>ЕГЭизм</b><span>Новое задание: «Вариант · Математика»…</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel" style="margin-top:14px">
+      <div class="panel-label">Масштабы</div>
+      <div class="scales"><div class="scale s128"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#m-v2"/></svg><i>128</i></div><div class="scale s64"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#m-v2"/></svg><i>64</i></div><div class="scale s32"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#m-v2"/></svg><i>32</i></div><div class="scale s16"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#m-v2"/></svg><i>16</i></div></div>
+    </div>
+  </section>
+
+  <section class="concept" id="v3">
+    <div class="c-head">
+      <div class="c-hero"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#m-v3"/></svg></div>
+      <div class="c-copy">
+        <span class="c-num">ВАРИАНТ 3</span>
+        <h2>Траектория к сотке</h2>
+        <p>Марка — путь ученика к 100 баллам: плотный белый росчерк «путь пройден» мягко отрывается от земли и переходит в растущие точки-вехи, чей угол подъёма ускоряется (−42° → −61°) к крупной цели в фиолетовом углу градиента #0071E3→#AF52DE. Цель окружена настоящим радиальным ореолом-свечением, обрезанным по скруглению плитки, — ambient-glow продукта, а не плоский диск. Ритм остановок выверен так, что и в 16 px силуэт читается однозначно: диагональный след с яркой головой-целью, маршрут, а не биржевой график.</p>
+        <div class="c-dark">Иконка несёт собственный градиентный фон, а белый след и светящаяся цель на #000 читаются даже контрастнее, чем на светлом, — проверено рендером на обоих фонах.</div>
+      </div>
+    </div>
+    <div class="ctx">
+      
+      <div class="panel p-light">
+        <div class="panel-label">Светлая тема</div>
+        <div class="p-body">
+          <div class="tab"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#m-v3"/></svg><span>ЕГЭизм · подготовка к ЕГЭ</span><span class="x">✕</span></div>
+          <div class="lockup">
+            <div class="tile"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#g-v3"/></svg></div>
+            <div class="lockup-txt"><b>ЕГЭизм</b><span>подготовка · ЕГЭ</span></div>
+          </div>
+          <div class="lockup">
+            <span class="mark-sm"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#m-v3"/></svg></span>
+            <div class="lockup-txt"><b>ЕГЭизм</b><span>подготовка · ЕГЭ</span></div>
+          </div>
+          <div class="tg">
+            <div class="tg-ava"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#m-v3"/></svg></div>
+            <div class="tg-txt"><b>ЕГЭизм</b><span>Новое задание: «Вариант · Математика»…</span></div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="panel p-dark">
+        <div class="panel-label">Тёмная тема</div>
+        <div class="p-body">
+          <div class="tab"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#m-v3"/></svg><span>ЕГЭизм · подготовка к ЕГЭ</span><span class="x">✕</span></div>
+          <div class="lockup">
+            <div class="tile"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#g-v3"/></svg></div>
+            <div class="lockup-txt"><b>ЕГЭизм</b><span>подготовка · ЕГЭ</span></div>
+          </div>
+          <div class="lockup">
+            <span class="mark-sm"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#m-v3"/></svg></span>
+            <div class="lockup-txt"><b>ЕГЭизм</b><span>подготовка · ЕГЭ</span></div>
+          </div>
+          <div class="tg">
+            <div class="tg-ava"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#m-v3"/></svg></div>
+            <div class="tg-txt"><b>ЕГЭизм</b><span>Новое задание: «Вариант · Математика»…</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel" style="margin-top:14px">
+      <div class="panel-label">Масштабы</div>
+      <div class="scales"><div class="scale s128"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#m-v3"/></svg><i>128</i></div><div class="scale s64"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#m-v3"/></svg><i>64</i></div><div class="scale s32"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#m-v3"/></svg><i>32</i></div><div class="scale s16"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#m-v3"/></svg><i>16</i></div></div>
+    </div>
+  </section>
+
+  <section class="concept" id="v4">
+    <div class="c-head">
+      <div class="c-hero"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#m-v4"/></svg></div>
+      <div class="c-copy">
+        <span class="c-num">ВАРИАНТ 4</span>
+        <h2>Сотка</h2>
+        <p>Число 100 — та самая «сотка», ради которой школьник открывает ЕГЭизм. Цифры — кастомная замковая геометрия: два ноля-стадиона сварены в лигатуру одним общим штрихом (стенки колец совпадают точь-в-точь, шов ровно в одну толщину линии), единица с флагом держит общий рост и базовую линию. Под числом — прогресс-бар высотой ровно в штрих, заполненный на 100% системным success-зелёным — цветом, которым чекер платформы подсвечивает верный ответ: «прорешал до конца — сдал на сотку». На 16px марка сжимается в чёткий силуэт «1OO» с зелёной полосой и остаётся узнаваемой среди фавиконов.</p>
+        <div class="c-dark">Знак несёт собственную сине-градиентную плашку, белые цифры и зелёный бар держат контраст и на #F5F5F7, и на чистом чёрном — проверено рендером на обоих фонах.</div>
+      </div>
+    </div>
+    <div class="ctx">
+      
+      <div class="panel p-light">
+        <div class="panel-label">Светлая тема</div>
+        <div class="p-body">
+          <div class="tab"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#m-v4"/></svg><span>ЕГЭизм · подготовка к ЕГЭ</span><span class="x">✕</span></div>
+          <div class="lockup">
+            <div class="tile"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#g-v4"/></svg></div>
+            <div class="lockup-txt"><b>ЕГЭизм</b><span>подготовка · ЕГЭ</span></div>
+          </div>
+          <div class="lockup">
+            <span class="mark-sm"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#m-v4"/></svg></span>
+            <div class="lockup-txt"><b>ЕГЭизм</b><span>подготовка · ЕГЭ</span></div>
+          </div>
+          <div class="tg">
+            <div class="tg-ava"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#m-v4"/></svg></div>
+            <div class="tg-txt"><b>ЕГЭизм</b><span>Новое задание: «Вариант · Математика»…</span></div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="panel p-dark">
+        <div class="panel-label">Тёмная тема</div>
+        <div class="p-body">
+          <div class="tab"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#m-v4"/></svg><span>ЕГЭизм · подготовка к ЕГЭ</span><span class="x">✕</span></div>
+          <div class="lockup">
+            <div class="tile"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#g-v4"/></svg></div>
+            <div class="lockup-txt"><b>ЕГЭизм</b><span>подготовка · ЕГЭ</span></div>
+          </div>
+          <div class="lockup">
+            <span class="mark-sm"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#m-v4"/></svg></span>
+            <div class="lockup-txt"><b>ЕГЭизм</b><span>подготовка · ЕГЭ</span></div>
+          </div>
+          <div class="tg">
+            <div class="tg-ava"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#m-v4"/></svg></div>
+            <div class="tg-txt"><b>ЕГЭизм</b><span>Новое задание: «Вариант · Математика»…</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel" style="margin-top:14px">
+      <div class="panel-label">Масштабы</div>
+      <div class="scales"><div class="scale s128"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#m-v4"/></svg><i>128</i></div><div class="scale s64"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#m-v4"/></svg><i>64</i></div><div class="scale s32"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#m-v4"/></svg><i>32</i></div><div class="scale s16"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#m-v4"/></svg><i>16</i></div></div>
+    </div>
+  </section>
+
+  <section class="concept" id="v5">
+    <div class="c-head">
+      <div class="c-hero"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#m-v5"/></svg></div>
+      <div class="c-copy">
+        <span class="c-num">ВАРИАНТ 5</span>
+        <h2>Е-ступени</h2>
+        <p>Буква «Е» собрана из трёх белых прогресс-баров растущей длины на вертикальном стеме: их концы лежат на одной восходящей диагонали, так что первая буква бренда одновременно читается как график подготовки. В конец самого длинного бара вплавлена идеально круглая зелёная точка — house-зелёный «решено», геометрически совпадающая с капом бара (ноль швов). Утолщённые до 8px бары держат силуэт на favicon: на 16px марка изящно деградирует до чистой белой «Е» на синем, а на 32+ зелёный маркер уже виден. Лёгкий верхний блик и едва заметное фиолетовое свечение заполняют воздух над ступенями, не съедая фирменный синий.</p>
+        <div class="c-dark">Иконка несёт собственную сине-градиентную плитку, поэтому на #000 нижняя кромка #0068D6 по-прежнему отделяется от фона, а белая «Е» и зелёная точка не теряют контраст.</div>
+      </div>
+    </div>
+    <div class="ctx">
+      
+      <div class="panel p-light">
+        <div class="panel-label">Светлая тема</div>
+        <div class="p-body">
+          <div class="tab"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#m-v5"/></svg><span>ЕГЭизм · подготовка к ЕГЭ</span><span class="x">✕</span></div>
+          <div class="lockup">
+            <div class="tile"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#g-v5"/></svg></div>
+            <div class="lockup-txt"><b>ЕГЭизм</b><span>подготовка · ЕГЭ</span></div>
+          </div>
+          <div class="lockup">
+            <span class="mark-sm"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#m-v5"/></svg></span>
+            <div class="lockup-txt"><b>ЕГЭизм</b><span>подготовка · ЕГЭ</span></div>
+          </div>
+          <div class="tg">
+            <div class="tg-ava"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#m-v5"/></svg></div>
+            <div class="tg-txt"><b>ЕГЭизм</b><span>Новое задание: «Вариант · Математика»…</span></div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="panel p-dark">
+        <div class="panel-label">Тёмная тема</div>
+        <div class="p-body">
+          <div class="tab"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#m-v5"/></svg><span>ЕГЭизм · подготовка к ЕГЭ</span><span class="x">✕</span></div>
+          <div class="lockup">
+            <div class="tile"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#g-v5"/></svg></div>
+            <div class="lockup-txt"><b>ЕГЭизм</b><span>подготовка · ЕГЭ</span></div>
+          </div>
+          <div class="lockup">
+            <span class="mark-sm"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#m-v5"/></svg></span>
+            <div class="lockup-txt"><b>ЕГЭизм</b><span>подготовка · ЕГЭ</span></div>
+          </div>
+          <div class="tg">
+            <div class="tg-ava"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#m-v5"/></svg></div>
+            <div class="tg-txt"><b>ЕГЭизм</b><span>Новое задание: «Вариант · Математика»…</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel" style="margin-top:14px">
+      <div class="panel-label">Масштабы</div>
+      <div class="scales"><div class="scale s128"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#m-v5"/></svg><i>128</i></div><div class="scale s64"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#m-v5"/></svg><i>64</i></div><div class="scale s32"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#m-v5"/></svg><i>32</i></div><div class="scale s16"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#m-v5"/></svg><i>16</i></div></div>
+    </div>
+  </section>
+
+  <div class="choose">
+    <b>Как выбрать:</b> ответь номером варианта (1–5). Могу докрутить любой — цвет, форму, глиф для шапки — или скрестить два концепта. Файлы всех пяти уже лежат в репозитории в <code>design/logo/</code>, выбранный подключу как фавиконку и логотип сайта.
+  </div>
+</div>

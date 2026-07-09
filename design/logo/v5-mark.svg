@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="v5bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2A8CEC"/>
+      <stop offset="1" stop-color="#0068D6"/>
+    </linearGradient>
+    <radialGradient id="v5glow" cx="0.82" cy="0.08" r="0.9">
+      <stop offset="0" stop-color="#AF52DE" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#AF52DE" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="v5sheen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.14"/>
+      <stop offset="0.32" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14.5" fill="url(#v5bg)"/>
+  <rect width="64" height="64" rx="14.5" fill="url(#v5glow)"/>
+  <rect width="64" height="64" rx="14.5" fill="url(#v5sheen)"/>
+  <g fill="#FFFFFF">
+    <rect x="15" y="13.5" width="8" height="37" rx="4"/>
+    <rect x="15" y="13.5" width="19" height="8" rx="4"/>
+    <rect x="15" y="28" width="27" height="8" rx="4"/>
+    <rect x="15" y="42.5" width="35" height="8" rx="4"/>
+  </g>
+  <circle cx="46" cy="46.5" r="4" fill="#34C759"/>
+</svg>

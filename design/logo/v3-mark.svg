@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="v3grad" x1="0" y1="64" x2="64" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0071E3"/>
+      <stop offset="0.45" stop-color="#2E6EE4"/>
+      <stop offset="1" stop-color="#AF52DE"/>
+    </linearGradient>
+    <radialGradient id="v3glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.32"/>
+      <stop offset="0.55" stop-color="#FFFFFF" stop-opacity="0.13"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <clipPath id="v3clip"><rect width="64" height="64" rx="14.5"/></clipPath>
+  </defs>
+  <rect width="64" height="64" rx="14.5" fill="url(#v3grad)"/>
+  <g clip-path="url(#v3clip)">
+    <circle cx="48.4" cy="16.6" r="13.5" fill="url(#v3glow)"/>
+    <path d="M11.4 51.8 Q22.4 49.5 30 42.6" fill="none" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round"/>
+    <circle cx="35.8" cy="36.6" r="2.7" fill="#FFFFFF"/>
+    <circle cx="41.6" cy="28.9" r="3.7" fill="#FFFFFF"/>
+    <circle cx="48.4" cy="16.6" r="6.8" fill="#FFFFFF"/>
+  </g>
+</svg>
