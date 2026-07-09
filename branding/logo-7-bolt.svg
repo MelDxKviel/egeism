@@ -1,0 +1,9 @@
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="ЕГЭизм — вспышка">
+  <defs>
+    <linearGradient id="l7bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2A8EFF"/>
+      <stop offset="1" stop-color="#0066CC"/>
+    </linearGradient>
+  </defs>
+  <path d="M37,5 L19,35 L30,35 L26,59 L45,27 L34,27 Z" fill="url(#l7bg)"/>
+</svg>

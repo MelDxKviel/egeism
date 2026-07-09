@@ -1,0 +1,23 @@
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="ЕГЭизм — книга">
+  <defs>
+    <linearGradient id="l9left" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2A8EFF"/>
+      <stop offset="1" stop-color="#0071E3"/>
+    </linearGradient>
+    <linearGradient id="l9right" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0071E3"/>
+      <stop offset="1" stop-color="#0066CC"/>
+    </linearGradient>
+  </defs>
+  <path d="M30,15 L9,20 L9,47 L30,42 Z" fill="url(#l9left)"/>
+  <path d="M34,15 L55,20 L55,47 L34,42 Z" fill="url(#l9right)"/>
+  <path d="M30,15 L34,15 L34,42 L30,42 Z" fill="#0050B8"/>
+  <g stroke="#FFFFFF" stroke-width="1.6" opacity="0.4" stroke-linecap="round">
+    <line x1="14" y1="26" x2="26" y2="23"/>
+    <line x1="14" y1="32" x2="26" y2="29"/>
+    <line x1="14" y1="38" x2="24" y2="35.5"/>
+    <line x1="38" y1="23" x2="50" y2="26"/>
+    <line x1="38" y1="29" x2="50" y2="32"/>
+    <line x1="40" y1="35.5" x2="50" y2="38"/>
+  </g>
+</svg>

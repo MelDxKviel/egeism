@@ -1,0 +1,18 @@
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="ЕГЭизм — матрица">
+  <circle cx="16" cy="16" r="4.5" fill="#D5D5D9"/>
+  <circle cx="28" cy="16" r="4.5" fill="#9EC9F5"/>
+  <circle cx="40" cy="16" r="4.5" fill="#9EC9F5"/>
+  <circle cx="52" cy="16" r="4.5" fill="#5AA6F0"/>
+  <circle cx="16" cy="28" r="4.5" fill="#9EC9F5"/>
+  <circle cx="28" cy="28" r="4.5" fill="#5AA6F0"/>
+  <circle cx="40" cy="28" r="4.5" fill="#5AA6F0"/>
+  <circle cx="52" cy="28" r="4.5" fill="#1A86E8"/>
+  <circle cx="16" cy="40" r="4.5" fill="#5AA6F0"/>
+  <circle cx="28" cy="40" r="4.5" fill="#1A86E8"/>
+  <circle cx="40" cy="40" r="4.5" fill="#1A86E8"/>
+  <circle cx="52" cy="40" r="4.5" fill="#0066CC"/>
+  <circle cx="16" cy="52" r="4.5" fill="#1A86E8"/>
+  <circle cx="28" cy="52" r="4.5" fill="#0066CC"/>
+  <circle cx="40" cy="52" r="4.5" fill="#0066CC"/>
+  <circle cx="52" cy="52" r="4.5" fill="#0066CC"/>
+</svg>

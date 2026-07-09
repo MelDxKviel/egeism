@@ -1,0 +1,19 @@
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="ЕГЭизм — компас">
+  <defs>
+    <linearGradient id="l13n" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2A8EFF"/>
+      <stop offset="1" stop-color="#0066CC"/>
+    </linearGradient>
+  </defs>
+  <circle cx="32" cy="32" r="26" fill="none" stroke="url(#l13n)" stroke-width="3" opacity="0.3"/>
+  <g stroke="url(#l13n)" stroke-width="3.2" stroke-linecap="round">
+    <line x1="32" y1="3" x2="32" y2="9"/>
+    <line x1="61" y1="32" x2="55" y2="32"/>
+    <line x1="32" y1="61" x2="32" y2="55"/>
+    <line x1="3" y1="32" x2="9" y2="32"/>
+  </g>
+  <path d="M32,9 L38,32 L26,32 Z" fill="url(#l13n)"/>
+  <path d="M32,55 L38,32 L26,32 Z" fill="url(#l13n)" opacity="0.38"/>
+  <circle cx="32" cy="32" r="3.2" fill="#FFFFFF"/>
+  <circle cx="32" cy="32" r="1.6" fill="url(#l13n)"/>
+</svg>

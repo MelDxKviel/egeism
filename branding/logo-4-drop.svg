@@ -1,0 +1,10 @@
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="ЕГЭизм — капля">
+  <defs>
+    <linearGradient id="l4bg" x1="0.2" y1="0" x2="0.8" y2="1">
+      <stop offset="0" stop-color="#2A8EFF"/>
+      <stop offset="1" stop-color="#0066CC"/>
+    </linearGradient>
+  </defs>
+  <path d="M32,5 C32,5 51,22 51,38 C51,50.4 42.4,59 32,59 C21.6,59 13,50.4 13,38 C13,22 32,5 32,5 Z" fill="url(#l4bg)"/>
+  <path d="M24,38 L30,44 L41,30" fill="none" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
