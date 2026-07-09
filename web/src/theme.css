@@ -1,42 +1,77 @@
-/* Design tokens from the handoff (light/dark). Applied via data-theme on .app. */
+/* Design system — Apple HIG-inspired. Tokens applied via data-theme on .app.
+   Layers: base tokens (color/shape/motion) → materials (.glass) → interactive
+   classes (.btn/.icon-btn/.card/.navbtn/.seg) with hover/active/focus states.
+   Interactive colors live in classes (not inline styles) so :hover can win. */
 * { box-sizing: border-box; }
 html, body, #root { margin: 0; padding: 0; height: 100%; }
-button { font-family: inherit; color: inherit; cursor: pointer; }
+button { font-family: inherit; color: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
 input, select, textarea { font-family: inherit; }
 ::selection { background: var(--accent-soft); }
 
 .app {
-  --bg: #F6F4F0; --bg-2: #EFEBE4; --surface: #FFFFFF; --surface-2: #FBFAF7;
-  --border: #E8E3DB; --border-2: #D8D2C7;
-  --text: #23221E; --text-2: #5F5B53; --text-3: #948F85;
-  --accent: #3E9284; --accent-2: #31735F; --accent-soft: #E4EFEC; --on-accent: #FFFFFF;
-  --bad: #C6563E; --bad-soft: #F4E3DD; --warn: #B8842F; --warn-soft: #F3E9D6;
-  --hm0: #ECE8E1; --hm1: #CFE7E0; --hm2: #9AD3C5; --hm3: #61B6A5; --hm4: #3E9284;
-  --shadow: 0 1px 2px rgba(30,28,24,.04), 0 12px 30px -16px rgba(30,28,24,.14);
-  --shadow-lg: 0 1px 2px rgba(30,28,24,.05), 0 24px 60px -24px rgba(30,28,24,.22);
+  /* Neutral scale (apple.com light) */
+  --bg: #F5F5F7; --bg-2: #E8E8ED; --surface: #FFFFFF; --surface-2: #F5F5F7;
+  --border: rgba(0, 0, 0, .09); --border-2: rgba(0, 0, 0, .18);
+  --text: #1D1D1F; --text-2: #55555B; --text-3: #86868B;
+  /* System blue — actions, links, selection */
+  --accent: #0071E3; --accent-2: #0066CC; --accent-soft: rgba(0, 113, 227, .10); --on-accent: #FFFFFF;
+  /* Semantics: green = success, red = error, orange = warning */
+  --ok: #1D8339; --ok-soft: rgba(52, 199, 89, .14);
+  --bad: #E30000; --bad-soft: rgba(227, 0, 0, .08);
+  --warn: #BF4E00; --warn-soft: rgba(255, 149, 0, .14);
+  /* Activity heatmap (green ramp, deepest = --ok) */
+  --hm0: #E8E8ED; --hm1: #BDE9C8; --hm2: #7DD996; --hm3: #34C759; --hm4: #1D8339;
+  /* Depth — barely-there resting shadow, soft raised hover, big floating panels */
+  --shadow: 0 1px 2px rgba(0, 0, 0, .04), 0 12px 32px -18px rgba(0, 0, 0, .12);
+  --shadow-2: 0 2px 6px rgba(0, 0, 0, .05), 0 18px 44px -18px rgba(0, 0, 0, .18);
+  --shadow-lg: 0 2px 8px rgba(0, 0, 0, .06), 0 32px 80px -24px rgba(0, 0, 0, .28);
+  /* Materials */
+  --glass: rgba(255, 255, 255, .68); --backdrop: rgba(0, 0, 0, .32);
+  --knob: #FFFFFF; --ring: rgba(0, 113, 227, .35);
+  /* Motion */
+  --ease: cubic-bezier(.25, .1, .25, 1); --spring: cubic-bezier(.34, 1.25, .44, 1);
   --gap: 20px; --main-pad: 32px;
   min-height: 100%;
   background: var(--bg);
   color: var(--text);
-  font-family: Onest, system-ui, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+    "Helvetica Neue", "Segoe UI", Roboto, Inter, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
-  font-feature-settings: 'ss01','cv01';
+  -webkit-tap-highlight-color: transparent;
+  text-rendering: optimizeLegibility;
 }
 .app[data-theme="dark"] {
-  --bg: #121417; --bg-2: #0C0E11; --surface: #191C20; --surface-2: #20242A;
-  --border: #292D33; --border-2: #3A3F47;
-  --text: #EAECEE; --text-2: #A6ACB3; --text-3: #767C84;
-  --accent: #55B7A5; --accent-2: #6BC7B6; --accent-soft: #16302B; --on-accent: #06201B;
-  --bad: #E1745C; --bad-soft: #33201C; --warn: #D3A24E; --warn-soft: #2E2718;
-  --hm0: #20242A; --hm1: #274A43; --hm2: #356D61; --hm3: #449484; --hm4: #55B7A5;
-  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 14px 34px -18px rgba(0,0,0,.7);
-  --shadow-lg: 0 1px 2px rgba(0,0,0,.4), 0 30px 70px -28px rgba(0,0,0,.8);
+  /* iOS dark: true-black canvas, elevated #1C1C1E / #2C2C2E surfaces.
+     bg-2 sits between them so neutral fills/tracks read both on the black
+     canvas AND on a #1C1C1E card. */
+  --bg: #000000; --bg-2: #29292D; --surface: #1C1C1E; --surface-2: #2C2C2E;
+  --border: rgba(255, 255, 255, .10); --border-2: rgba(255, 255, 255, .24);
+  --text: #F5F5F7; --text-2: #A1A1A6; --text-3: #8A8A90;
+  --accent: #0A84FF; --accent-2: #409CFF; --accent-soft: rgba(10, 132, 255, .18); --on-accent: #FFFFFF;
+  --ok: #30D158; --ok-soft: rgba(48, 209, 88, .16);
+  --bad: #FF453A; --bad-soft: rgba(255, 69, 58, .15);
+  --warn: #FF9F0A; --warn-soft: rgba(255, 159, 10, .15);
+  --hm0: #2C2C2E; --hm1: #174524; --hm2: #1F6B33; --hm3: #2AA84A; --hm4: #30D158;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .5), 0 16px 40px -20px rgba(0, 0, 0, .75);
+  --shadow-2: 0 2px 6px rgba(0, 0, 0, .55), 0 22px 52px -20px rgba(0, 0, 0, .8);
+  --shadow-lg: 0 2px 8px rgba(0, 0, 0, .55), 0 40px 100px -28px rgba(0, 0, 0, .9);
+  --glass: rgba(22, 22, 24, .68); --backdrop: rgba(0, 0, 0, .55);
+  --knob: #636366; --ring: rgba(10, 132, 255, .5);
 }
-.mono { font-family: 'JetBrains Mono', monospace; }
+.mono {
+  font-family: ui-monospace, "SF Mono", Menlo, "Cascadia Code", "JetBrains Mono", "Roboto Mono", monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Focus — a soft system-blue ring, keyboard only. */
+:where(button, a, input, select, textarea, [role="button"]):focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 4px var(--ring);
+}
 
 @keyframes fade { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-@keyframes pop  { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: none; } }
-@keyframes popdown { from { opacity: 0; transform: translateY(-6px) scale(.985); } to { opacity: 1; transform: none; } }
+@keyframes pop  { from { opacity: 0; transform: scale(.96) translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes popdown { from { opacity: 0; transform: translateY(-6px) scale(.97); } to { opacity: 1; transform: none; } }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes shim { 0% { background-position: -420px 0; } 100% { background-position: 420px 0; } }
 
@@ -45,33 +80,156 @@ input, select, textarea { font-family: inherit; }
 @keyframes celebrate { 0% { opacity: 0; transform: scale(.92); } 55% { opacity: 1; transform: scale(1.03); } 100% { transform: scale(1); } }
 @keyframes checkpop { 0% { transform: scale(0); } 60% { transform: scale(1.25); } 100% { transform: scale(1); } }
 @keyframes flamelive { 0%, 100% { transform: scale(1) rotate(-1deg); } 30% { transform: scale(1.08, .96) rotate(1.5deg); } 60% { transform: scale(.95, 1.06) rotate(-2deg); } }
-.celebrate { animation: celebrate .42s cubic-bezier(.2,1.25,.5,1) both; }
-.checkpop { animation: checkpop .5s cubic-bezier(.2,1.4,.5,1) both; transform-origin: center; }
+.celebrate { animation: celebrate .42s cubic-bezier(.2, 1.25, .5, 1) both; }
+.checkpop { animation: checkpop .5s cubic-bezier(.2, 1.4, .5, 1) both; transform-origin: center; }
 /* The glow rides in a currentColor drop-shadow, so the flame burns in whatever
    token color it inherits (the accent pill) and needs no extra element. */
 .flame-live { animation: flamelive 1.7s ease-in-out infinite; transform-origin: 50% 85%; filter: drop-shadow(0 0 3px currentColor); }
 
 @media (prefers-reduced-motion: reduce) {
-  .fade, .popdown, .skel, .celebrate, .checkpop, .flame-live { animation: none !important; }
+  .fade, .pop, .popdown, .skel, .celebrate, .checkpop, .flame-live { animation: none !important; }
+  .btn, .icon-btn, .card-tap, .navbtn, .row, .seg > button { transition: none !important; }
 }
 
-.fade { animation: fade .3s ease both; }
+.fade { animation: fade .3s var(--ease) both; }
+/* Modal panel — a sheet that springs up into place. */
+.pop { animation: pop .34s var(--spring) both; }
 /* Anchored dropdown (the notifications popover) — drops in from just under its
    trigger. transform-origin is set inline so it scales from the right edge. */
-.popdown { animation: popdown .16s ease both; }
+.popdown { animation: popdown .22s var(--spring) both; }
 .skel {
-  background: linear-gradient(90deg, var(--bg-2) 25%, var(--surface-2) 37%, var(--bg-2) 63%);
-  background-size: 420px 100%; animation: shim 1.3s linear infinite; border-radius: 8px;
+  /* Text-mixed translucent ramp — shimmers on any surface level. */
+  background: linear-gradient(90deg,
+    color-mix(in srgb, var(--text) 6%, transparent) 25%,
+    color-mix(in srgb, var(--text) 12%, transparent) 37%,
+    color-mix(in srgb, var(--text) 6%, transparent) 63%);
+  background-size: 420px 100%; animation: shim 1.3s linear infinite; border-radius: 10px;
 }
 .scroll::-webkit-scrollbar { height: 8px; width: 8px; }
-.scroll::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 8px; }
+.scroll::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--text) 18%, transparent);
+  border-radius: 8px; background-clip: padding-box; border: 2px solid transparent;
+}
 
 a { color: var(--accent-2); }
 input, textarea, select {
   background: var(--surface-2); border: 1px solid var(--border);
-  border-radius: 10px; color: var(--text); padding: 10px 12px; font-size: 14px; outline: none;
+  border-radius: 12px; color: var(--text); padding: 10px 12px; font-size: 14px; outline: none;
+  transition: border-color .15s var(--ease), box-shadow .15s var(--ease), background .15s var(--ease);
 }
-input:focus, textarea:focus, select:focus { border-color: var(--accent); }
+input:hover, textarea:hover, select:hover { border-color: var(--border-2); }
+input:focus, textarea:focus, select:focus {
+  border-color: var(--accent); box-shadow: 0 0 0 3.5px var(--ring);
+}
+
+/* ---------- Frosted material (Apple header/tab-bar recipe) ---------- */
+.glass {
+  background: var(--glass);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass { background: var(--surface); }
+}
+/* Modal / lightbox scrim: dim + gently blur what's behind. */
+.overlay {
+  background: var(--backdrop);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+/* ---------- Buttons ---------- */
+/* Pill-shaped (apple.com CTA). Variant colors live here so :hover/:active can
+   layer on top; inline styles are reserved for layout (width/padding). */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  border-radius: 980px; padding: 10px 18px; font-weight: 600; font-size: 14px;
+  border: 1px solid transparent; white-space: nowrap;
+  transition: background .16s var(--ease), color .16s var(--ease),
+    border-color .16s var(--ease), filter .16s var(--ease),
+    transform .16s var(--spring), box-shadow .16s var(--ease), opacity .16s var(--ease);
+}
+.btn:active { transform: scale(.97); }
+.btn:disabled { opacity: .45; pointer-events: none; }
+.btn-primary { background: var(--accent); color: var(--on-accent); }
+.btn-primary:hover { filter: brightness(1.08); }
+.btn-primary:active { filter: brightness(.95); }
+.btn-ghost { background: transparent; color: var(--text); border-color: var(--border-2); }
+.btn-ghost:hover { background: color-mix(in srgb, var(--text) 6%, transparent); }
+.btn-soft { background: var(--accent-soft); color: var(--accent-2); }
+.btn-soft:hover { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+.btn-danger { background: var(--bad-soft); color: var(--bad); }
+.btn-danger:hover { background: color-mix(in srgb, var(--bad) 16%, transparent); }
+
+/* Square hairline icon button (theme toggle, bell, logout, …). */
+.icon-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 9px;
+  background: transparent; border: 1px solid var(--border); border-radius: 12px;
+  padding: 8px; color: var(--text-2); position: relative;
+  transition: background .16s var(--ease), color .16s var(--ease),
+    border-color .16s var(--ease), transform .16s var(--spring);
+}
+.icon-btn:hover { background: color-mix(in srgb, var(--text) 5%, transparent); color: var(--text); }
+.icon-btn:active { transform: scale(.94); }
+.icon-btn[data-active="1"] { background: var(--accent-soft); color: var(--accent-2); border-color: transparent; }
+
+/* Bare text link button. */
+.link-btn {
+  background: none; border: none; padding: 0; font-size: 13px;
+  color: var(--accent-2); transition: opacity .15s var(--ease);
+}
+.link-btn:hover { opacity: .75; }
+
+/* ---------- Cards ---------- */
+.card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 18px; box-shadow: var(--shadow);
+}
+/* A card (or row) that acts as a button: raise on hover, settle on press. */
+.card-tap {
+  cursor: pointer;
+  transition: transform .2s var(--ease), box-shadow .2s var(--ease), border-color .2s var(--ease), background .2s var(--ease);
+}
+.card-tap:hover { transform: translateY(-2px); box-shadow: var(--shadow-2); border-color: var(--border-2); }
+.card-tap:active { transform: translateY(0) scale(.995); box-shadow: var(--shadow); }
+
+/* Flat interactive row (list items, notification entries). Background states
+   ride on data-attrs so :hover can win over the resting tint. */
+.row {
+  transition: background .15s var(--ease), border-color .15s var(--ease), transform .15s var(--ease);
+}
+.row:hover { background: color-mix(in srgb, var(--text) 5%, transparent); }
+.row:active { transform: scale(.99); }
+.row[data-unread="1"] { background: var(--accent-soft); }
+.row[data-unread="1"]:hover { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+
+/* ---------- Sidebar / tab-bar nav ---------- */
+.navbtn {
+  display: flex; align-items: center; gap: 11px; padding: 10px 12px; border-radius: 12px;
+  border: none; text-align: left; font-size: 14px; font-weight: 500; width: 100%;
+  background: transparent; color: var(--text-2);
+  transition: background .16s var(--ease), color .16s var(--ease), transform .16s var(--spring);
+}
+.navbtn:hover { background: color-mix(in srgb, var(--text) 5%, transparent); color: var(--text); }
+.navbtn:active { transform: scale(.98); }
+.navbtn[data-active="1"] { background: var(--accent-soft); color: var(--accent-2); font-weight: 600; }
+
+/* ---------- Segmented control (iOS-style subject/mode switcher) ---------- */
+.seg {
+  display: inline-flex; gap: 2px; padding: 3px; border-radius: 12px;
+  background: color-mix(in srgb, var(--text) 7%, transparent);
+}
+.seg > button {
+  border: none; background: transparent; padding: 7px 14px; border-radius: 9px;
+  font-weight: 600; font-size: 13px; color: var(--text-2); white-space: nowrap;
+  transition: background .18s var(--ease), color .18s var(--ease), box-shadow .18s var(--ease), transform .18s var(--spring);
+}
+.seg > button:hover { color: var(--text); }
+.seg > button:active { transform: scale(.97); }
+.seg > button[data-active="1"] {
+  background: var(--knob); color: var(--text);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .16), 0 3px 8px rgba(0, 0, 0, .08);
+}
 
 /* Inline formulas (РЕШУ <img class=tex>): baseline-aligned, at natural text size
    instead of detached blocks. The source SVGs are pure black, so invert them in

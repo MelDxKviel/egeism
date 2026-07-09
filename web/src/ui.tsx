@@ -20,11 +20,11 @@ export function Modal({ title, children, onClose, maxWidth = 560 }:
   // <body> level, leaving the panel transparent and unstyled. Every dialog must
   // go through this component — a bare createPortal loses the theme again.
   return createPortal(
-    <div className="app" data-theme={theme} onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 16, minHeight: 0 }}>
-      <div onClick={(e) => e.stopPropagation()} className="fade" style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 18, padding: 24, maxWidth, width: "100%", maxHeight: "92vh", display: "flex", flexDirection: "column", boxShadow: "var(--shadow-lg)" }}>
+    <div className="app overlay" data-theme={theme} onClick={onClose} style={{ position: "fixed", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 16, minHeight: 0 }}>
+      <div onClick={(e) => e.stopPropagation()} className="pop" style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 20, padding: 24, maxWidth, width: "100%", maxHeight: "92vh", display: "flex", flexDirection: "column", boxShadow: "var(--shadow-lg)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-          <div style={{ fontWeight: 700, fontSize: 16, display: "flex", alignItems: "center", gap: 10 }}>{title}</div>
-          <button onClick={onClose} title="Закрыть" style={{ display: "flex", alignItems: "center", background: "none", border: "none", color: "var(--text-3)", padding: 2 }}><Icon name="close" size={20} /></button>
+          <div style={{ fontWeight: 700, fontSize: 17, letterSpacing: "-0.01em", display: "flex", alignItems: "center", gap: 10 }}>{title}</div>
+          <button onClick={onClose} title="Закрыть" className="icon-btn" style={{ border: "none", borderRadius: 999, padding: 6, color: "var(--text-3)" }}><Icon name="close" size={19} /></button>
         </div>
         <div className="scroll" style={{ overflowY: "auto", flex: 1, minHeight: 0 }}>{children}</div>
       </div>
@@ -62,11 +62,12 @@ export function MediaBlock({ media }: { media?: Media[] }) {
         // the card; click opens an in-page lightbox. The container is always
         // white (even in dark theme) so transparent PNG figures stay legible.
         <div key={i} role="button" tabIndex={0} aria-label="Увеличить изображение"
+          className="card-tap"
           onClick={() => setZoom(m.key)}
           onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setZoom(m.key); } }}
           style={{
             alignSelf: "flex-start", display: "block", width: "min(100%, 340px)", lineHeight: 0,
-            background: "#FFFFFF", padding: 6, borderRadius: 12, border: "1px solid var(--border)",
+            background: "#FFFFFF", padding: 6, borderRadius: 14, border: "1px solid var(--border)",
             cursor: "zoom-in", boxSizing: "border-box",
           }}>
           <img src={mediaUrl(m.key)} alt={m.alt || ""} loading="lazy" style={{
@@ -80,7 +81,8 @@ export function MediaBlock({ media }: { media?: Media[] }) {
         // Portaled to <body> so the fixed backdrop covers the whole viewport
         // regardless of any transformed/clipping ancestor in the card tree.
         <div onClick={() => setZoom(null)} style={{
-          position: "fixed", inset: 0, zIndex: 2000, background: "rgba(0,0,0,.8)",
+          position: "fixed", inset: 0, zIndex: 2000, background: "rgba(0,0,0,.72)",
+          WebkitBackdropFilter: "blur(14px)", backdropFilter: "blur(14px)",
           display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
         }}>
           <button type="button" aria-label="Закрыть" onClick={() => setZoom(null)} style={{
@@ -178,9 +180,10 @@ export function StatementView({ text, media, style }: { text?: string; media?: M
   return <div style={style}>{blocks}</div>;
 }
 
-// Accuracy → token color (§ design: ≥78 accent · 62–77 L3 · 48–61 warn · <48 bad).
+// Accuracy → token color (≥78 green · 62–77 light green · 48–61 warn · <48 bad).
+// Success is GREEN (system semantics), the blue accent is reserved for actions.
 export function accColor(pct: number): string {
-  if (pct >= 78) return "var(--accent)";
+  if (pct >= 78) return "var(--ok)";
   if (pct >= 62) return "var(--hm3)";
   if (pct >= 48) return "var(--warn)";
   return "var(--bad)";
@@ -196,27 +199,29 @@ export function heatColor(total: number): string {
 
 export function Card({ children, style, className, onClick }:
   { children: ReactNode; style?: CSSProperties; className?: string; onClick?: () => void }) {
+  // Clickable cards get the .card-tap raise/settle states from theme.css.
   return (
-    <div className={className} onClick={onClick} style={{
-      background: "var(--surface)", border: "1px solid var(--border)",
-      borderRadius: 16, padding: 22, boxShadow: "var(--shadow)", ...style,
-    }}>{children}</div>
+    <div className={["card", onClick ? "card-tap" : "", className || ""].filter(Boolean).join(" ")}
+      onClick={onClick} style={{ padding: 22, ...style }}>{children}</div>
   );
 }
 
 export function Label({ children, style }: { children: ReactNode; style?: CSSProperties }) {
   return <div className="mono" style={{
-    fontSize: 11, letterSpacing: ".06em", textTransform: "uppercase",
+    fontSize: 11, fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase",
     color: "var(--text-3)", ...style,
   }}>{children}</div>;
 }
 
-export function Pill({ children, tone = "neutral" }: { children: ReactNode; tone?: "accent" | "bad" | "warn" | "neutral" }) {
+export function Pill({ children, tone = "neutral" }: { children: ReactNode; tone?: "accent" | "ok" | "bad" | "warn" | "neutral" }) {
+  // ok = green success («верно», «решён»); accent (blue) = informational/selected.
+  // The neutral tint is text-mixed so it reads on any surface level.
   const map = {
     accent: ["var(--accent-soft)", "var(--accent-2)"],
+    ok: ["var(--ok-soft)", "var(--ok)"],
     bad: ["var(--bad-soft)", "var(--bad)"],
     warn: ["var(--warn-soft)", "var(--warn)"],
-    neutral: ["var(--bg-2)", "var(--text-2)"],
+    neutral: ["color-mix(in srgb, var(--text) 8%, transparent)", "var(--text-2)"],
   }[tone];
   return <span className="mono" style={{
     background: map[0], color: map[1], borderRadius: 999, padding: "3px 10px",
@@ -224,19 +229,12 @@ export function Pill({ children, tone = "neutral" }: { children: ReactNode; tone
   }}>{children}</span>;
 }
 
+// Pill button (apple.com CTA shape). Colors + hover/active/focus states live in
+// theme.css (.btn-*); the style prop stays for layout overrides only.
 export function Button({ children, onClick, variant = "primary", disabled, style, type }:
-  { children: ReactNode; onClick?: () => void; variant?: "primary" | "ghost" | "soft"; disabled?: boolean; style?: CSSProperties; type?: "button" | "submit" }) {
-  const base: CSSProperties = {
-    borderRadius: 11, padding: "10px 16px", fontWeight: 600, fontSize: 14,
-    border: "1px solid transparent", opacity: disabled ? 0.5 : 1,
-    pointerEvents: disabled ? "none" : "auto", ...style,
-  };
-  const styles: Record<string, CSSProperties> = {
-    primary: { background: "var(--accent)", color: "var(--on-accent)" },
-    ghost: { background: "transparent", color: "var(--text)", border: "1px solid var(--border-2)" },
-    soft: { background: "var(--accent-soft)", color: "var(--accent-2)" },
-  };
-  return <button type={type || "button"} onClick={onClick} disabled={disabled} style={{ ...base, ...styles[variant] }}>{children}</button>;
+  { children: ReactNode; onClick?: () => void; variant?: "primary" | "ghost" | "soft" | "danger"; disabled?: boolean; style?: CSSProperties; type?: "button" | "submit" }) {
+  return <button type={type || "button"} onClick={onClick} disabled={disabled}
+    className={`btn btn-${variant}`} style={style}>{children}</button>;
 }
 
 // PasswordInput — a password field with the «глазик»: a trailing eye button
@@ -329,16 +327,16 @@ export function AttemptReviewGrid({ items, selfView }: { items: AttemptReviewIte
   return (
     <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", alignItems: "start" }}>
       {items.map((it) => (
-        <div key={it.answer_id} style={{ padding: 14, background: "var(--surface-2)", borderRadius: 12 }}>
+        <div key={it.answer_id} style={{ padding: 14, background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 14 }}>
           <div style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
             <Pill tone="neutral">№{it.number}</Pill>
-            <Pill tone={it.is_correct ? "accent" : "bad"}>{it.is_correct ? "верно" : "неверно"}</Pill>
+            <Pill tone={it.is_correct ? "ok" : "bad"}>{it.is_correct ? "верно" : "неверно"}</Pill>
           </div>
           <StatementView text={it.statement} media={it.media} style={{ fontSize: 14, lineHeight: 1.45, marginBottom: 8 }} />
           <MediaBlock media={it.media} />
           <div className="mono" style={{ fontSize: 13, display: "flex", flexDirection: "column", gap: 4 }}>
-            <div><span style={{ color: "var(--text-3)" }}>{selfView ? "твой ответ" : "ответ ученика"}: </span><b style={{ color: it.is_correct ? "var(--accent-2)" : "var(--bad)" }}>{it.raw_answer || "—"}</b></div>
-            <div><span style={{ color: "var(--text-3)" }}>верный ответ: </span><b style={{ color: "var(--accent-2)" }}>{it.correct.join(" / ")}</b></div>
+            <div><span style={{ color: "var(--text-3)" }}>{selfView ? "твой ответ" : "ответ ученика"}: </span><b style={{ color: it.is_correct ? "var(--ok)" : "var(--bad)" }}>{it.raw_answer || "—"}</b></div>
+            <div><span style={{ color: "var(--text-3)" }}>верный ответ: </span><b style={{ color: "var(--ok)" }}>{it.correct.join(" / ")}</b></div>
           </div>
         </div>
       ))}
