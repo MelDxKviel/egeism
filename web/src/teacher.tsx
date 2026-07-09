@@ -7,7 +7,7 @@ import {
   useAdminTasks, useTests, useTestDetail, useTaskSummary, useInvalidate, useClasses, useClassDetail, useClassOverview, useStudents,
 } from "./api";
 import { useApp } from "./state";
-import { Card, Label, Pill, Button, Async, Empty, Loading, Modal, PasswordInput, accColor, SUBJECT_TITLES, testTitle, MediaBlock, StatementView, AttemptReviewGrid } from "./ui";
+import { Card, Label, Pill, Button, Async, Empty, Loading, Modal, PasswordInput, Seg, accColor, SUBJECT_TITLES, testTitle, MediaBlock, StatementView, AttemptReviewGrid } from "./ui";
 import { ScoreGauge, computeStreak, WeakSpotsList, Section, MasteryChart } from "./charts";
 import { StreakBadge, ASSIGNMENT_STATUS_RU } from "./student";
 import { deadlineInfo } from "./deadline";
@@ -76,11 +76,11 @@ function SubjectTabs({ value, onChange }: { value: SubjectCode; onChange: (s: Su
   }
   return (
     <div>
-      <div className="seg">
+      <Seg>
         {allowed.map((c) => (
           <button key={c} onClick={() => onChange(c)} data-active={value === c ? "1" : undefined}>{SUBJECT_TITLES[c]}</button>
         ))}
-      </div>
+      </Seg>
     </div>
   );
 }
@@ -1006,11 +1006,11 @@ export function Builder() {
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
       <SubjectTabs value={subject} onChange={setSubject} />
       <Section title="Собрать вариант">
-        <div className="seg scroll" style={{ marginBottom: 14, maxWidth: "100%", overflowX: "auto" }}>
+        <Seg className="scroll" style={{ marginBottom: 14, maxWidth: "100%", overflowX: "auto" }}>
           <ChoiceTab active={kind === "classic"} onClick={() => setKind("classic")}>Классический (по одному на номер)</ChoiceTab>
           <ChoiceTab active={kind === "composed"} onClick={() => setKind("composed")}>Составной (свой набор)</ChoiceTab>
           <ChoiceTab active={kind === "drill"} onClick={() => setKind("drill")}>Дрилл (N одного номера)</ChoiceTab>
-        </div>
+        </Seg>
         {kind === "composed" ? <ComposedBuilder subject={subject} /> : (
           <>
             {kind === "drill" && (
@@ -1222,10 +1222,10 @@ export function Assign() {
           <div>
             <Label>Кому</Label>
             <div style={{ marginTop: 6 }}>
-              <div className="seg">
+              <Seg>
                 <ChoiceTab active={mode === "student"} onClick={() => setMode("student")}>Ученику</ChoiceTab>
                 <ChoiceTab active={mode === "class"} onClick={() => setMode("class")}>Классу</ChoiceTab>
-              </div>
+              </Seg>
             </div>
           </div>
           {mode === "student" ? (
@@ -1335,11 +1335,11 @@ export function Bank() {
       <SourcePanel subject={subject} onDone={refresh} />
       <SubjectTabs value={subject} onChange={setSubject} />
       <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-        <div className="seg">
+        <Seg>
           {(["", "draft", "active", "rejected"] as const).map((s) => (
             <ChoiceTab key={s} active={status === s} onClick={() => setStatus(s)}>{s === "" ? "Все" : s}</ChoiceTab>
           ))}
-        </div>
+        </Seg>
         <button onClick={clearBank} title="Удалить все задания предмета (кроме решённых)"
           className="btn btn-danger" style={{ marginLeft: "auto", padding: "7px 14px", fontSize: 13 }}>
           <Icon name="trash" size={15} /> Очистить банк
@@ -1505,7 +1505,7 @@ function BankCard({ task, onStatus, onEditAnswer }: { task: Task; onStatus: (id:
 }
 
 // ChoiceTab — a bare segment button; the parent wraps each mutually-exclusive
-// group in <div className="seg"> (iOS segmented control, colors live in the class).
+// group in <Seg> (the iOS segmented control with the sliding knob, ui.tsx).
 function ChoiceTab({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return <button onClick={onClick} data-active={active ? "1" : undefined}>{children}</button>;
 }

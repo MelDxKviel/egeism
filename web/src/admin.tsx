@@ -4,7 +4,7 @@ import {
   useAdminUsers, useAdminStats, useAdminClasses, useInvalidate,
 } from "./api";
 import { useApp } from "./state";
-import { Card, Label, Pill, Button, Async, Empty, Modal, PasswordInput, accColor, SUBJECT_TITLES } from "./ui";
+import { Card, Label, Pill, Button, Async, Empty, Modal, PasswordInput, Seg, accColor, SUBJECT_TITLES } from "./ui";
 import { Icon } from "./icons";
 import { ResetLinkModal } from "./reset";
 
@@ -129,12 +129,12 @@ function UserForm({ initial, onSubmit, onClose, busy }: {
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <div>
           <Label>Роль</Label>
-          <div className="seg" style={{ display: "flex", marginTop: 6 }}>
+          <Seg style={{ display: "flex", marginTop: 6 }}>
             {(["student", "teacher", "admin"] as Role[]).map((r) => (
               <button key={r} type="button" onClick={() => setRole(r)}
                 data-active={role === r ? "1" : undefined} style={{ flex: 1 }}>{ROLE_RU[r]}</button>
             ))}
-          </div>
+          </Seg>
         </div>
         {role === "teacher" && (
           <label>
@@ -227,13 +227,13 @@ export function AdminUsers() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
       <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-        <div className="seg">
+        <Seg>
           {(["", "student", "teacher", "admin"] as const).map((rr) => (
             <button key={rr} onClick={() => setFilter(rr)} data-active={filter === rr ? "1" : undefined}>
               {rr === "" ? "Все" : ROLE_RU[rr]}
             </button>
           ))}
-        </div>
+        </Seg>
         <input placeholder="поиск: имя или логин" value={search} onChange={(e) => setSearch(e.target.value)}
           style={{ marginLeft: "auto", width: 200 }} />
         <Button onClick={() => setCreating(true)}>+ Пользователь</Button>

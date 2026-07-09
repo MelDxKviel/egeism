@@ -1,4 +1,4 @@
-import { CSSProperties, ReactNode, useEffect, useState } from "react";
+import { CSSProperties, ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AttemptReviewItem, Media, mediaUrl, SubjectCode } from "./api";
 import { useApp } from "./state";
@@ -313,19 +313,79 @@ export const SUBJECT_TITLES: Record<string, string> = {
   rus: "Русский язык", math: "Математика", inf: "Информатика", soc: "Обществознание",
 };
 
+// Seg — THE segmented-control container (replaces bare <div className="seg">).
+// Children are plain <button data-active="1"> segments, exactly as before; Seg
+// adds the iOS-style animated knob: one floating .seg-knob element measured
+// against the active button and slid under it with a spring, instead of each
+// button repainting its own background instantly. Measuring (not equal-width
+// math) keeps the variable-width labels and the horizontal scroll behavior.
+export function Seg({ children, className, style }:
+  { children: ReactNode; className?: string; style?: CSSProperties }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [knob, setKnob] = useState<{ x: number; w: number } | null>(null);
+  // Last knob position — auto-scroll only when the active segment MOVED, so a
+  // background re-render never yanks a hand-scrolled control back into view.
+  const prevX = useRef<number | null>(null);
+
+  // Measure after every render: callers mark the active button via data-active,
+  // so any click / options change / theme flip lands here before paint.
+  useLayoutEffect(() => {
+    const wrap = ref.current;
+    if (!wrap) return;
+    const el = wrap.querySelector<HTMLElement>('button[data-active="1"]');
+    if (!el) { setKnob(null); prevX.current = null; return; }
+    const x = el.offsetLeft, w = el.offsetWidth;
+    setKnob((k) => (k && k.x === x && k.w === w ? k : { x, w }));
+    if (prevX.current !== x) {
+      // Keep the active segment visible inside the scrollable control. The
+      // first placement snaps (no animation yet); later moves glide.
+      const right = x + w;
+      if (x < wrap.scrollLeft || right > wrap.scrollLeft + wrap.clientWidth) {
+        const still = prevX.current === null ||
+          window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        wrap.scrollTo({ left: Math.max(0, x - 24), behavior: still ? "auto" : "smooth" });
+      }
+      prevX.current = x;
+    }
+  });
+
+  // Re-measure when the container itself resizes (viewport, font swap, …).
+  useEffect(() => {
+    const wrap = ref.current;
+    if (!wrap) return;
+    const ro = new ResizeObserver(() => {
+      const el = wrap.querySelector<HTMLElement>('button[data-active="1"]');
+      if (!el) return;
+      const x = el.offsetLeft, w = el.offsetWidth;
+      setKnob((k) => (k && k.x === x && k.w === w ? k : { x, w }));
+    });
+    ro.observe(wrap);
+    return () => ro.disconnect();
+  }, []);
+
+  return (
+    <div ref={ref} className={["seg", className].filter(Boolean).join(" ")} style={style}>
+      {/* Mounted only once measured, with transform already set — so the first
+          paint places it silently and only later moves animate. */}
+      {knob && <div className="seg-knob" style={{ width: knob.w, transform: `translateX(${knob.x}px)` }} />}
+      {children}
+    </div>
+  );
+}
+
 // SubjectSwitch — THE segmented subject picker. One shared control so the
 // dashboard, the training hub and the subject screen all switch the same
 // app-wide subject in the same place, styled identically (.seg in theme.css).
 export function SubjectSwitch() {
   const { subject, setSubject } = useApp();
   return (
-    <div className="seg" style={{ alignSelf: "flex-start" }}>
+    <Seg style={{ alignSelf: "flex-start" }}>
       {(["rus", "math", "inf", "soc"] as SubjectCode[]).map((c) => (
         <button key={c} onClick={() => setSubject(c)} data-active={subject === c ? "1" : undefined}>
           {SUBJECT_TITLES[c]}
         </button>
       ))}
-    </div>
+    </Seg>
   );
 }
 
