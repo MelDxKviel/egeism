@@ -1,8 +1,21 @@
-import { CSSProperties, ReactNode, useEffect, useState } from "react";
+import { CSSProperties, ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AttemptReviewItem, Media, mediaUrl, SubjectCode } from "./api";
 import { useApp } from "./state";
 import { Icon } from "./icons";
+
+// useIsMobile — the ONE phone/desktop breakpoint (shared by the Shell's tab
+// bar and the SubjectPicker's dropdown mode). Lives here, not in shell.tsx,
+// so ui components can use it without an import cycle.
+export function useIsMobile() {
+  const [m, setM] = useState(window.innerWidth < 900);
+  useEffect(() => {
+    const on = () => setM(window.innerWidth < 900);
+    window.addEventListener("resize", on);
+    return () => window.removeEventListener("resize", on);
+  }, []);
+  return m;
+}
 
 // ---------- Modal (the ONE portaled dialog) ----------
 // maxWidth defaults to a compact dialog; pass a larger value (e.g. a near-full
@@ -313,20 +326,136 @@ export const SUBJECT_TITLES: Record<string, string> = {
   rus: "Русский язык", math: "Математика", inf: "Информатика", soc: "Обществознание",
 };
 
-// SubjectSwitch — THE segmented subject picker. One shared control so the
-// dashboard, the training hub and the subject screen all switch the same
-// app-wide subject in the same place, styled identically (.seg in theme.css).
-export function SubjectSwitch() {
-  const { subject, setSubject } = useApp();
+// Seg — THE segmented-control container (replaces bare <div className="seg">).
+// Children are plain <button data-active="1"> segments, exactly as before; Seg
+// adds the iOS-style animated knob: one floating .seg-knob element measured
+// against the active button and slid under it with a spring, instead of each
+// button repainting its own background instantly. Measuring (not equal-width
+// math) keeps the variable-width labels and the horizontal scroll behavior.
+export function Seg({ children, className, style }:
+  { children: ReactNode; className?: string; style?: CSSProperties }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [knob, setKnob] = useState<{ x: number; w: number } | null>(null);
+  // Last knob position — auto-scroll only when the active segment MOVED, so a
+  // background re-render never yanks a hand-scrolled control back into view.
+  const prevX = useRef<number | null>(null);
+
+  // Measure after every render: callers mark the active button via data-active,
+  // so any click / options change / theme flip lands here before paint.
+  useLayoutEffect(() => {
+    const wrap = ref.current;
+    if (!wrap) return;
+    const el = wrap.querySelector<HTMLElement>('button[data-active="1"]');
+    if (!el) { setKnob(null); prevX.current = null; return; }
+    const x = el.offsetLeft, w = el.offsetWidth;
+    setKnob((k) => (k && k.x === x && k.w === w ? k : { x, w }));
+    if (prevX.current !== x) {
+      // Keep the active segment visible inside the scrollable control. The
+      // first placement snaps (no animation yet); later moves glide.
+      const right = x + w;
+      if (x < wrap.scrollLeft || right > wrap.scrollLeft + wrap.clientWidth) {
+        const still = prevX.current === null ||
+          window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        wrap.scrollTo({ left: Math.max(0, x - 24), behavior: still ? "auto" : "smooth" });
+      }
+      prevX.current = x;
+    }
+  });
+
+  // Re-measure when the container itself resizes (viewport, font swap, …).
+  useEffect(() => {
+    const wrap = ref.current;
+    if (!wrap) return;
+    const ro = new ResizeObserver(() => {
+      const el = wrap.querySelector<HTMLElement>('button[data-active="1"]');
+      if (!el) return;
+      const x = el.offsetLeft, w = el.offsetWidth;
+      setKnob((k) => (k && k.x === x && k.w === w ? k : { x, w }));
+    });
+    ro.observe(wrap);
+    return () => ro.disconnect();
+  }, []);
+
   return (
-    <div className="seg" style={{ alignSelf: "flex-start" }}>
-      {(["rus", "math", "inf", "soc"] as SubjectCode[]).map((c) => (
-        <button key={c} onClick={() => setSubject(c)} data-active={subject === c ? "1" : undefined}>
-          {SUBJECT_TITLES[c]}
-        </button>
-      ))}
+    <div ref={ref} className={["seg", className].filter(Boolean).join(" ")} style={style}>
+      {/* Mounted only once measured, with transform already set — so the first
+          paint places it silently and only later moves animate. */}
+      {knob && <div className="seg-knob" style={{ width: knob.w, transform: `translateX(${knob.x}px)` }} />}
+      {children}
     </div>
   );
+}
+
+const ALL_SUBJECTS: SubjectCode[] = ["rus", "math", "inf", "soc"];
+
+// SubjectPicker — the subject switcher in two shapes: the animated Seg on
+// desktop, and a dropdown menu on phones (four full titles never fit a phone
+// row — the seg clipped and had to scroll). The dropdown is an iOS-style
+// anchored menu: pill trigger with a rotating chevron, popdown panel, check
+// on the active row. Outside tap / Esc closes. Styles live in theme.css
+// (.drop-btn/.drop-menu/.drop-item).
+export function SubjectPicker({ value, onChange, options }:
+  { value: SubjectCode; onChange: (s: SubjectCode) => void; options?: SubjectCode[] }) {
+  const opts = options ?? ALL_SUBJECTS;
+  const isMobile = useIsMobile();
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: PointerEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("pointerdown", onDown);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onDown);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  if (!isMobile) {
+    return (
+      <Seg style={{ alignSelf: "flex-start" }}>
+        {opts.map((c) => (
+          <button key={c} onClick={() => onChange(c)} data-active={value === c ? "1" : undefined}>
+            {SUBJECT_TITLES[c]}
+          </button>
+        ))}
+      </Seg>
+    );
+  }
+  return (
+    <div ref={wrapRef} style={{ position: "relative", alignSelf: "flex-start" }}>
+      <button className="drop-btn" onClick={() => setOpen((o) => !o)}
+        data-open={open ? "1" : undefined} aria-haspopup="listbox" aria-expanded={open}>
+        <span className="mono" style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--text-3)" }}>Предмет</span>
+        {SUBJECT_TITLES[value]}
+        <span className="chev"><Icon name="chevronDown" size={16} strokeWidth={2.2} /></span>
+      </button>
+      {open && (
+        <div className="drop-menu popdown" role="listbox" style={{ transformOrigin: "top left" }}>
+          {opts.map((c) => (
+            <button key={c} className="drop-item" role="option" aria-selected={value === c}
+              data-active={value === c ? "1" : undefined}
+              onClick={() => { onChange(c); setOpen(false); }}>
+              {SUBJECT_TITLES[c]}
+              {value === c && <Icon name="check" size={17} strokeWidth={2} />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// SubjectSwitch — THE app-wide subject picker. One shared control so the
+// dashboard, the training hub and the subject screen all switch the same
+// app-wide subject in the same place, styled identically.
+export function SubjectSwitch() {
+  const { subject, setSubject } = useApp();
+  return <SubjectPicker value={subject} onChange={setSubject} />;
 }
 
 // The internal practice test carries a sentinel title; show it nicely in feeds.

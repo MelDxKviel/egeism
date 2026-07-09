@@ -1,21 +1,11 @@
-import { ReactNode, useEffect, useRef, useState } from "react";
+import { CSSProperties, ReactNode, useEffect, useRef, useState } from "react";
 import { useApp, View } from "./state";
 import { Icon, IconName } from "./icons";
 import { api, User, NotificationItem, useNotifications, useSubjects, useInvalidate } from "./api";
-import { Button, Loading, Modal, Spinner, SUBJECT_TITLES, testTitle } from "./ui";
+import { Button, Loading, Modal, Spinner, SUBJECT_TITLES, testTitle, useIsMobile } from "./ui";
 import { requestSolve } from "./student";
 import { requestTestView } from "./teacher";
 import { ResetLinkModal } from "./reset";
-
-function useIsMobile() {
-  const [m, setM] = useState(window.innerWidth < 900);
-  useEffect(() => {
-    const on = () => setM(window.innerWidth < 900);
-    window.addEventListener("resize", on);
-    return () => window.removeEventListener("resize", on);
-  }, []);
-  return m;
-}
 
 const STUDENT_NAV: { v: View; label: string; icon: IconName }[] = [
   { v: "dashboard", label: "Дашборд", icon: "dashboard" },
@@ -91,7 +81,7 @@ export function Shell({ title, cta, children }: { title: string; cta?: ReactNode
           </aside>
         )}
 
-        <main style={{ flex: 1, minWidth: 0, paddingBottom: isMobile ? 90 : 0 }}>
+        <main style={{ flex: 1, minWidth: 0, paddingBottom: isMobile ? "calc(96px + env(safe-area-inset-bottom))" : 0 }}>
           {/* Frosted sticky header — the content scrolls beneath the glass. */}
           <header className="glass" style={{
             position: "sticky", top: 0, zIndex: 5, height: 60,
@@ -115,29 +105,40 @@ export function Shell({ title, cta, children }: { title: string; cta?: ReactNode
               )}
             </div>
           </header>
-          <div className="fade" style={{ padding: "var(--main-pad)", maxWidth: 1200, margin: "0 auto" }}>{children}</div>
+          {/* Keyed by view so switching tabs replays the entrance fade — the
+              screen glides in instead of blinking into place. */}
+          <div key={view} className="fade" style={{ padding: "var(--main-pad)", maxWidth: 1200, margin: "0 auto" }}>{children}</div>
         </main>
       </div>
 
-      {isMobile && (
-        /* Frosted tab bar (iOS): hairline top edge + home-indicator safe area. */
-        <nav className="glass" style={{
-          position: "fixed", bottom: 0, left: 0, right: 0,
-          height: "calc(66px + env(safe-area-inset-bottom))", paddingBottom: "env(safe-area-inset-bottom)",
-          borderTop: "1px solid var(--border)", display: "flex", justifyContent: "space-around", alignItems: "center", zIndex: 10,
-        }}>
-          {nav.map((n) => (
-            <button key={n.v} onClick={() => go(n.v)} style={{
-              background: "none", border: "none", display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
-              color: view === n.v ? "var(--accent)" : "var(--text-3)", fontSize: 11,
-              fontWeight: view === n.v ? 600 : 500, transition: "color .16s ease",
-            }}>
-              <Icon name={n.icon} size={21} strokeWidth={view === n.v ? 2.1 : 1.75} />{n.label}
-            </button>
-          ))}
-        </nav>
-      )}
+      {isMobile && <TabBar nav={nav} view={view} go={go} />}
     </div>
+  );
+}
+
+// TabBar — the mobile nav as a floating rounded glass capsule (iOS-26 style)
+// instead of an edge-to-edge strip. One tinted lens (.tabbar-lens) glides
+// between equal-width tabs with a spring; on detail views that live outside
+// the tab set (solve, t-test, …) it fades out in place and fades back in
+// wherever the user lands next. Geometry/motion live in theme.css (.tabbar).
+function TabBar({ nav, view, go }:
+  { nav: { v: View; label: string; icon: IconName }[]; view: View; go: (v: View) => void }) {
+  const idx = nav.findIndex((n) => n.v === view);
+  const last = useRef(0); // park the hidden lens at its previous tab
+  if (idx >= 0) last.current = idx;
+  return (
+    <nav className="glass tabbar" style={{ "--tabs": nav.length } as CSSProperties}>
+      <div className="tabbar-lens" style={{
+        transform: `translateX(${(idx >= 0 ? idx : last.current) * 100}%)`,
+        opacity: idx >= 0 ? 1 : 0,
+      }} />
+      {nav.map((n) => (
+        <button key={n.v} onClick={() => go(n.v)} data-active={view === n.v ? "1" : undefined}>
+          <span className="tab-ic"><Icon name={n.icon} size={22} strokeWidth={view === n.v ? 2.1 : 1.75} /></span>
+          <span className="tab-label">{n.label}</span>
+        </button>
+      ))}
+    </nav>
   );
 }
 
@@ -340,14 +341,19 @@ function NotificationsBell() {
                   const action = n.kind === "password_reset_requested" ? "Выдать ссылку для смены пароля" : "Перейти к тесту";
                   return (
                     <button key={n.id} onClick={() => openItem(n)} title={fullTime(n.created_at)}
-                      className="row" data-unread={isUnread ? "1" : undefined} style={{
+                      className="row" data-unread={isUnread ? "1" : undefined}
+                      data-filled={isUnread ? undefined : "1"} style={{
                         display: "flex", gap: 11, alignItems: "flex-start", textAlign: "left", width: "100%",
                         border: "none", borderRadius: 12, padding: "10px 12px", cursor: "pointer",
                       }}>
+                      {/* Unread: vivid accent disc + white glyph (iOS-style). Read: a
+                          neutral text-mixed disc — reads on ANY surface in BOTH themes
+                          (the old surface-on-surface disc vanished in dark mode). */}
                       <span style={{
                         display: "flex", flex: "none", width: 30, height: 30, borderRadius: 999,
-                        alignItems: "center", justifyContent: "center", color: "var(--accent-2)",
-                        background: isUnread ? "var(--surface)" : "var(--surface-2)",
+                        alignItems: "center", justifyContent: "center",
+                        color: isUnread ? "var(--on-accent)" : "var(--text-2)",
+                        background: isUnread ? "var(--accent)" : "color-mix(in srgb, var(--text) 8%, transparent)",
                       }}>
                         <Icon name={iconName} size={17} />
                       </span>

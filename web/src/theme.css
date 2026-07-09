@@ -4,7 +4,10 @@
    Interactive colors live in classes (not inline styles) so :hover can win. */
 * { box-sizing: border-box; }
 html, body, #root { margin: 0; padding: 0; height: 100%; }
-button { font-family: inherit; color: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+/* background:none kills the UA ButtonFace default — a classless button used to
+   surface as a light-grey slab that turned unreadable in dark mode (the
+   notification-row bug); every styled button sets its own fill anyway. */
+button { font-family: inherit; color: inherit; cursor: pointer; background: none; -webkit-tap-highlight-color: transparent; }
 input, select, textarea { font-family: inherit; }
 ::selection { background: var(--accent-soft); }
 
@@ -21,18 +24,33 @@ input, select, textarea { font-family: inherit; }
   --warn: #BF4E00; --warn-soft: rgba(255, 149, 0, .14);
   /* Activity heatmap (green ramp, deepest = --ok) */
   --hm0: #E8E8ED; --hm1: #BDE9C8; --hm2: #7DD996; --hm3: #34C759; --hm4: #1D8339;
-  /* Depth — barely-there resting shadow, soft raised hover, big floating panels */
-  --shadow: 0 1px 2px rgba(0, 0, 0, .04), 0 12px 32px -18px rgba(0, 0, 0, .12);
-  --shadow-2: 0 2px 6px rgba(0, 0, 0, .05), 0 18px 44px -18px rgba(0, 0, 0, .18);
+  /* Depth — Apple-tight: a hairline contact shadow + a soft short ambient one;
+     the big blur is reserved for genuinely floating panels (--shadow-lg).
+     --edge is a hairline inner top-light that makes panels read as physical. */
+  --shadow: 0 1px 2px rgba(0, 0, 0, .04), 0 6px 16px -10px rgba(0, 0, 0, .10);
+  --shadow-2: 0 2px 4px rgba(0, 0, 0, .05), 0 12px 28px -14px rgba(0, 0, 0, .16);
   --shadow-lg: 0 2px 8px rgba(0, 0, 0, .06), 0 32px 80px -24px rgba(0, 0, 0, .28);
+  --edge: inset 0 1px 0 rgba(255, 255, 255, .55);
   /* Materials */
   --glass: rgba(255, 255, 255, .68); --backdrop: rgba(0, 0, 0, .32);
   --knob: #FFFFFF; --ring: rgba(0, 113, 227, .35);
+  /* Ambient canvas glow — two faint corner washes (accent + violet) so the
+     background isn't a flat sheet; content surfaces stay opaque on top. */
+  --glow-a: color-mix(in srgb, var(--accent) 7%, transparent);
+  --glow-b: color-mix(in srgb, #AF52DE 5%, transparent);
   /* Motion */
   --ease: cubic-bezier(.25, .1, .25, 1); --spring: cubic-bezier(.34, 1.25, .44, 1);
   --gap: 20px; --main-pad: 32px;
   min-height: 100%;
-  background: var(--bg);
+  /* Native controls (date pickers, scrollbars, selects) follow the app theme,
+     not the OS — the dark override below flips it to `dark`. */
+  color-scheme: light;
+  background:
+    radial-gradient(1100px 560px at 84% -180px, var(--glow-a), transparent 70%),
+    radial-gradient(900px 520px at -180px 14%, var(--glow-b), transparent 70%),
+    var(--bg);
+  /* Pin the glows to the viewport (falls back to scroll on iOS — still fine). */
+  background-attachment: fixed, fixed, scroll;
   color: var(--text);
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
     "Helvetica Neue", "Segoe UI", Roboto, Inter, Arial, sans-serif;
@@ -55,8 +73,13 @@ input, select, textarea { font-family: inherit; }
   --shadow: 0 1px 2px rgba(0, 0, 0, .5), 0 16px 40px -20px rgba(0, 0, 0, .75);
   --shadow-2: 0 2px 6px rgba(0, 0, 0, .55), 0 22px 52px -20px rgba(0, 0, 0, .8);
   --shadow-lg: 0 2px 8px rgba(0, 0, 0, .55), 0 40px 100px -28px rgba(0, 0, 0, .9);
+  --edge: inset 0 1px 0 rgba(255, 255, 255, .06);
   --glass: rgba(22, 22, 24, .68); --backdrop: rgba(0, 0, 0, .55);
   --knob: #636366; --ring: rgba(10, 132, 255, .5);
+  /* The glows read stronger on the pure-black canvas. */
+  --glow-a: color-mix(in srgb, var(--accent) 12%, transparent);
+  --glow-b: color-mix(in srgb, #BF5AF2 8%, transparent);
+  color-scheme: dark;
 }
 /* U+2116 «№» is missing or oddly drawn in a number of monospace fonts, so the
    browser substitutes a confusing glyph from a random fallback (the «҂1» tiles
@@ -98,8 +121,9 @@ input, select, textarea { font-family: inherit; }
 .flame-live { animation: flamelive 1.7s ease-in-out infinite; transform-origin: 50% 85%; filter: drop-shadow(0 0 3px currentColor); }
 
 @media (prefers-reduced-motion: reduce) {
-  .fade, .pop, .popdown, .skel, .celebrate, .checkpop, .flame-live { animation: none !important; }
-  .btn, .icon-btn, .card-tap, .navbtn, .row, .seg > button, .hm-tap { transition: none !important; }
+  .fade, .pop, .popdown, .skel, .celebrate, .checkpop, .flame-live, .tab-ic { animation: none !important; }
+  .btn, .icon-btn, .card-tap, .navbtn, .row, .seg > button, .hm-tap,
+  .seg-knob, .tabbar-lens, .tabbar > button, .drop-btn, .drop-btn .chev, .drop-item { transition: none !important; }
 }
 
 .fade { animation: fade .3s var(--ease) both; }
@@ -126,6 +150,8 @@ a { color: var(--accent-2); }
 input, textarea, select {
   background: var(--surface-2); border: 1px solid var(--border);
   border-radius: 12px; color: var(--text); padding: 10px 12px; font-size: 14px; outline: none;
+  /* A whisper of inner shading so fields read as slightly sunken wells. */
+  box-shadow: inset 0 1px 2px color-mix(in srgb, var(--text) 4%, transparent);
   transition: border-color .15s var(--ease), box-shadow .15s var(--ease), background .15s var(--ease);
 }
 input:hover, textarea:hover, select:hover { border-color: var(--border-2); }
@@ -162,9 +188,25 @@ input:focus, textarea:focus, select:focus {
 }
 .btn:active { transform: scale(.97); }
 .btn:disabled { opacity: .45; pointer-events: none; }
-.btn-primary { background: var(--accent); color: var(--on-accent); }
-.btn-primary:hover { filter: brightness(1.08); }
-.btn-primary:active { filter: brightness(.95); }
+/* Primary: a barely-there top light (inset highlight + 8% white at the top of
+   the fill) and a TIGHT contact shadow — Apple volume comes from the inner
+   light, not from a colored halo. Lifts 1px on hover, settles on press. */
+.btn-primary {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 92%, #fff), var(--accent));
+  color: var(--on-accent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .2), 0 1px 2.5px rgba(0, 0, 0, .12),
+    0 2px 6px -2px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+.btn-primary:hover {
+  filter: brightness(1.05); transform: translateY(-1px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .2), 0 2px 4px rgba(0, 0, 0, .1),
+    0 4px 10px -3px color-mix(in srgb, var(--accent) 36%, transparent);
+}
+.btn-primary:active {
+  filter: brightness(.94); transform: scale(.97);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .1), 0 1px 2px rgba(0, 0, 0, .12),
+    0 1px 3px -1px color-mix(in srgb, var(--accent) 24%, transparent);
+}
 .btn-ghost { background: transparent; color: var(--text); border-color: var(--border-2); }
 .btn-ghost:hover { background: color-mix(in srgb, var(--text) 6%, transparent); }
 .btn-soft { background: var(--accent-soft); color: var(--accent-2); }
@@ -182,7 +224,7 @@ input:focus, textarea:focus, select:focus {
   transition: background .16s var(--ease), color .16s var(--ease),
     border-color .16s var(--ease), transform .16s var(--spring);
 }
-.icon-btn:hover { background: color-mix(in srgb, var(--text) 5%, transparent); color: var(--text); }
+.icon-btn:hover { background: color-mix(in srgb, var(--text) 5%, transparent); color: var(--text); transform: translateY(-1px); }
 .icon-btn:active { transform: scale(.94); }
 .icon-btn[data-active="1"] { background: var(--accent-soft); color: var(--accent-2); border-color: transparent; }
 
@@ -196,15 +238,20 @@ input:focus, textarea:focus, select:focus {
 /* ---------- Cards ---------- */
 .card {
   background: var(--surface); border: 1px solid var(--border);
-  border-radius: 18px; box-shadow: var(--shadow);
+  border-radius: 18px; box-shadow: var(--edge), var(--shadow);
+}
+/* Dark surfaces get a faint top-light gradient — flat #1C1C1E panels on the
+   black canvas otherwise read as cutouts, not objects. */
+.app[data-theme="dark"] .card {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 94%, #fff), var(--surface) 58%);
 }
 /* A card (or row) that acts as a button: raise on hover, settle on press. */
 .card-tap {
   cursor: pointer;
   transition: transform .2s var(--ease), box-shadow .2s var(--ease), border-color .2s var(--ease), background .2s var(--ease);
 }
-.card-tap:hover { transform: translateY(-2px); box-shadow: var(--shadow-2); border-color: var(--border-2); }
-.card-tap:active { transform: translateY(0) scale(.995); box-shadow: var(--shadow); }
+.card-tap:hover { transform: translateY(-2px); box-shadow: var(--edge), var(--shadow-2); border-color: var(--border-2); }
+.card-tap:active { transform: translateY(0) scale(.995); box-shadow: var(--edge), var(--shadow); }
 
 /* Flat interactive row (list items, notification entries). Background states
    ride on data-attrs so :hover can win over the resting tint. */
@@ -213,6 +260,10 @@ input:focus, textarea:focus, select:focus {
 }
 .row:hover { background: color-mix(in srgb, var(--text) 5%, transparent); }
 .row:active { transform: scale(.99); }
+/* Filled row (read notifications): a soft neutral card so every feed entry
+   reads as an object on the popover surface — light AND dark. */
+.row[data-filled="1"] { background: color-mix(in srgb, var(--text) 5%, transparent); }
+.row[data-filled="1"]:hover { background: color-mix(in srgb, var(--text) 9%, transparent); }
 .row[data-unread="1"] { background: var(--accent-soft); }
 .row[data-unread="1"]:hover { background: color-mix(in srgb, var(--accent) 16%, transparent); }
 
@@ -225,28 +276,112 @@ input:focus, textarea:focus, select:focus {
 }
 .navbtn:hover { background: color-mix(in srgb, var(--text) 5%, transparent); color: var(--text); }
 .navbtn:active { transform: scale(.98); }
-.navbtn[data-active="1"] { background: var(--accent-soft); color: var(--accent-2); font-weight: 600; }
+.navbtn[data-active="1"] {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 15%, transparent), color-mix(in srgb, var(--accent) 8%, transparent));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent-2); font-weight: 600;
+}
 
 /* ---------- Segmented control (iOS-style subject/mode switcher) ---------- */
-/* Scrolls horizontally (scrollbar hidden) when the labels outgrow a phone. */
+/* Scrolls horizontally (scrollbar hidden) when the labels outgrow a phone.
+   The white knob is ONE floating element (.seg-knob, rendered by ui.tsx's Seg)
+   that slides under the active segment with a spring — an iOS-style toggle,
+   not an instant repaint. Buttons sit above it (z-index) and only change color. */
 .seg {
+  position: relative;
   display: inline-flex; gap: 2px; padding: 3px; border-radius: 12px;
   background: color-mix(in srgb, var(--text) 7%, transparent);
+  box-shadow: inset 0 1px 2px color-mix(in srgb, var(--text) 5%, transparent);
   max-width: 100%; overflow-x: auto; scrollbar-width: none;
 }
 .seg::-webkit-scrollbar { display: none; }
 .seg > button { flex: none; }
 .seg > button {
+  position: relative; z-index: 1;
   border: none; background: transparent; padding: 7px 14px; border-radius: 9px;
   font-weight: 600; font-size: 13px; color: var(--text-2); white-space: nowrap;
-  transition: background .18s var(--ease), color .18s var(--ease), box-shadow .18s var(--ease), transform .18s var(--spring);
+  transition: color .18s var(--ease), transform .18s var(--spring);
 }
 .seg > button:hover { color: var(--text); }
 .seg > button:active { transform: scale(.97); }
-.seg > button[data-active="1"] {
-  background: var(--knob); color: var(--text);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, .16), 0 3px 8px rgba(0, 0, 0, .08);
+.seg > button[data-active="1"] { color: var(--text); }
+.seg-knob {
+  position: absolute; top: 3px; bottom: 3px; left: 0; z-index: 0;
+  border-radius: 9px; background: var(--knob);
+  /* iOS segmented-knob shadow: tight and soft, no halo. */
+  box-shadow: 0 3px 8px rgba(0, 0, 0, .12), 0 1px 1px rgba(0, 0, 0, .05),
+    inset 0 1px 0 rgba(255, 255, 255, .3);
+  transition: transform .32s var(--spring), width .32s var(--spring);
+  will-change: transform, width;
 }
+
+/* ---------- Dropdown picker (mobile subject switcher) ---------- */
+/* Pill trigger + anchored iOS-style menu. The chevron rotates while open;
+   the menu drops in with the shared popdown spring. */
+.drop-btn {
+  display: inline-flex; align-items: center; gap: 9px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 999px;
+  padding: 9px 14px 9px 16px; font-size: 15px; font-weight: 600; color: var(--text);
+  box-shadow: var(--edge), var(--shadow);
+  transition: border-color .16s var(--ease), background .16s var(--ease), transform .16s var(--spring);
+}
+.drop-btn:active { transform: scale(.97); }
+.drop-btn[data-open="1"] { border-color: var(--border-2); }
+.drop-btn .chev { display: flex; color: var(--text-3); transition: transform .28s var(--spring); }
+.drop-btn[data-open="1"] .chev { transform: rotate(180deg); }
+.drop-menu {
+  position: absolute; top: calc(100% + 8px); left: 0; z-index: 40; min-width: 232px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+  box-shadow: var(--edge), var(--shadow-lg); padding: 5px;
+  display: flex; flex-direction: column; gap: 1px;
+}
+.drop-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  background: none; border: none; border-radius: 11px; padding: 11px 12px;
+  font-size: 14.5px; font-weight: 500; color: var(--text); text-align: left; white-space: nowrap;
+  transition: background .14s var(--ease);
+}
+.drop-item:hover { background: color-mix(in srgb, var(--text) 5%, transparent); }
+.drop-item:active { background: color-mix(in srgb, var(--text) 9%, transparent); }
+.drop-item[data-active="1"] { color: var(--accent-2); font-weight: 600; }
+
+/* ---------- Floating tab bar (mobile) ---------- */
+/* An iOS-26-style detached glass capsule: floats above the home indicator,
+   rounded, hairline border, big soft shadow. The active tab sits in a tinted
+   "lens" (.tabbar-lens) that glides between tabs with a spring. Pair with
+   .glass in the markup for the frosted material. */
+.tabbar {
+  position: fixed; z-index: 10;
+  left: max(12px, env(safe-area-inset-left)); right: max(12px, env(safe-area-inset-right));
+  bottom: calc(12px + env(safe-area-inset-bottom));
+  margin: 0 auto; max-width: 448px;
+  display: flex; align-items: stretch; padding: 7px;
+  border-radius: 30px; border: 1px solid var(--border);
+  box-shadow: var(--edge), var(--shadow-lg);
+}
+.tabbar > button {
+  position: relative; z-index: 1; flex: 1; min-width: 0;
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  background: none; border: none; padding: 8px 2px 7px; border-radius: 23px;
+  font-size: 10.5px; font-weight: 500; color: var(--text-3);
+  transition: color .18s var(--ease), transform .18s var(--spring);
+}
+.tabbar > button:active { transform: scale(.93); }
+.tabbar > button[data-active="1"] { color: var(--accent-2); font-weight: 600; }
+.tabbar-lens {
+  position: absolute; top: 7px; bottom: 7px; left: 7px; z-index: 0;
+  width: calc((100% - 14px) / var(--tabs, 5));
+  border-radius: 23px; background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 10%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, .14);
+  transition: transform .4s var(--spring), opacity .2s var(--ease);
+  will-change: transform;
+}
+.tab-label { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The freshly-selected icon does a small joyful hop as the lens arrives. */
+@keyframes tabpop { 0% { transform: scale(1); } 45% { transform: scale(1.22) translateY(-1.5px); } 100% { transform: scale(1); } }
+.tab-ic { display: flex; line-height: 0; }
+.tabbar > button[data-active="1"] .tab-ic { animation: tabpop .4s var(--spring); }
 
 /* ---------- Activity heatmap ---------- */
 /* A hairline inset keeps empty cells legible on any surface; clickable days
