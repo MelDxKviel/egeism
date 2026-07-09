@@ -46,7 +46,7 @@ export function Login() {
     <div className="app" data-theme={theme} style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
       <form onSubmit={mode === "login" ? submit : submitForgot} className="pop" style={{
         width: "100%", maxWidth: 400, background: "var(--surface)", border: "1px solid var(--border)",
-        borderRadius: 24, padding: "36px 32px 30px", boxShadow: "var(--shadow-lg)",
+        borderRadius: 24, padding: "clamp(26px, 7vw, 36px) clamp(20px, 6vw, 32px) clamp(22px, 6vw, 30px)", boxShadow: "var(--shadow-lg)",
       }}>
         {/* Centered mark + large title — the Apple sign-in composition. */}
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12, marginBottom: 26, textAlign: "center" }}>

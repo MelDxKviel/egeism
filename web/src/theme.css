@@ -40,7 +40,7 @@ input, select, textarea { font-family: inherit; }
   --glow-b: color-mix(in srgb, #AF52DE 5%, transparent);
   /* Motion */
   --ease: cubic-bezier(.25, .1, .25, 1); --spring: cubic-bezier(.34, 1.25, .44, 1);
-  --gap: 20px; --main-pad: 32px;
+  --gap: 20px; --main-pad: 32px; --card-pad: 22px; --modal-pad: 24px;
   min-height: 100%;
   /* Native controls (date pickers, scrollbars, selects) follow the app theme,
      not the OS — the dark override below flips it to `dark`. */
@@ -80,6 +80,18 @@ input, select, textarea { font-family: inherit; }
   --glow-a: color-mix(in srgb, var(--accent) 12%, transparent);
   --glow-b: color-mix(in srgb, #BF5AF2 8%, transparent);
   color-scheme: dark;
+}
+
+/* ---------- Responsive spacing ---------- */
+/* One spacing scale, three densities. Frame paddings, grid gaps and card/modal
+   paddings all ride on these tokens, so narrow screens tighten everywhere at
+   once instead of per-screen overrides. 899px matches useIsMobile()'s `< 900`
+   (ui.tsx) — keep the JS and CSS mobile seams in sync. */
+@media (max-width: 899px) {
+  .app { --main-pad: 20px; --gap: 16px; --card-pad: 18px; --modal-pad: 20px; }
+}
+@media (max-width: 599px) {
+  .app { --main-pad: 12px; --gap: 12px; --card-pad: 16px; --modal-pad: 18px; }
 }
 /* U+2116 «№» is missing or oddly drawn in a number of monospace fonts, so the
    browser substitutes a confusing glyph from a random fallback (the «҂1» tiles

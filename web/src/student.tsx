@@ -49,7 +49,7 @@ export const ASSIGNMENT_STATUS_RU: Record<string, string> = {
   scheduled: "запланирован", done: "решён", missed: "просрочен",
 };
 
-const grid12 = { display: "grid", gap: "var(--gap)", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))" } as const;
+const grid12 = { display: "grid", gap: "var(--gap)", gridTemplateColumns: "repeat(auto-fit, minmax(min(300px, 100%), 1fr))" } as const;
 
 // useAttemptReview loads a solved assignment's per-task review into a modal — the
 // «как решил» drill-down. It owns the modal, so a screen just renders `modal` and
@@ -437,7 +437,7 @@ function Results({ tasks, done, onExit }: { tasks: TaskView[]; done: Answered[];
   const pct = tasks.length ? Math.round((correct / tasks.length) * 100) : 0;
   return (
     <div style={{ maxWidth: 640, margin: "0 auto", display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
-      <Card style={{ textAlign: "center", padding: 34 }}>
+      <Card style={{ textAlign: "center", padding: "clamp(22px, 6vw, 34px)" }}>
         <Label>Итоги</Label>
         <div className="mono" style={{ fontSize: 54, fontWeight: 700, letterSpacing: "-0.02em", color: accColor(pct), margin: "10px 0" }}>{pct}%</div>
         <div style={{ color: "var(--text-2)" }}>{correct} из {tasks.length} верно</div>

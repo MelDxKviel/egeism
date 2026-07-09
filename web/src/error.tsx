@@ -40,7 +40,7 @@ export class ErrorBoundary extends Component<
       ?? ((localStorage.getItem("egeism.theme") as "light" | "dark") || "light");
     return (
       <div className="app" data-theme={theme} style={{ padding: "var(--main-pad)" }}>
-        <div className="card" style={{ padding: 24, maxWidth: 560, margin: "24px auto" }}>
+        <div className="card" style={{ padding: "var(--card-pad)", maxWidth: 560, margin: "24px auto" }}>
           <div style={{ fontWeight: 700, fontSize: 18, letterSpacing: "-0.01em", marginBottom: 8 }}>
             Что-то пошло не так
           </div>

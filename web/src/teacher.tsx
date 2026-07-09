@@ -20,7 +20,7 @@ const SUBJECTS: SubjectCode[] = ["rus", "math", "inf", "soc"];
 const SOURCE_TITLE: Record<SubjectCode, string> = {
   rus: "РЕШУ ЕГЭ", math: "РЕШУ ЕГЭ", soc: "РЕШУ ЕГЭ", inf: "открытый банк ФИПИ (openfipi)",
 };
-const grid = { display: "grid", gap: "var(--gap)", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))" } as const;
+const grid = { display: "grid", gap: "var(--gap)", gridTemplateColumns: "repeat(auto-fit, minmax(min(300px, 100%), 1fr))" } as const;
 
 // Composed-variant builder bounds (mirror the backend caps in admin_read.go).
 const MAX_NUMBER = 99;       // matches backend maxTaskNumber

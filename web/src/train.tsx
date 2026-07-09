@@ -12,7 +12,7 @@ import { pluralRu } from "./plural";
 // session, self-generated пробники and the per-номер training map — everything
 // a student can start without waiting for the teacher.
 
-const grid3 = { display: "grid", gap: "var(--gap)", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))" } as const;
+const grid3 = { display: "grid", gap: "var(--gap)", gridTemplateColumns: "repeat(auto-fit, minmax(min(280px, 100%), 1fr))" } as const;
 
 export function TrainingHub() {
   const { subject, go, user, showToast } = useApp();

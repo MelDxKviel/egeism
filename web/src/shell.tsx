@@ -82,14 +82,19 @@ export function Shell({ title, cta, children }: { title: string; cta?: ReactNode
         )}
 
         <main style={{ flex: 1, minWidth: 0, paddingBottom: isMobile ? "calc(96px + env(safe-area-inset-bottom))" : 0 }}>
-          {/* Frosted sticky header — the content scrolls beneath the glass. */}
+          {/* Frosted sticky header — the content scrolls beneath the glass.
+              On phones it slims down (52px, smaller title) and the title
+              ellipsizes: the right side carries up to five buttons there. */}
           <header className="glass" style={{
-            position: "sticky", top: 0, zIndex: 5, height: 60,
+            position: "sticky", top: 0, zIndex: 5, height: isMobile ? 52 : 60,
             borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center",
-            justifyContent: "space-between", padding: "0 var(--main-pad)",
+            justifyContent: "space-between", gap: 10, padding: "0 var(--main-pad)",
           }}>
-            <div style={{ fontWeight: 700, fontSize: 20, letterSpacing: "-0.02em" }}>{title}</div>
-            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <div style={{
+              fontWeight: 700, fontSize: isMobile ? 17 : 20, letterSpacing: "-0.02em",
+              minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            }}>{title}</div>
+            <div style={{ display: "flex", gap: isMobile ? 6 : 10, alignItems: "center", flex: "none" }}>
               {cta}
               <NotificationsBell />
               {isMobile && (
@@ -289,7 +294,7 @@ function NotificationsBell() {
         <div className="popdown" style={{
           position: isMobile ? "fixed" : "absolute",
           ...(isMobile
-            ? { top: 68, left: 8, right: 8, maxHeight: "calc(100vh - 150px)" }
+            ? { top: 60, left: 8, right: 8, maxHeight: "calc(100vh - 150px)" }
             : { top: "calc(100% + 10px)", right: 0, width: 384, maxHeight: "min(72vh, 540px)" }),
           background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 18,
           boxShadow: "var(--shadow-lg)", zIndex: 60, transformOrigin: "top right",
