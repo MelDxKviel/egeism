@@ -69,10 +69,13 @@ export default function App() {
     <Shell title={TITLES[view] || "ЕГЭизм"}>
       {screen}
       {toast && (
-        <div className="fade" style={{
-          position: "fixed", top: 74, left: "50%", transform: "translateX(-50%)",
-          background: "var(--accent)", color: "var(--on-accent)", padding: "12px 22px",
-          borderRadius: 12, fontSize: 14, fontWeight: 600, zIndex: 1000,
+        /* Floating frosted capsule (an iOS banner), not a colored block. */
+        <div className="popdown glass" style={{
+          // Centered via auto margins — the entrance animation owns `transform`
+          // (its fill ends at `transform: none`, which would undo a translateX).
+          position: "fixed", top: 74, left: 0, right: 0, margin: "0 auto", width: "fit-content",
+          color: "var(--text)", padding: "12px 22px",
+          border: "1px solid var(--border)", borderRadius: 999, fontSize: 14, fontWeight: 600, zIndex: 1000,
           boxShadow: "var(--shadow-lg)", maxWidth: "90vw", textAlign: "center",
         }}>{toast}</div>
       )}

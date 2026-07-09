@@ -53,11 +53,16 @@ export function Shell({ title, cta, children }: { title: string; cta?: ReactNode
             display: "flex", flexDirection: "column", padding: "22px 16px 18px",
           }}>
             <div style={{ display: "flex", alignItems: "center", gap: 11, padding: "0 6px 18px" }}>
-              <div style={{ width: 34, height: 34, borderRadius: 10, background: "var(--accent)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--on-accent)" }}>
+              <div style={{
+                width: 34, height: 34, borderRadius: 10, flex: "none",
+                background: "linear-gradient(180deg, color-mix(in srgb, var(--accent) 88%, #fff), var(--accent))",
+                boxShadow: "0 2px 8px color-mix(in srgb, var(--accent) 35%, transparent)",
+                display: "flex", alignItems: "center", justifyContent: "center", color: "var(--on-accent)",
+              }}>
                 <Icon name="logo" size={18} strokeWidth={2.4} />
               </div>
-              <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.1 }}>
-                <span style={{ fontWeight: 800, fontSize: 17 }}>ЕГЭизм</span>
+              <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.15 }}>
+                <span style={{ fontWeight: 700, fontSize: 17, letterSpacing: "-0.02em" }}>ЕГЭизм</span>
                 <span className="mono" style={{ fontSize: 11, color: "var(--text-3)" }}>подготовка · ЕГЭ</span>
               </div>
             </div>
@@ -72,17 +77,12 @@ export function Shell({ title, cta, children }: { title: string; cta?: ReactNode
                   <span style={{ fontWeight: 600, fontSize: 14, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.name}</span>
                   <span className="mono" style={{ fontSize: 11, color: "var(--text-3)" }}>{ROLE_RU[role || "student"]}</span>
                 </div>
-                <button onClick={logout} title="Выйти" style={{
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  background: "transparent", border: "1px solid var(--border)", borderRadius: 8,
-                  padding: 8, color: "var(--text-2)",
-                }}><Icon name="logout" size={17} /></button>
+                <button onClick={logout} title="Выйти" className="icon-btn">
+                  <Icon name="logout" size={17} />
+                </button>
               </div>
-              <button onClick={() => setTheme(theme === "light" ? "dark" : "light")} style={{
-                display: "flex", alignItems: "center", gap: 9,
-                background: "transparent", border: "1px solid var(--border)", borderRadius: 10,
-                padding: "8px 12px", color: "var(--text-2)", fontSize: 13,
-              }}>
+              <button onClick={() => setTheme(theme === "light" ? "dark" : "light")} className="icon-btn"
+                style={{ justifyContent: "flex-start", padding: "8px 12px", fontSize: 13 }}>
                 <Icon name={theme === "light" ? "moon" : "sun"} size={16} />
                 {theme === "light" ? "Тёмная тема" : "Светлая тема"}
               </button>
@@ -92,24 +92,25 @@ export function Shell({ title, cta, children }: { title: string; cta?: ReactNode
         )}
 
         <main style={{ flex: 1, minWidth: 0, paddingBottom: isMobile ? 90 : 0 }}>
-          <header style={{
-            position: "sticky", top: 0, zIndex: 5, height: 60, background: "var(--bg)",
+          {/* Frosted sticky header — the content scrolls beneath the glass. */}
+          <header className="glass" style={{
+            position: "sticky", top: 0, zIndex: 5, height: 60,
             borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center",
             justifyContent: "space-between", padding: "0 var(--main-pad)",
           }}>
-            <div style={{ fontWeight: 700, fontSize: 18 }}>{title}</div>
+            <div style={{ fontWeight: 700, fontSize: 20, letterSpacing: "-0.02em" }}>{title}</div>
             <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
               {cta}
               <NotificationsBell />
               {isMobile && (
                 <>
                   <TelegramLink user={user} compact />
-                  <button onClick={() => setTheme(theme === "light" ? "dark" : "light")} title="Сменить тему" style={{
-                    display: "flex", alignItems: "center", background: "transparent", border: "1px solid var(--border)", borderRadius: 10, padding: 8, color: "var(--text-2)",
-                  }}><Icon name={theme === "light" ? "moon" : "sun"} size={17} /></button>
-                  <button onClick={logout} title="Выйти" style={{
-                    display: "flex", alignItems: "center", background: "transparent", border: "1px solid var(--border)", borderRadius: 10, padding: 8, color: "var(--text-2)",
-                  }}><Icon name="logout" size={17} /></button>
+                  <button onClick={() => setTheme(theme === "light" ? "dark" : "light")} title="Сменить тему" className="icon-btn">
+                    <Icon name={theme === "light" ? "moon" : "sun"} size={17} />
+                  </button>
+                  <button onClick={logout} title="Выйти" className="icon-btn">
+                    <Icon name="logout" size={17} />
+                  </button>
                 </>
               )}
             </div>
@@ -119,14 +120,17 @@ export function Shell({ title, cta, children }: { title: string; cta?: ReactNode
       </div>
 
       {isMobile && (
-        <nav style={{
-          position: "fixed", bottom: 0, left: 0, right: 0, height: 66, background: "var(--surface)",
+        /* Frosted tab bar (iOS): hairline top edge + home-indicator safe area. */
+        <nav className="glass" style={{
+          position: "fixed", bottom: 0, left: 0, right: 0,
+          height: "calc(66px + env(safe-area-inset-bottom))", paddingBottom: "env(safe-area-inset-bottom)",
           borderTop: "1px solid var(--border)", display: "flex", justifyContent: "space-around", alignItems: "center", zIndex: 10,
         }}>
           {nav.map((n) => (
             <button key={n.v} onClick={() => go(n.v)} style={{
               background: "none", border: "none", display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
               color: view === n.v ? "var(--accent)" : "var(--text-3)", fontSize: 11,
+              fontWeight: view === n.v ? 600 : 500, transition: "color .16s ease",
             }}>
               <Icon name={n.icon} size={21} strokeWidth={view === n.v ? 2.1 : 1.75} />{n.label}
             </button>
@@ -268,12 +272,8 @@ function NotificationsBell() {
 
   return (
     <div ref={wrapRef} style={{ position: "relative", display: "inline-flex" }}>
-      <button onClick={() => setOpen((o) => !o)} title="Уведомления" style={{
-        display: "flex", alignItems: "center", position: "relative",
-        background: open ? "var(--accent-soft)" : "transparent",
-        border: "1px solid var(--border)", borderRadius: 10, padding: 8,
-        color: open ? "var(--accent-2)" : "var(--text-2)", transition: "background .15s, color .15s",
-      }}>
+      <button onClick={() => setOpen((o) => !o)} title="Уведомления" className="icon-btn"
+        data-active={open ? "1" : undefined}>
         <Icon name="bell" size={17} />
         {unread > 0 && (
           <span className="mono" style={{
@@ -290,7 +290,7 @@ function NotificationsBell() {
           ...(isMobile
             ? { top: 68, left: 8, right: 8, maxHeight: "calc(100vh - 150px)" }
             : { top: "calc(100% + 10px)", right: 0, width: 384, maxHeight: "min(72vh, 540px)" }),
-          background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 16,
+          background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 18,
           boxShadow: "var(--shadow-lg)", zIndex: 60, transformOrigin: "top right",
           display: "flex", flexDirection: "column", overflow: "hidden",
         }}>
@@ -309,15 +309,14 @@ function NotificationsBell() {
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
               {unread > 0 && (
-                <button onClick={markAll} style={{
-                  background: "none", border: "none", color: "var(--accent-2)",
-                  fontSize: 13, fontWeight: 600, padding: "4px 6px", borderRadius: 8, whiteSpace: "nowrap",
+                <button onClick={markAll} className="link-btn" style={{
+                  fontWeight: 600, padding: "4px 6px", whiteSpace: "nowrap",
                 }}>Прочитать все</button>
               )}
               {isMobile && (
-                <button onClick={() => setOpen(false)} title="Закрыть" style={{
-                  display: "flex", background: "none", border: "none", color: "var(--text-3)", padding: 4,
-                }}><Icon name="close" size={19} /></button>
+                <button onClick={() => setOpen(false)} title="Закрыть" className="icon-btn"
+                  style={{ border: "none", borderRadius: 999, padding: 4, color: "var(--text-3)" }}>
+                  <Icon name="close" size={19} /></button>
               )}
             </div>
           </div>
@@ -340,14 +339,13 @@ function NotificationsBell() {
                   const iconName: IconName = n.kind === "assignment_created" ? "assign" : n.kind === "password_reset_requested" ? "key" : "check";
                   const action = n.kind === "password_reset_requested" ? "Выдать ссылку для смены пароля" : "Перейти к тесту";
                   return (
-                    <button key={n.id} onClick={() => openItem(n)} title={fullTime(n.created_at)} style={{
-                      display: "flex", gap: 11, alignItems: "flex-start", textAlign: "left", width: "100%",
-                      background: isUnread ? "var(--accent-soft)" : "transparent",
-                      border: isUnread ? "1px solid transparent" : "1px solid var(--border)",
-                      borderRadius: 12, padding: "10px 12px", cursor: "pointer",
-                    }}>
+                    <button key={n.id} onClick={() => openItem(n)} title={fullTime(n.created_at)}
+                      className="row" data-unread={isUnread ? "1" : undefined} style={{
+                        display: "flex", gap: 11, alignItems: "flex-start", textAlign: "left", width: "100%",
+                        border: "none", borderRadius: 12, padding: "10px 12px", cursor: "pointer",
+                      }}>
                       <span style={{
-                        display: "flex", flex: "none", width: 30, height: 30, borderRadius: 9,
+                        display: "flex", flex: "none", width: 30, height: 30, borderRadius: 999,
                         alignItems: "center", justifyContent: "center", color: "var(--accent-2)",
                         background: isUnread ? "var(--surface)" : "var(--surface-2)",
                       }}>
@@ -385,19 +383,13 @@ function TelegramLink({ user, compact }: { user?: User | null; compact?: boolean
   return (
     <>
       {compact ? (
-        <button onClick={() => setOpen(true)} title={linked ? "Telegram привязан" : "Привязать Telegram"} style={{
-          display: "flex", alignItems: "center", position: "relative",
-          background: "transparent", border: "1px solid var(--border)", borderRadius: 10, padding: 8, color: "var(--text-2)",
-        }}>
+        <button onClick={() => setOpen(true)} title={linked ? "Telegram привязан" : "Привязать Telegram"} className="icon-btn">
           <Icon name="bot" size={17} />
-          {linked && <span style={{ position: "absolute", top: 3, right: 3, width: 7, height: 7, borderRadius: 999, background: "var(--accent)" }} />}
+          {linked && <span style={{ position: "absolute", top: 3, right: 3, width: 7, height: 7, borderRadius: 999, background: "var(--ok)" }} />}
         </button>
       ) : (
-        <button onClick={() => setOpen(true)} style={{
-          display: "flex", alignItems: "center", gap: 9,
-          background: "transparent", border: "1px solid var(--border)", borderRadius: 10,
-          padding: "8px 12px", color: "var(--text-2)", fontSize: 13,
-        }}>
+        <button onClick={() => setOpen(true)} className="icon-btn"
+          style={{ justifyContent: "flex-start", padding: "8px 12px", fontSize: 13 }}>
           <Icon name="bot" size={16} />
           {linked ? "Telegram привязан ✓" : "Привязать Telegram"}
         </button>
@@ -455,14 +447,10 @@ function TelegramLinkModal({ linked, onClose }: { linked: boolean; onClose: () =
   );
 }
 
+// Sidebar item — resting/hover/active states live in theme.css (.navbtn).
 function NavBtn({ active, onClick, icon, label }: { active: boolean; onClick: () => void; icon: IconName; label: string }) {
   return (
-    <button onClick={onClick} style={{
-      display: "flex", alignItems: "center", gap: 11, padding: "10px 12px", borderRadius: 10,
-      border: "none", textAlign: "left", fontSize: 14, fontWeight: active ? 700 : 500,
-      background: active ? "var(--accent-soft)" : "transparent",
-      color: active ? "var(--accent-2)" : "var(--text-2)",
-    }}>
+    <button onClick={onClick} className="navbtn" data-active={active ? "1" : undefined}>
       <Icon name={icon} size={19} strokeWidth={active ? 2.1 : 1.75} />{label}
     </button>
   );

@@ -44,17 +44,23 @@ export function Login() {
 
   return (
     <div className="app" data-theme={theme} style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-      <form onSubmit={mode === "login" ? submit : submitForgot} className="fade" style={{
-        width: "100%", maxWidth: 380, background: "var(--surface)", border: "1px solid var(--border)",
-        borderRadius: 20, padding: 28, boxShadow: "var(--shadow-lg)",
+      <form onSubmit={mode === "login" ? submit : submitForgot} className="pop" style={{
+        width: "100%", maxWidth: 400, background: "var(--surface)", border: "1px solid var(--border)",
+        borderRadius: 24, padding: "36px 32px 30px", boxShadow: "var(--shadow-lg)",
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 11, marginBottom: 22 }}>
-          <div style={{ width: 38, height: 38, borderRadius: 11, background: "var(--accent)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--on-accent)" }}>
-            <Icon name="logo" size={20} strokeWidth={2.4} />
+        {/* Centered mark + large title — the Apple sign-in composition. */}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12, marginBottom: 26, textAlign: "center" }}>
+          <div style={{
+            width: 52, height: 52, borderRadius: 14,
+            background: "linear-gradient(180deg, color-mix(in srgb, var(--accent) 88%, #fff), var(--accent))",
+            boxShadow: "0 4px 14px color-mix(in srgb, var(--accent) 40%, transparent)",
+            display: "flex", alignItems: "center", justifyContent: "center", color: "var(--on-accent)",
+          }}>
+            <Icon name="logo" size={26} strokeWidth={2.4} />
           </div>
           <div>
-            <div style={{ fontWeight: 800, fontSize: 19 }}>ЕГЭизм</div>
-            <div className="mono" style={{ fontSize: 11, color: "var(--text-3)" }}>подготовка · ЕГЭ</div>
+            <div style={{ fontWeight: 700, fontSize: 24, letterSpacing: "-0.02em" }}>ЕГЭизм</div>
+            <div className="mono" style={{ fontSize: 11, color: "var(--text-3)", marginTop: 3 }}>подготовка · ЕГЭ</div>
           </div>
         </div>
 
@@ -70,9 +76,7 @@ export function Login() {
             <Button type="submit" disabled={busy} style={{ width: "100%", padding: "12px 0" }}>
               {busy ? "…" : "Войти"}
             </Button>
-            <button type="button" onClick={() => swap("forgot")} style={{
-              background: "none", border: "none", color: "var(--accent-2)", fontSize: 13, cursor: "pointer", padding: 0,
-            }}>Забыли пароль?</button>
+            <button type="button" onClick={() => swap("forgot")} className="link-btn">Забыли пароль?</button>
             <div style={{ color: "var(--text-3)", fontSize: 12.5, textAlign: "center" }}>
               Аккаунты выдаёт администратор или учитель.
             </div>
@@ -94,23 +98,20 @@ export function Login() {
             <Button type="submit" disabled={busy} style={{ width: "100%", padding: "12px 0" }}>
               {busy ? "…" : "Сообщить учителю"}
             </Button>
-            <button type="button" onClick={() => swap("login")} style={{
-              background: "none", border: "none", color: "var(--text-3)", fontSize: 13, cursor: "pointer", padding: 0,
-            }}>← Назад ко входу</button>
+            <button type="button" onClick={() => swap("login")} className="link-btn"
+              style={{ color: "var(--text-3)" }}>← Назад ко входу</button>
           </div>
         )}
 
         {mode === "forgot-sent" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <div style={{ fontWeight: 700, fontSize: 15, color: "var(--accent-2)" }}>Готово ✓</div>
+            <div style={{ fontWeight: 700, fontSize: 15, color: "var(--ok)" }}>Готово ✓</div>
             <div style={{ color: "var(--text-2)", fontSize: 13.5 }}>
               Если такой логин есть, учитель и администратор уже получили
               уведомление. Они пришлют тебе ссылку для смены пароля — она
               действует 1 час.
             </div>
-            <button type="button" onClick={() => swap("login")} style={{
-              background: "none", border: "none", color: "var(--accent-2)", fontSize: 13, cursor: "pointer", padding: 0,
-            }}>← Назад ко входу</button>
+            <button type="button" onClick={() => swap("login")} className="link-btn">← Назад ко входу</button>
           </div>
         )}
       </form>

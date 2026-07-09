@@ -17,7 +17,7 @@ function StatTile({ label, value, sub }: { label: string; value: number | string
   return (
     <Card style={{ padding: 18 }}>
       <Label>{label}</Label>
-      <div className="mono" style={{ fontSize: 30, fontWeight: 800, marginTop: 6 }}>{value}</div>
+      <div className="mono" style={{ fontSize: 30, fontWeight: 700, letterSpacing: "-0.02em", marginTop: 6 }}>{value}</div>
       {sub && <div className="mono" style={{ color: "var(--text-3)", fontSize: 12, marginTop: 2 }}>{sub}</div>}
     </Card>
   );
@@ -82,7 +82,7 @@ export function AdminStats() {
           : (
             <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 10 }}>
               {list.map((c) => (
-                <div key={c.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", background: "var(--surface-2)", borderRadius: 10 }}>
+                <div key={c.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", background: "var(--surface-2)", borderRadius: 12 }}>
                   <span style={{ fontWeight: 600 }}>{c.name}</span>
                   <span className="mono" style={{ color: "var(--text-3)", fontSize: 12 }}>
                     {c.teacher_name} · {c.member_count} уч.
@@ -129,14 +129,10 @@ function UserForm({ initial, onSubmit, onClose, busy }: {
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <div>
           <Label>Роль</Label>
-          <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+          <div className="seg" style={{ display: "flex", marginTop: 6 }}>
             {(["student", "teacher", "admin"] as Role[]).map((r) => (
-              <button key={r} type="button" onClick={() => setRole(r)} style={{
-                flex: 1, borderRadius: 10, padding: "9px 0", fontSize: 14, fontWeight: 600,
-                border: "1px solid " + (role === r ? "var(--accent)" : "var(--border-2)"),
-                background: role === r ? "var(--accent-soft)" : "transparent",
-                color: role === r ? "var(--accent-2)" : "var(--text-2)",
-              }}>{ROLE_RU[r]}</button>
+              <button key={r} type="button" onClick={() => setRole(r)}
+                data-active={role === r ? "1" : undefined} style={{ flex: 1 }}>{ROLE_RU[r]}</button>
             ))}
           </div>
         </div>
@@ -231,14 +227,13 @@ export function AdminUsers() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
       <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-        {(["", "student", "teacher", "admin"] as const).map((rr) => (
-          <button key={rr} onClick={() => setFilter(rr)} style={{
-            padding: "7px 14px", borderRadius: 999, fontSize: 13, fontWeight: 600,
-            border: "1px solid " + (filter === rr ? "var(--accent)" : "var(--border-2)"),
-            background: filter === rr ? "var(--accent-soft)" : "transparent",
-            color: filter === rr ? "var(--accent-2)" : "var(--text-2)",
-          }}>{rr === "" ? "Все" : ROLE_RU[rr]}</button>
-        ))}
+        <div className="seg">
+          {(["", "student", "teacher", "admin"] as const).map((rr) => (
+            <button key={rr} onClick={() => setFilter(rr)} data-active={filter === rr ? "1" : undefined}>
+              {rr === "" ? "Все" : ROLE_RU[rr]}
+            </button>
+          ))}
+        </div>
         <input placeholder="поиск: имя или логин" value={search} onChange={(e) => setSearch(e.target.value)}
           style={{ marginLeft: "auto", width: 200 }} />
         <Button onClick={() => setCreating(true)}>+ Пользователь</Button>
@@ -263,7 +258,7 @@ export function AdminUsers() {
                     </div>
                     <div className="mono" style={{ color: "var(--text-3)", fontSize: 12, marginTop: 3 }}>
                       {u.username || "—"}
-                      {u.telegram_id ? " · tg ✓" : ""}
+                      {u.telegram_id ? <span style={{ color: "var(--ok)" }}> · tg ✓</span> : null}
                       {u.created_at ? ` · с ${new Date(u.created_at).toLocaleDateString("ru")}` : ""}
                     </div>
                   </div>
@@ -281,14 +276,10 @@ export function AdminUsers() {
                           onClick={() => toggleActive(u)}>
                           {u.is_active ? "Отключить" : "Включить"}
                         </Button>
-                        <button onClick={() => setResetFor(u)} title="Ссылка для сброса пароля" style={{
-                          display: "inline-flex", alignItems: "center", background: "transparent",
-                          border: "none", color: "var(--text-3)", padding: 4,
-                        }}><Icon name="key" size={16} /></button>
-                        <button onClick={() => del(u)} title="Удалить аккаунт" style={{
-                          display: "inline-flex", alignItems: "center", background: "transparent",
-                          border: "none", color: "var(--text-3)", padding: 4,
-                        }}><Icon name="trash" size={16} /></button>
+                        <button className="icon-btn" onClick={() => setResetFor(u)} title="Ссылка для сброса пароля">
+                          <Icon name="key" size={16} /></button>
+                        <button className="btn btn-danger" onClick={() => del(u)} title="Удалить аккаунт"
+                          style={{ padding: "8px 10px" }}><Icon name="trash" size={16} /></button>
                       </>
                     )}
                   </div>
