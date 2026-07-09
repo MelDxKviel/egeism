@@ -7,7 +7,7 @@ import {
   useAdminTasks, useTests, useTestDetail, useTaskSummary, useInvalidate, useClasses, useClassDetail, useClassOverview, useStudents,
 } from "./api";
 import { useApp } from "./state";
-import { Card, Label, Pill, Button, Async, Empty, Loading, Modal, PasswordInput, Seg, SubjectPicker, accColor, SUBJECT_TITLES, testTitle, MediaBlock, StatementView, AttemptReviewGrid } from "./ui";
+import { Card, Label, Pill, Button, Async, Empty, Loading, Modal, PasswordInput, Seg, SubjectPicker, accColor, SUBJECT_TITLES, testTitle, MediaBlock, StatementView, AttemptReviewGrid, useIsMobile } from "./ui";
 import { ScoreGauge, computeStreak, WeakSpotsList, Section, MasteryChart } from "./charts";
 import { StreakBadge, ASSIGNMENT_STATUS_RU } from "./student";
 import { deadlineInfo } from "./deadline";
@@ -20,7 +20,9 @@ const SUBJECTS: SubjectCode[] = ["rus", "math", "inf", "soc"];
 const SOURCE_TITLE: Record<SubjectCode, string> = {
   rus: "РЕШУ ЕГЭ", math: "РЕШУ ЕГЭ", soc: "РЕШУ ЕГЭ", inf: "открытый банк ФИПИ (openfipi)",
 };
-const grid = { display: "grid", gap: "var(--gap)", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))" } as const;
+// min(300px, 100%) keeps the track from exceeding a narrow phone's content
+// width (a bare 300px minimum forced horizontal scroll on 320–360px screens).
+const grid = { display: "grid", gap: "var(--gap)", gridTemplateColumns: "repeat(auto-fit, minmax(min(300px, 100%), 1fr))" } as const;
 
 // Composed-variant builder bounds (mirror the backend caps in admin_read.go).
 const MAX_NUMBER = 99;       // matches backend maxTaskNumber
@@ -272,7 +274,7 @@ export function TeacherDashboard() {
         <Async q={classes}>{(list) => list.length === 0
           ? <div style={{ color: "var(--text-2)" }}>Классов пока нет. Создай класс и добавь в него учеников — или веди учеников индивидуально.</div>
           : (
-            <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))" }}>
+            <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fill, minmax(min(220px, 100%), 1fr))" }}>
               {list.map((c) => (
                 <Card key={c.id} onClick={() => { requestClassView(c.id); go("t-class"); }} style={{ padding: 18 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -514,6 +516,7 @@ function ClassGrid({ rows, onOpen }: {
   rows: import("./api").ClassStudentStats[];
   onOpen: (s: { id: string; name: string }) => void;
 }) {
+  const isMobile = useIsMobile();
   const numbers = useMemo(() => {
     const set = new Set<number>();
     rows.forEach((r) => r.by_number.forEach((n) => set.add(n.number)));
@@ -531,8 +534,9 @@ function ClassGrid({ rows, onOpen }: {
   ));
 
   return (
-    <div style={{ overflowX: "auto" }}>
-      <table className="stmt-table" style={{ width: "100%" }}>
+    <div className="scroll" style={{ overflowX: "auto" }}>
+      {/* grid-sticky (theme.css) pins the name column while номера scroll. */}
+      <table className="stmt-table grid-sticky" style={{ width: "100%" }}>
         <thead>
           <tr>
             <th>Ученик</th>
@@ -551,7 +555,9 @@ function ClassGrid({ rows, onOpen }: {
                     color: "var(--text)", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 7,
                   }}>
                     <span style={{ width: 9, height: 9, borderRadius: 999, background: r.total ? accColor(pct) : "var(--border-2)", flex: "none" }} />
-                    {r.name}
+                    {/* Truncate only on phones (the sticky column must stay
+                        narrow there); desktop shows the full name as before. */}
+                    <span style={isMobile ? { maxWidth: "34vw", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } : undefined}>{r.name}</span>
                   </button>
                 </th>
                 {numbers.map((n) => { const c = byNum(r, n); return <GridCell key={n} total={c.total} correct={c.correct} />; })}
@@ -618,6 +624,7 @@ function EditableClassTitle({ id, title, onRenamed }: { id: string; title: strin
 // назначенные тесты. Это бывший обзор — теперь на каждого ученика свой.
 export function StudentStatsPage() {
   const { subject, setSubject, go, showToast } = useApp();
+  const isMobile = useIsMobile();
   const invalidate = useInvalidate();
   const student = useRef(viewStudent).current;
   const sid = student?.id ?? "";
@@ -703,7 +710,7 @@ export function StudentStatsPage() {
           <ResponsiveContainer width="100%" height={260}>
             <BarChart data={rows.map((r) => ({ number: r.number, label: `№${r.number}`, acc: r.total ? Math.round((r.correct / r.total) * 100) : 0 }))} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
               <CartesianGrid stroke="var(--border)" vertical={false} />
-              <XAxis dataKey="label" stroke="var(--text-3)" fontSize={10} tickLine={false} interval={0} angle={-30} textAnchor="end" height={44} />
+              <XAxis dataKey="label" stroke="var(--text-3)" fontSize={10} tickLine={false} interval={isMobile ? "preserveStartEnd" : 0} angle={-30} textAnchor="end" height={44} />
               <YAxis domain={[0, 100]} stroke="var(--text-3)" fontSize={11} tickLine={false} />
               <Tooltip contentStyle={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 12 }} />
               <Bar dataKey="acc" minPointSize={2} radius={[4, 4, 0, 0]} cursor="pointer" isAnimationActive={false} onClick={(d: any) => { if (d && typeof d.number === "number") setOpen(d.number); }}>
@@ -1011,7 +1018,7 @@ export function Builder() {
         {kind === "composed" ? <ComposedBuilder subject={subject} /> : (
           <>
             {kind === "drill" && (
-              <div style={{ display: "flex", gap: 12, marginBottom: 14, alignItems: "center" }}>
+              <div style={{ display: "flex", gap: 12, marginBottom: 14, alignItems: "center", flexWrap: "wrap" }}>
                 <label className="mono" style={{ fontSize: 13, color: "var(--text-2)" }}>Номер
                   <input type="number" min={1} value={number} onChange={(e) => setNumber(+e.target.value)} style={{ width: 70, marginLeft: 8 }} /></label>
                 <label className="mono" style={{ fontSize: 13, color: "var(--text-2)" }}>Сколько
@@ -1140,7 +1147,7 @@ export function TestDetailPage() {
                   </div>
                   <StatementView text={t.statement} media={t.media} style={{ fontSize: 15, lineHeight: 1.45, marginBottom: 8 }} />
                   <MediaBlock media={t.media} />
-                  <div className="mono" style={{ fontSize: 14, background: "var(--surface-2)", borderRadius: 12, padding: "8px 12px", display: "inline-block" }}>
+                  <div className="mono" style={{ fontSize: 14, background: "var(--surface-2)", borderRadius: 12, padding: "8px 12px", display: "inline-block", maxWidth: "100%", overflowWrap: "anywhere" }}>
                     <span style={{ color: "var(--text-3)" }}>ответ: </span>
                     <b style={{ color: "var(--ok)" }}>{t.answer_schema.correct.join(" / ")}</b>
                   </div>
@@ -1450,7 +1457,7 @@ function SourcePanel({ subject, onDone }: { subject: SubjectCode; onDone: () => 
         <span style={{ fontSize: 12, color: "var(--text-3)" }}>чинит битые условия: теория вместо текста, разъехавшиеся таблицы</span>
       </div>
       {superTeacher && (
-        <div style={{ marginTop: 12, borderTop: "1px solid var(--border)", paddingTop: 10, display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{ marginTop: 12, borderTop: "1px solid var(--border)", paddingTop: 10, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           <span style={{ fontSize: 13, color: "var(--text-3)" }}>или загрузить файлом</span>
           <input ref={inputRef} type="file" accept=".json,.jsonl,application/json" onChange={onPick} style={{ display: "none" }} />
           <button onClick={() => inputRef.current?.click()} disabled={busy !== null}
@@ -1479,11 +1486,11 @@ function BankCard({ task, onStatus, onEditAnswer }: { task: Task; onStatus: (id:
       </div>
       <StatementView text={task.statement} media={task.media} style={{ fontSize: 15, lineHeight: 1.45, marginBottom: 12 }} />
       <MediaBlock media={task.media} />
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
         <Label>Ответ</Label>
         {!editing ? (
           <>
-            <span className="mono" style={{ background: "var(--surface-2)", padding: "4px 10px", borderRadius: 12 }}>{task.answer_schema.correct.join(" / ")}</span>
+            <span className="mono" style={{ background: "var(--surface-2)", padding: "4px 10px", borderRadius: 12, minWidth: 0, overflowWrap: "anywhere" }}>{task.answer_schema.correct.join(" / ")}</span>
             <button onClick={() => setEditing(true)} className="link-btn">править</button>
           </>
         ) : (

@@ -40,7 +40,7 @@ input, select, textarea { font-family: inherit; }
   --glow-b: color-mix(in srgb, #AF52DE 5%, transparent);
   /* Motion */
   --ease: cubic-bezier(.25, .1, .25, 1); --spring: cubic-bezier(.34, 1.25, .44, 1);
-  --gap: 20px; --main-pad: 32px;
+  --gap: 20px; --main-pad: 32px; --card-pad: 22px; --modal-pad: 24px;
   min-height: 100%;
   /* Native controls (date pickers, scrollbars, selects) follow the app theme,
      not the OS — the dark override below flips it to `dark`. */
@@ -396,6 +396,10 @@ input:focus, textarea:focus, select:focus {
 .stmt-formula { vertical-align: middle; max-width: 100%; height: auto; }
 .app[data-theme="dark"] .stmt-formula { filter: invert(1); }
 
+/* Modal panel height: dvh tracks the iOS dynamic toolbar (the second line wins
+   where supported); plain vh stays as the fallback. */
+.modal-panel { max-height: 92vh; max-height: 92dvh; }
+
 /* Statement tables (truth tables, DB headers) rendered by StatementView. */
 .stmt-table { border-collapse: collapse; font-size: 0.92em; font-variant-numeric: tabular-nums; }
 .stmt-table th, .stmt-table td {
@@ -405,3 +409,37 @@ input:focus, textarea:focus, select:focus {
    fill vanished inside surface-2 panels like the attempt review). */
 .stmt-table th { background: color-mix(in srgb, var(--text) 7%, transparent); color: var(--text-2); font-weight: 600; }
 .stmt-table td { color: var(--text); }
+
+/* ---------- Mobile (<900px = ui.tsx's useIsMobile breakpoint) ---------- */
+/* The ONE place phone spacing is tuned: the shell content/header, every Card,
+   the Modal and the error boundary all read these tokens, so screens sit near
+   edge-to-edge on a phone without per-component media hacks. Desktop (≥900px)
+   keeps the exact previous values.
+   MUST STAY LAST IN THE FILE: the element/class overrides below (.btn, inputs,
+   .grid-sticky) share specificity with their base rules above — a media query
+   adds no cascade priority, so only source order makes these win. */
+@media (max-width: 899px) {
+  .app {
+    --gap: 14px;
+    --main-pad: max(14px, env(safe-area-inset-left), env(safe-area-inset-right));
+    --card-pad: 16px;
+    --modal-pad: 18px;
+  }
+  /* iOS Safari auto-zooms into any focused control under 16px and often leaves
+     the page zoomed/pannable — keep fields at 16 so the viewport never jumps. */
+  input, textarea, select { font-size: 16px; }
+  /* Long Russian CTA labels («Обновить условия у старых заданий», …) wrap into
+     a taller pill instead of forcing horizontal overflow. min-width: 0 lifts
+     the flex-item floor ONLY here, where wrapping (not clipping) absorbs it. */
+  .btn { white-space: normal; text-align: center; max-width: 100%; min-width: 0; }
+  /* Class color grid: pin the student-name column while the номера scroll — on
+     a phone the colored cells (the point of the grid) were entirely offscreen
+     behind the name column. Opaque th-tint equivalent so cells don't shine
+     through; the inset hairline keeps a divider edge (collapsed-model borders
+     don't travel with a sticky cell). */
+  .grid-sticky th:first-child {
+    position: sticky; left: 0; z-index: 1;
+    background: color-mix(in srgb, var(--text) 7%, var(--surface));
+    box-shadow: inset -1px 0 var(--border-2);
+  }
+}

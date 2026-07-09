@@ -48,14 +48,18 @@ export function AnswerInput({ kind, value, onChange, disabled }:
 function Keypad({ onKey, onBack, disabled }: { onKey: (k: string) => void; onBack: () => void; disabled?: boolean }) {
   const keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"];
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 8, maxWidth: 320 }}>
+    // auto-fit keeps every key at ≥52px (above the 44px touch-target minimum) —
+    // the fixed 5 columns gave ~36px keys on narrow phones. 52px still yields
+    // exactly 5 columns in the full 320px-wide grid, so desktop is unchanged;
+    // «стереть» spans whatever column count the width produced.
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(52px, 1fr))", gap: 8, maxWidth: 320 }}>
       {keys.map((k) => (
         <button key={k} disabled={disabled} onClick={() => onKey(k)} className="btn btn-ghost mono" style={{
           padding: "12px 0", fontSize: 18, fontWeight: 700,
         }}>{k}</button>
       ))}
       <button disabled={disabled} onClick={onBack} className="btn btn-ghost" style={{
-        gridColumn: "span 5", padding: "10px 0",
+        gridColumn: "1 / -1", padding: "10px 0",
       }}><Icon name="arrowLeft" size={15} /> стереть</button>
     </div>
   );

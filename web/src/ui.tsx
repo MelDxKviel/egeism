@@ -33,8 +33,8 @@ export function Modal({ title, children, onClose, maxWidth = 560 }:
   // <body> level, leaving the panel transparent and unstyled. Every dialog must
   // go through this component — a bare createPortal loses the theme again.
   return createPortal(
-    <div className="app overlay" data-theme={theme} onClick={onClose} style={{ position: "fixed", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 16, minHeight: 0 }}>
-      <div onClick={(e) => e.stopPropagation()} className="pop" style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 20, padding: 24, maxWidth, width: "100%", maxHeight: "92vh", display: "flex", flexDirection: "column", boxShadow: "var(--shadow-lg)" }}>
+    <div className="app overlay" data-theme={theme} onClick={onClose} style={{ position: "fixed", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: "clamp(10px, 2.5vw, 16px)", minHeight: 0 }}>
+      <div onClick={(e) => e.stopPropagation()} className="pop modal-panel" style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 20, padding: "var(--modal-pad, 24px)", maxWidth, width: "100%", display: "flex", flexDirection: "column", boxShadow: "var(--shadow-lg)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
           <div style={{ fontWeight: 700, fontSize: 17, letterSpacing: "-0.01em", display: "flex", alignItems: "center", gap: 10 }}>{title}</div>
           <button onClick={onClose} title="Закрыть" className="icon-btn" style={{ border: "none", borderRadius: 999, padding: 6, color: "var(--text-3)" }}><Icon name="close" size={19} /></button>
@@ -155,7 +155,7 @@ export function StatementView({ text, media, style }: { text?: string; media?: M
   let para: string[] = [];
   const flush = () => {
     if (para.join("").trim())
-      blocks.push(<div key={blocks.length} style={{ whiteSpace: "pre-wrap" }}>{renderInline(para.join("\n").trim(), media)}</div>);
+      blocks.push(<div key={blocks.length} style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{renderInline(para.join("\n").trim(), media)}</div>);
     para = [];
   };
   for (let i = 0; i < lines.length; ) {
@@ -215,7 +215,7 @@ export function Card({ children, style, className, onClick }:
   // Clickable cards get the .card-tap raise/settle states from theme.css.
   return (
     <div className={["card", onClick ? "card-tap" : "", className || ""].filter(Boolean).join(" ")}
-      onClick={onClick} style={{ padding: 22, ...style }}>{children}</div>
+      onClick={onClick} style={{ padding: "var(--card-pad, 22px)", ...style }}>{children}</div>
   );
 }
 
@@ -306,7 +306,7 @@ export function ErrorBox({ error, onRetry }: { error: unknown; onRetry?: () => v
   </Card>;
 }
 export function Empty({ title, hint, action }: { title: string; hint?: string; action?: ReactNode }) {
-  return <Card style={{ textAlign: "center", padding: 34 }}>
+  return <Card style={{ textAlign: "center", padding: "clamp(20px, 5vw, 34px)" }}>
     <div style={{ fontWeight: 700, fontSize: 16 }}>{title}</div>
     {hint && <div style={{ color: "var(--text-2)", marginTop: 6, fontSize: 14 }}>{hint}</div>}
     {action && <div style={{ marginTop: 16 }}>{action}</div>}
@@ -470,7 +470,7 @@ export const testTitle = (t: string) => (t === "__practice__" ? "Свободн�
 export function AttemptReviewGrid({ items, selfView }: { items: AttemptReviewItem[]; selfView?: boolean }) {
   if (items.length === 0) return <div style={{ color: "var(--text-2)" }}>В этой попытке нет ответов.</div>;
   return (
-    <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", alignItems: "start" }}>
+    <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fill, minmax(min(340px, 100%), 1fr))", alignItems: "start" }}>
       {items.map((it) => (
         <div key={it.answer_id} style={{ padding: 14, background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 14 }}>
           <div style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
@@ -479,7 +479,7 @@ export function AttemptReviewGrid({ items, selfView }: { items: AttemptReviewIte
           </div>
           <StatementView text={it.statement} media={it.media} style={{ fontSize: 14, lineHeight: 1.45, marginBottom: 8 }} />
           <MediaBlock media={it.media} />
-          <div className="mono" style={{ fontSize: 13, display: "flex", flexDirection: "column", gap: 4 }}>
+          <div className="mono" style={{ fontSize: 13, display: "flex", flexDirection: "column", gap: 4, overflowWrap: "anywhere" }}>
             <div><span style={{ color: "var(--text-3)" }}>{selfView ? "твой ответ" : "ответ ученика"}: </span><b style={{ color: it.is_correct ? "var(--ok)" : "var(--bad)" }}>{it.raw_answer || "—"}</b></div>
             <div><span style={{ color: "var(--text-3)" }}>верный ответ: </span><b style={{ color: "var(--ok)" }}>{it.correct.join(" / ")}</b></div>
           </div>

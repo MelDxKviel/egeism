@@ -35,7 +35,7 @@ export function AdminStats() {
         const acc = s.answers ? Math.round((s.correct_answers / s.answers) * 100) : 0;
         return (
           <>
-            <div style={{ display: "grid", gap: "var(--gap)", gridTemplateColumns: "repeat(auto-fill, minmax(170px, 1fr))" }}>
+            <div style={{ display: "grid", gap: "var(--gap)", gridTemplateColumns: "repeat(auto-fill, minmax(min(170px, 100%), 1fr))" }}>
               <StatTile label="Ученики" value={s.students} />
               <StatTile label="Учителя" value={s.teachers} sub={`админов: ${s.admins}`} />
               <StatTile label="Классы" value={s.classes} />
@@ -82,8 +82,8 @@ export function AdminStats() {
           : (
             <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 10 }}>
               {list.map((c) => (
-                <div key={c.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", background: "var(--surface-2)", borderRadius: 12 }}>
-                  <span style={{ fontWeight: 600 }}>{c.name}</span>
+                <div key={c.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "10px 12px", background: "var(--surface-2)", borderRadius: 12 }}>
+                  <span style={{ fontWeight: 600, minWidth: 0 }}>{c.name}</span>
                   <span className="mono" style={{ color: "var(--text-3)", fontSize: 12 }}>
                     {c.teacher_name} · {c.member_count} уч.
                   </span>
@@ -235,7 +235,7 @@ export function AdminUsers() {
           ))}
         </Seg>
         <input placeholder="поиск: имя или логин" value={search} onChange={(e) => setSearch(e.target.value)}
-          style={{ marginLeft: "auto", width: 200 }} />
+          style={{ marginLeft: "auto", width: 200, maxWidth: "100%", minWidth: 0 }} />
         <Button onClick={() => setCreating(true)}>+ Пользователь</Button>
       </div>
 
@@ -266,7 +266,7 @@ export function AdminUsers() {
                     {ROLE_RU[u.role]}
                     {u.role === "teacher" && ` · ${u.subject ? SUBJECT_TITLES[u.subject] : "все предметы"}`}
                   </Pill>
-                  <div style={{ display: "flex", gap: 6 }}>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                     <Button variant="ghost" style={{ padding: "6px 12px", fontSize: 13 }} onClick={() => setEditing(u)}>
                       Изменить
                     </Button>
