@@ -1,0 +1,15 @@
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="ЕГЭизм — ступени">
+  <defs>
+    <linearGradient id="l3bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2A8EFF"/>
+      <stop offset="1" stop-color="#0066CC"/>
+    </linearGradient>
+  </defs>
+  <g fill="url(#l3bg)">
+    <path d="M9,54 L9,43 Q9,40 12,40 L16,40 Q19,40 19,43 L19,54 Z"/>
+    <path d="M22,54 L22,35 Q22,32 25,32 L29,32 Q32,32 32,35 L32,54 Z"/>
+    <path d="M35,54 L35,26 Q35,23 38,23 L42,23 Q45,23 45,26 L45,54 Z"/>
+    <path d="M48,54 L48,15 Q48,12 51,12 L55,12 Q58,12 58,15 L58,54 Z"/>
+  </g>
+  <circle cx="53" cy="6" r="4" fill="#BF4E00"/>
+</svg>

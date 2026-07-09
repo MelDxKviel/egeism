@@ -1,0 +1,19 @@
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="ЕГЭизм — кристалл">
+  <defs>
+    <linearGradient id="l5top" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#80C4FF"/>
+      <stop offset="1" stop-color="#409CFF"/>
+    </linearGradient>
+    <linearGradient id="l5left" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0071E3"/>
+      <stop offset="1" stop-color="#0066CC"/>
+    </linearGradient>
+    <linearGradient id="l5right" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0066CC"/>
+      <stop offset="1" stop-color="#003D80"/>
+    </linearGradient>
+  </defs>
+  <polygon points="32,8 52,18 32,28 12,18" fill="url(#l5top)"/>
+  <polygon points="12,18 32,28 32,52 12,42" fill="url(#l5left)"/>
+  <polygon points="52,18 32,28 32,52 52,42" fill="url(#l5right)"/>
+</svg>

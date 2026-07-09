@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Брендинг · ЕГЭизм</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#F5F5F7; --bg-2:#E8E8ED; --surface:#FFFFFF; --surface-2:#F5F5F7;
+    --border:rgba(0,0,0,.09); --border-2:rgba(0,0,0,.18);
+    --text:#1D1D1F; --text-2:#55555B; --text-3:#86868B;
+    --accent:#0071E3; --accent-2:#0066CC; --accent-soft:rgba(0,113,227,.10); --on-accent:#FFFFFF;
+    --warn:#BF4E00;
+    --edge:inset 0 1px 0 rgba(255,255,255,.55);
+    --shadow:0 1px 2px rgba(0,0,0,.04), 0 6px 16px -10px rgba(0,0,0,.10);
+    --shadow-lg:0 2px 8px rgba(0,0,0,.06), 0 32px 80px -24px rgba(0,0,0,.28);
+    --glow-a:rgba(0,113,227,.07); --glow-b:rgba(175,82,222,.05);
+    --dark-demo:#000000;
+  }
+  .app[data-theme="dark"] {
+    --bg:#000000; --bg-2:#29292D; --surface:#1C1C1E; --surface-2:#2C2C2E;
+    --border:rgba(255,255,255,.10); --border-2:rgba(255,255,255,.24);
+    --text:#F5F5F7; --text-2:#A1A1A6; --text-3:#8A8A90;
+    --accent:#0A84FF; --accent-2:#409CFF; --accent-soft:rgba(10,132,255,.18); --on-accent:#FFFFFF;
+    --glow-a:rgba(10,132,255,.12); --glow-b:rgba(191,90,242,.08);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:
+      radial-gradient(1100px 560px at 84% -180px, var(--glow-a), transparent 70%),
+      radial-gradient(900px 520px at -180px 14%, var(--glow-b), transparent 70%),
+      var(--bg);
+    background-attachment:fixed,fixed,scroll;
+    color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display","Helvetica Neue","Segoe UI",Inter,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+    transition:background .25s ease,color .25s ease;
+    min-height:100vh;
+  }
+  a{color:var(--accent-2);text-decoration:none}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+
+  /* Header */
+  header.top{
+    position:sticky; top:0; z-index:50;
+    background:color-mix(in srgb, var(--bg) 88%, transparent);
+    backdrop-filter:blur(12px);
+    border-bottom:1px solid var(--border);
+  }
+  .top .row{display:flex;align-items:center;gap:14px;height:64px}
+  .top .brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:17px;letter-spacing:-.01em}
+  .top .brand img{width:32px;height:32px;border-radius:9px;box-shadow:var(--shadow)}
+  .top .grow{flex:1}
+  .theme-btn{
+    background:var(--surface);border:1px solid var(--border);color:var(--text-2);
+    padding:9px 14px;border-radius:10px;font-size:13px;font-weight:500;
+    display:inline-flex;align-items:center;gap:8px;cursor:pointer;transition:all .15s;
+  }
+  .theme-btn:hover{border-color:var(--accent);color:var(--accent)}
+
+  /* Hero */
+  .hero{padding:64px 0 40px;text-align:center}
+  .hero .eyebrow{
+    display:inline-flex;align-items:center;gap:8px;
+    background:var(--accent-soft);color:var(--accent-2);
+    padding:6px 14px;border-radius:999px;font-size:13px;font-weight:600;
+    margin-bottom:22px;
+  }
+  .hero h1{font-size:clamp(34px,5vw,56px);line-height:1.05;margin:0 0 16px;font-weight:800;letter-spacing:-.025em}
+  .hero h1 .grad{
+    background:linear-gradient(120deg,var(--accent),var(--accent-2));
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+  }
+  .hero p.lead{font-size:18px;color:var(--text-2);max-width:620px;margin:0 auto;line-height:1.55}
+  .hero .stack{margin-top:26px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+  .chip{background:var(--surface);border:1px solid var(--border);padding:6px 12px;border-radius:999px;font-size:12.5px;color:var(--text-2)}
+
+  /* Section */
+  section{padding:48px 0}
+  .sec-head{margin-bottom:28px}
+  .sec-head h2{font-size:26px;font-weight:700;margin:0 0 6px;letter-spacing:-.015em}
+  .sec-head p{margin:0;color:var(--text-2);font-size:15px}
+
+  /* Logo grid */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:18px}
+  .card{
+    background:var(--surface);border:1px solid var(--border);border-radius:18px;
+    overflow:hidden;transition:transform .18s ease,box-shadow .18s ease,border-color .18s;
+    display:flex;flex-direction:column;
+  }
+  .card:hover{transform:translateY(-3px);box-shadow:var(--shadow-lg);border-color:var(--border-2)}
+  .card .stage{
+    height:180px;display:flex;align-items:center;justify-content:center;
+    background:linear-gradient(135deg,var(--surface-2),var(--bg-2));
+    position:relative;
+  }
+  .card .stage img{width:96px;height:96px}
+  .card .stage .badge{
+    position:absolute;top:12px;left:12px;
+    background:var(--surface);border:1px solid var(--border);
+    font-size:11px;font-weight:700;letter-spacing:.06em;
+    padding:4px 8px;border-radius:6px;color:var(--text-3);
+    text-transform:uppercase;
+  }
+  .card .body{padding:18px 20px 20px;display:flex;flex-direction:column;gap:8px;flex:1}
+  .card .name{font-size:17px;font-weight:700;letter-spacing:-.01em}
+  .card .slug{font-size:12px;color:var(--text-3);font-family:'JetBrains Mono',ui-monospace,monospace}
+  .card .desc{font-size:13.5px;color:var(--text-2);line-height:1.5;flex:1}
+  .card .mini{display:flex;gap:10px;align-items:center;margin-top:4px}
+  .card .mini .sw{
+    width:42px;height:42px;border-radius:11px;display:flex;align-items:center;justify-content:center;
+    border:1px solid var(--border);
+  }
+  .card .mini .sw img{width:26px;height:26px}
+  .card .mini .sw.dark{background:var(--dark-demo);border-color:transparent}
+  .card .mini .sw.light{background:#FFFFFF}
+  .card .mini .lab{font-size:11px;color:var(--text-3)}
+  .card .actions{display:flex;gap:8px;margin-top:14px}
+  .btn{
+    border:none;font-family:inherit;font-size:13px;font-weight:600;
+    padding:9px 18px;border-radius:980px;cursor:pointer;transition:all .15s;
+    display:inline-flex;align-items:center;gap:6px;
+  }
+  .btn-primary{background:linear-gradient(180deg,#0A7BEB,var(--accent));color:var(--on-accent);box-shadow:inset 0 1px 0 rgba(255,255,255,.2),0 1px 2.5px rgba(0,0,0,.12),0 2px 6px -2px rgba(0,113,227,.3)}
+  .btn-primary:hover{filter:brightness(1.05);transform:translateY(-1px)}
+  .btn-ghost{background:transparent;border:1px solid var(--border);color:var(--text-2)}
+  .btn-ghost:hover{border-color:var(--accent);color:var(--accent)}
+
+  /* Context section */
+  .panel{background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:28px;margin-bottom:18px}
+  .panel h3{margin:0 0 4px;font-size:16px;font-weight:700}
+  .panel .sub{margin:0 0 22px;color:var(--text-2);font-size:13.5px}
+  .panel .row-x{display:flex;gap:28px;flex-wrap:wrap;align-items:flex-end}
+
+  .sizes{display:flex;gap:24px;align-items:flex-end;flex-wrap:wrap}
+  .sizes .item{display:flex;flex-direction:column;align-items:center;gap:8px}
+  .sizes .item img{display:block}
+  .sizes .item .l{font-size:11px;color:var(--text-3);font-family:ui-monospace,monospace}
+
+  .ios{width:120px;height:120px;border-radius:28px;background:linear-gradient(135deg,#2A8EFF,#0066CC);display:flex;align-items:center;justify-content:center;box-shadow:0 10px 30px -8px rgba(0,102,204,.45),inset 0 1px 0 rgba(255,255,255,.3)}
+  .ios img{width:84px;height:84px}
+
+  .darktile{background:var(--dark-demo);border-radius:14px;padding:24px;display:flex;align-items:center;gap:14px}
+  .darktile .wm{color:#EAECEE;font-weight:700;font-size:20px;letter-spacing:-.01em}
+  .darktile img{width:40px;height:40px;border-radius:10px}
+
+  .wordmark-demo{display:flex;align-items:center;gap:14px;padding:18px 22px;background:var(--bg);border-radius:14px;border:1px solid var(--border)}
+  .wordmark-demo img{width:40px;height:40px;border-radius:10px}
+  .wordmark-demo .wm{font-size:22px;font-weight:800;letter-spacing:-.02em}
+  .wordmark-demo .wm .dim{color:var(--text-3);font-weight:500}
+
+  .livebar{display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--surface-2);border:1px solid var(--border);border-radius:12px;margin-bottom:14px}
+  .livebar img{width:28px;height:28px;border-radius:7px}
+  .livebar .t{font-weight:700;font-size:15px}
+  .livebar .t .dim{color:var(--text-3);font-weight:500;font-size:13px;margin-left:6px}
+
+  /* Before/after gradient tiles */
+  .ba{display:flex;gap:16px;flex-wrap:wrap}
+  .ba-item{display:flex;flex-direction:column;gap:10px;flex:1;min-width:240px}
+  .ba-tile{height:210px;border-radius:16px;border:1px solid var(--border);position:relative;overflow:hidden;background:#000}
+  .ba-tile::before{content:"";position:absolute;inset:20px;border-radius:13px;border:1px solid rgba(255,255,255,.10);box-shadow:inset 0 1px 0 rgba(255,255,255,.06)}
+  .ba-was::before{background:linear-gradient(180deg,#2b2b2d,#1C1C1E 58%)}
+  .ba-now::before{background:linear-gradient(180deg,#1E1E20,#1C1C1E 16%)}
+  .ba-cap{font-size:12.5px;color:var(--text-3);font-family:ui-monospace,monospace}
+  .ba-cap b{color:var(--text-2);font-weight:600;font-family:inherit;margin-right:6px}
+
+  footer{padding:40px 0 60px;text-align:center;color:var(--text-3);font-size:13px;border-top:1px solid var(--border);margin-top:40px}
+
+  @media (max-width:640px){
+    .hero{padding:40px 0 24px}
+    .card .stage{height:150px}
+    .card .stage img{width:80px;height:80px}
+  }
+</style>
+</head>
+<body>
+<div class="app" data-theme="light">
+
+<header class="top">
+  <div class="wrap">
+    <div class="row">
+      <div class="brand">
+        <img id="hdr-logo" src="logo-12-aurora.svg" alt="">
+        <span>ЕГЭизм</span>
+      </div>
+      <div class="grow"></div>
+      <button class="theme-btn" id="theme-toggle">
+        <span id="theme-icon">🌙</span><span id="theme-label">Тёмная</span>
+      </button>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="hero">
+    <span class="eyebrow">◆ Брендинг · 15 концепций</span>
+    <h1>Логотип <span class="grad">ЕГЭизм</span></h1>
+    <p class="lead">Платформа подготовки к ЕГЭ: веб, Telegram-бот и админка.
+       Пятнадцать независимых визуальных концепций на единой сетке 64×64 в эстетике Apple HIG.</p>
+    <div class="stack">
+      <span class="chip">Apple HIG · #0071E3</span>
+      <span class="chip">SF Pro / system</span>
+      <span class="chip">сетка 64px</span>
+      <span class="chip">true-black dark</span>
+      <span class="chip">favicon-ready</span>
+    </div>
+  </div>
+
+  <section>
+    <div class="sec-head">
+      <h2>Варианты</h2>
+      <p>Наведи на карточку, открой SVG или нажми «В шапку», чтобы прикинуть, как ляжет в навигации.</p>
+    </div>
+    <div class="grid" id="grid"></div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <h2>В контексте</h2>
+      <p>Как логотип смотрится на разных носителях и в шапке приложения.</p>
+    </div>
+
+    <div class="livebar">
+      <img id="live-logo" src="logo-12-aurora.svg" alt="">
+      <div class="t">Живая шапка <span class="dim">— выбери «В шапку» в карточке выше</span></div>
+    </div>
+
+    <div class="panel">
+      <h3>Favicon · размеры</h3>
+      <p class="sub">Один SVG-файл честно масштабируется от 16px (вкладка) до крупных превью.</p>
+      <div class="sizes" id="sizes"></div>
+    </div>
+
+    <div class="panel">
+      <h3>App icon · iOS/Android</h3>
+      <p class="sub">Градиентный контейнер с заложенным под скругление ОС запасом.</p>
+      <div class="ios"><img id="ios-logo" src="logo-12-aurora.svg" alt=""></div>
+    </div>
+
+    <div class="panel">
+      <h3>Горизонтальный вариант · иконка + wordmark</h3>
+      <p class="sub">Для шапки сайта, email, презентаций и Telegram-канала.</p>
+      <div class="wordmark-demo">
+        <img id="wm-logo" src="logo-12-aurora.svg" alt="">
+        <span class="wm">ЕГЭ<span class="dim">изм</span></span>
+      </div>
+      <div style="height:14px"></div>
+      <div class="darktile">
+        <img id="dark-logo" src="logo-12-aurora.svg" alt="">
+        <span class="wm">ЕГЭизм на тёмном</span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <h2>Карточки в тёмной теме · было / стало</h2>
+      <p>Старый <code>linear-gradient</code> <b>94%→58%</b> клал видимую серую полосу через каждую карточку. Сделали whisper-thin: <b>99%</b> mix и стоп на <b>16%</b> — едва заметный блик у верхнего края (1% белизны), остальное плоский <code>#1C1C1E</code>.</p>
+    </div>
+    <div class="panel">
+      <div class="ba">
+        <div class="ba-item">
+          <div class="ba-tile ba-was"></div>
+          <span class="ba-cap"><b>Было</b>94% mix · стоп 58% — серая полоса</span>
+        </div>
+        <div class="ba-item">
+          <div class="ba-tile ba-now"></div>
+          <span class="ba-cap"><b>Стало</b>99% mix · стоп 16% — whisper-thin</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    ЕГЭизм · бренд-кит · все логотипы в <code>branding/*.svg</code> · открой через любой статический сервер или просто <code>index.html</code>
+  </footer>
+</div>
+</div>
+
+<script>
+const LOGOS = [
+  { file:"logo-1-monogram.svg", name:"Монограмма «Е»", tag:"MONOGRAM",
+    desc:"Буква Е из трёх скруглённых полосок с точкой-акцентом — намёк на суффикс «-изм». Развитие нынешнего favicon: узнаваемо, сдержанно, работает везде." },
+  { file:"logo-2-check.svg", name:"Галочка в гексагоне", tag:"CHECK",
+    desc:"Белый чек-марк в шестиугольнике. Галочка = правильный ответ, ядро платформы (checker). Гексагон читается как «структура, надёжно»." },
+  { file:"logo-3-steps.svg", name:"Восходящие ступени", tag:"STEPS",
+    desc:"Четыре растущих столбика (4 предмета) со звездой-целью наверху. Метафора прогресса и роста балла. Открытая форма — для горизонтального лого." },
+  { file:"logo-4-drop.svg", name:"Капля с галочкой", tag:"DROP",
+    desc:"Мягкая капля/лист с встроенной галочкой. Дружелюбный, молодёжный силуэт — для соцсетей и онбординга старшеклассников." },
+  { file:"logo-5-crystal.svg", name:"Кристалл / грани", tag:"CRYSTAL",
+    desc:"Изометрический кристалл из трёх граней. Многогранность подготовки, tech-эстетика. Самый «премиальный» вариант без отдельной заливки." },
+  { file:"logo-6-pencil.svg", name:"Карандаш", tag:"PENCIL",
+    desc:"Диагональный карандаш с оранжевым ластиком — классика учёбы. Контрастный warn-акцент оживляет системный синий. Для онбординга и иконок разделов." },
+  { file:"logo-7-bolt.svg", name:"Вспышка / инсайт", tag:"BOLT",
+    desc:"Молния чистым силуэтом — озарение, момент «дошло». Открытая форма без контейнера: динамичная, для sticky-баннеров и Telegram-превью." },
+  { file:"logo-8-target.svg", name:"Мишень / точность", tag:"TARGET",
+    desc:"Концентрические кольца с точкой в центре. Прямая метафора checker'а: точный ответ = попадание в цель = высокий балл." },
+  { file:"logo-9-book.svg", name:"Открытая книга", tag:"BOOK",
+    desc:"Разворот с корешком и линиями-бликами текста. Универсальный символ образования, переработанный в Apple-чистой геометрии." },
+  { file:"logo-10-matrix.svg", name:"Матрица прогресса", tag:"MATRIX",
+    desc:"Сетка 4×4 точек с градиентом насыщенности по диагонали роста. Прямая связь с тепловой картой активности — data-viz во главе бренда." },
+  { file:"logo-11-spark.svg", name:"Искра", tag:"SPARK",
+    desc:"Четырёхконечная искра с переливом голубой→синий→индиго. Символ озарения и момента «дошло» — прямой родственник SF Symbol sparkles, самый Apple-эстетичный вариант." },
+  { file:"logo-12-aurora.svg", name:"Aurora · mesh-Е", tag:"AURORA",
+    desc:"Squircle с настоящим mesh-градиентом (голубой + синий + индиго + пурпурный блик) и белой буквой Е. Премиальная версия монограммы — переливается, оставаясь читаемой от 16px." },
+  { file:"logo-13-compass.svg", name:"Компас", tag:"COMPASS",
+    desc:"Минималистичный компас: кольцо, четыре румба и стрелка с приглушённой южной половиной. Метафора ориентира в подготовке, строгая Apple-геометрия." },
+  { file:"logo-14-atom.svg", name:"Атом / орбита", tag:"ATOM",
+    desc:"Объёмная сфера с радиальным бликом и орбитальным кольцом, по которому бежит электрон-акцент. Tech-premium — намёк на ядро знаний и фокус." },
+  { file:"logo-15-chevrons.svg", name:"Шевроны роста", tag:"CHEVRONS",
+    desc:"Три восходящих шеврона с нарастающей непрозрачностью — уровни мастерства, рост балла. Динамичный flat, идеально для баннеров и прогресс-состояний." },
+];
+
+const grid = document.getElementById("grid");
+const SIZES = [16, 24, 32, 48, 64, 128];
+const sizesEl = document.getElementById("sizes");
+
+function renderSizes(file){
+  sizesEl.innerHTML = "";
+  SIZES.forEach(s=>{
+    const item = document.createElement("div");
+    item.className = "item";
+    item.innerHTML = `<img src="${file}" width="${s}" height="${s}" style="border-radius:${Math.min(6,s*0.22)}px"><span class="l">${s}px</span>`;
+    sizesEl.appendChild(item);
+  });
+}
+
+function setHeaderLogo(file){
+  document.getElementById("hdr-logo").src = file;
+  document.getElementById("live-logo").src = file;
+  document.getElementById("ios-logo").src = file;
+  document.getElementById("wm-logo").src = file;
+  document.getElementById("dark-logo").src = file;
+  renderSizes(file);
+}
+
+LOGOS.forEach((l, i)=>{
+  const card = document.createElement("div");
+  card.className = "card";
+  card.innerHTML = `
+    <div class="stage">
+      <span class="badge">${l.tag}</span>
+      <img src="${l.file}" alt="${l.name}">
+    </div>
+    <div class="body">
+      <div class="name">${l.name}</div>
+      <div class="slug">${l.file}</div>
+      <div class="desc">${l.desc}</div>
+      <div class="mini">
+        <div class="sw light"><img src="${l.file}" alt=""></div>
+        <div class="sw dark"><img src="${l.file}" alt=""></div>
+        <span class="lab">light · dark</span>
+      </div>
+      <div class="actions">
+        <a class="btn btn-primary" href="${l.file}" download>↓ SVG</a>
+        <button class="btn btn-ghost" data-i="${i}">В шапку</button>
+      </div>
+    </div>`;
+  grid.appendChild(card);
+});
+
+grid.addEventListener("click", e=>{
+  const b = e.target.closest("button[data-i]");
+  if(!b) return;
+  setHeaderLogo(LOGOS[+b.dataset.i].file);
+  document.querySelector(".livebar").scrollIntoView({behavior:"smooth", block:"center"});
+});
+
+// Theme toggle
+const app = document.querySelector(".app");
+const tIcon = document.getElementById("theme-icon");
+const tLab  = document.getElementById("theme-label");
+document.getElementById("theme-toggle").addEventListener("click", ()=>{
+  const dark = app.dataset.theme === "dark";
+  app.dataset.theme = dark ? "light" : "dark";
+  tIcon.textContent = dark ? "🌙" : "☀️";
+  tLab.textContent  = dark ? "Тёмная" : "Светлая";
+});
+
+renderSizes("logo-12-aurora.svg");
+</script>
+</body>
+</html>

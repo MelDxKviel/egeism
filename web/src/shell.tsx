@@ -43,14 +43,7 @@ export function Shell({ title, cta, children }: { title: string; cta?: ReactNode
             display: "flex", flexDirection: "column", padding: "22px 16px 18px",
           }}>
             <div style={{ display: "flex", alignItems: "center", gap: 11, padding: "0 6px 18px" }}>
-              <div style={{
-                width: 34, height: 34, borderRadius: 10, flex: "none",
-                background: "linear-gradient(180deg, color-mix(in srgb, var(--accent) 88%, #fff), var(--accent))",
-                boxShadow: "0 2px 8px color-mix(in srgb, var(--accent) 35%, transparent)",
-                display: "flex", alignItems: "center", justifyContent: "center", color: "var(--on-accent)",
-              }}>
-                <Icon name="logo" size={18} strokeWidth={2.4} />
-              </div>
+              <img src="/favicon.svg" width={34} height={34} alt="" style={{ flex: "none", borderRadius: 11 }} />
               <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.15 }}>
                 <span style={{ fontWeight: 700, fontSize: 17, letterSpacing: "-0.02em" }}>ЕГЭизм</span>
                 <span className="mono" style={{ fontSize: 11, color: "var(--text-3)" }}>подготовка · ЕГЭ</span>
