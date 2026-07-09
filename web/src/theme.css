@@ -4,7 +4,10 @@
    Interactive colors live in classes (not inline styles) so :hover can win. */
 * { box-sizing: border-box; }
 html, body, #root { margin: 0; padding: 0; height: 100%; }
-button { font-family: inherit; color: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+/* background:none kills the UA ButtonFace default — a classless button used to
+   surface as a light-grey slab that turned unreadable in dark mode (the
+   notification-row bug); every styled button sets its own fill anyway. */
+button { font-family: inherit; color: inherit; cursor: pointer; background: none; -webkit-tap-highlight-color: transparent; }
 input, select, textarea { font-family: inherit; }
 ::selection { background: var(--accent-soft); }
 
@@ -21,10 +24,11 @@ input, select, textarea { font-family: inherit; }
   --warn: #BF4E00; --warn-soft: rgba(255, 149, 0, .14);
   /* Activity heatmap (green ramp, deepest = --ok) */
   --hm0: #E8E8ED; --hm1: #BDE9C8; --hm2: #7DD996; --hm3: #34C759; --hm4: #1D8339;
-  /* Depth — soft resting shadow, raised hover, big floating panels.
+  /* Depth — Apple-tight: a hairline contact shadow + a soft short ambient one;
+     the big blur is reserved for genuinely floating panels (--shadow-lg).
      --edge is a hairline inner top-light that makes panels read as physical. */
-  --shadow: 0 1px 2px rgba(0, 0, 0, .05), 0 14px 36px -18px rgba(0, 0, 0, .16);
-  --shadow-2: 0 2px 6px rgba(0, 0, 0, .06), 0 20px 48px -18px rgba(0, 0, 0, .22);
+  --shadow: 0 1px 2px rgba(0, 0, 0, .04), 0 6px 16px -10px rgba(0, 0, 0, .10);
+  --shadow-2: 0 2px 4px rgba(0, 0, 0, .05), 0 12px 28px -14px rgba(0, 0, 0, .16);
   --shadow-lg: 0 2px 8px rgba(0, 0, 0, .06), 0 32px 80px -24px rgba(0, 0, 0, .28);
   --edge: inset 0 1px 0 rgba(255, 255, 255, .55);
   /* Materials */
@@ -38,6 +42,9 @@ input, select, textarea { font-family: inherit; }
   --ease: cubic-bezier(.25, .1, .25, 1); --spring: cubic-bezier(.34, 1.25, .44, 1);
   --gap: 20px; --main-pad: 32px;
   min-height: 100%;
+  /* Native controls (date pickers, scrollbars, selects) follow the app theme,
+     not the OS — the dark override below flips it to `dark`. */
+  color-scheme: light;
   background:
     radial-gradient(1100px 560px at 84% -180px, var(--glow-a), transparent 70%),
     radial-gradient(900px 520px at -180px 14%, var(--glow-b), transparent 70%),
@@ -72,6 +79,7 @@ input, select, textarea { font-family: inherit; }
   /* The glows read stronger on the pure-black canvas. */
   --glow-a: color-mix(in srgb, var(--accent) 12%, transparent);
   --glow-b: color-mix(in srgb, #BF5AF2 8%, transparent);
+  color-scheme: dark;
 }
 /* U+2116 «№» is missing or oddly drawn in a number of monospace fonts, so the
    browser substitutes a confusing glyph from a random fallback (the «҂1» tiles
@@ -115,7 +123,7 @@ input, select, textarea { font-family: inherit; }
 @media (prefers-reduced-motion: reduce) {
   .fade, .pop, .popdown, .skel, .celebrate, .checkpop, .flame-live, .tab-ic { animation: none !important; }
   .btn, .icon-btn, .card-tap, .navbtn, .row, .seg > button, .hm-tap,
-  .seg-knob, .tabbar-lens, .tabbar > button { transition: none !important; }
+  .seg-knob, .tabbar-lens, .tabbar > button, .drop-btn, .drop-btn .chev, .drop-item { transition: none !important; }
 }
 
 .fade { animation: fade .3s var(--ease) both; }
@@ -180,23 +188,24 @@ input:focus, textarea:focus, select:focus {
 }
 .btn:active { transform: scale(.97); }
 .btn:disabled { opacity: .45; pointer-events: none; }
-/* Primary: top-lit gradient + a soft accent-colored glow, lifting on hover —
-   the same recipe as the sidebar logo tile, so CTAs read as physical. */
+/* Primary: a barely-there top light (inset highlight + 8% white at the top of
+   the fill) and a TIGHT contact shadow — Apple volume comes from the inner
+   light, not from a colored halo. Lifts 1px on hover, settles on press. */
 .btn-primary {
-  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 86%, #fff), var(--accent));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 92%, #fff), var(--accent));
   color: var(--on-accent);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .22), 0 1px 2px rgba(0, 0, 0, .1),
-    0 6px 16px -6px color-mix(in srgb, var(--accent) 60%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .2), 0 1px 2.5px rgba(0, 0, 0, .12),
+    0 2px 6px -2px color-mix(in srgb, var(--accent) 30%, transparent);
 }
 .btn-primary:hover {
-  filter: brightness(1.06); transform: translateY(-1px);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .22), 0 2px 4px rgba(0, 0, 0, .1),
-    0 10px 22px -8px color-mix(in srgb, var(--accent) 70%, transparent);
+  filter: brightness(1.05); transform: translateY(-1px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .2), 0 2px 4px rgba(0, 0, 0, .1),
+    0 4px 10px -3px color-mix(in srgb, var(--accent) 36%, transparent);
 }
 .btn-primary:active {
   filter: brightness(.94); transform: scale(.97);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .12), 0 1px 2px rgba(0, 0, 0, .1),
-    0 4px 10px -6px color-mix(in srgb, var(--accent) 50%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .1), 0 1px 2px rgba(0, 0, 0, .12),
+    0 1px 3px -1px color-mix(in srgb, var(--accent) 24%, transparent);
 }
 .btn-ghost { background: transparent; color: var(--text); border-color: var(--border-2); }
 .btn-ghost:hover { background: color-mix(in srgb, var(--text) 6%, transparent); }
@@ -251,6 +260,10 @@ input:focus, textarea:focus, select:focus {
 }
 .row:hover { background: color-mix(in srgb, var(--text) 5%, transparent); }
 .row:active { transform: scale(.99); }
+/* Filled row (read notifications): a soft neutral card so every feed entry
+   reads as an object on the popover surface — light AND dark. */
+.row[data-filled="1"] { background: color-mix(in srgb, var(--text) 5%, transparent); }
+.row[data-filled="1"]:hover { background: color-mix(in srgb, var(--text) 9%, transparent); }
 .row[data-unread="1"] { background: var(--accent-soft); }
 .row[data-unread="1"]:hover { background: color-mix(in srgb, var(--accent) 16%, transparent); }
 
@@ -295,11 +308,42 @@ input:focus, textarea:focus, select:focus {
 .seg-knob {
   position: absolute; top: 3px; bottom: 3px; left: 0; z-index: 0;
   border-radius: 9px; background: var(--knob);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, .16), 0 3px 8px rgba(0, 0, 0, .08),
-    inset 0 1px 0 rgba(255, 255, 255, .35);
+  /* iOS segmented-knob shadow: tight and soft, no halo. */
+  box-shadow: 0 3px 8px rgba(0, 0, 0, .12), 0 1px 1px rgba(0, 0, 0, .05),
+    inset 0 1px 0 rgba(255, 255, 255, .3);
   transition: transform .32s var(--spring), width .32s var(--spring);
   will-change: transform, width;
 }
+
+/* ---------- Dropdown picker (mobile subject switcher) ---------- */
+/* Pill trigger + anchored iOS-style menu. The chevron rotates while open;
+   the menu drops in with the shared popdown spring. */
+.drop-btn {
+  display: inline-flex; align-items: center; gap: 9px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 999px;
+  padding: 9px 14px 9px 16px; font-size: 15px; font-weight: 600; color: var(--text);
+  box-shadow: var(--edge), var(--shadow);
+  transition: border-color .16s var(--ease), background .16s var(--ease), transform .16s var(--spring);
+}
+.drop-btn:active { transform: scale(.97); }
+.drop-btn[data-open="1"] { border-color: var(--border-2); }
+.drop-btn .chev { display: flex; color: var(--text-3); transition: transform .28s var(--spring); }
+.drop-btn[data-open="1"] .chev { transform: rotate(180deg); }
+.drop-menu {
+  position: absolute; top: calc(100% + 8px); left: 0; z-index: 40; min-width: 232px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+  box-shadow: var(--edge), var(--shadow-lg); padding: 5px;
+  display: flex; flex-direction: column; gap: 1px;
+}
+.drop-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  background: none; border: none; border-radius: 11px; padding: 11px 12px;
+  font-size: 14.5px; font-weight: 500; color: var(--text); text-align: left; white-space: nowrap;
+  transition: background .14s var(--ease);
+}
+.drop-item:hover { background: color-mix(in srgb, var(--text) 5%, transparent); }
+.drop-item:active { background: color-mix(in srgb, var(--text) 9%, transparent); }
+.drop-item[data-active="1"] { color: var(--accent-2); font-weight: 600; }
 
 /* ---------- Floating tab bar (mobile) ---------- */
 /* An iOS-26-style detached glass capsule: floats above the home indicator,

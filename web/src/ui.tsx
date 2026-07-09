@@ -4,6 +4,19 @@ import { AttemptReviewItem, Media, mediaUrl, SubjectCode } from "./api";
 import { useApp } from "./state";
 import { Icon } from "./icons";
 
+// useIsMobile — the ONE phone/desktop breakpoint (shared by the Shell's tab
+// bar and the SubjectPicker's dropdown mode). Lives here, not in shell.tsx,
+// so ui components can use it without an import cycle.
+export function useIsMobile() {
+  const [m, setM] = useState(window.innerWidth < 900);
+  useEffect(() => {
+    const on = () => setM(window.innerWidth < 900);
+    window.addEventListener("resize", on);
+    return () => window.removeEventListener("resize", on);
+  }, []);
+  return m;
+}
+
 // ---------- Modal (the ONE portaled dialog) ----------
 // maxWidth defaults to a compact dialog; pass a larger value (e.g. a near-full
 // "min(1200px, 96vw)") for content-heavy modals like the attempt review. The body
@@ -373,20 +386,76 @@ export function Seg({ children, className, style }:
   );
 }
 
-// SubjectSwitch — THE segmented subject picker. One shared control so the
+const ALL_SUBJECTS: SubjectCode[] = ["rus", "math", "inf", "soc"];
+
+// SubjectPicker — the subject switcher in two shapes: the animated Seg on
+// desktop, and a dropdown menu on phones (four full titles never fit a phone
+// row — the seg clipped and had to scroll). The dropdown is an iOS-style
+// anchored menu: pill trigger with a rotating chevron, popdown panel, check
+// on the active row. Outside tap / Esc closes. Styles live in theme.css
+// (.drop-btn/.drop-menu/.drop-item).
+export function SubjectPicker({ value, onChange, options }:
+  { value: SubjectCode; onChange: (s: SubjectCode) => void; options?: SubjectCode[] }) {
+  const opts = options ?? ALL_SUBJECTS;
+  const isMobile = useIsMobile();
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: PointerEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("pointerdown", onDown);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onDown);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  if (!isMobile) {
+    return (
+      <Seg style={{ alignSelf: "flex-start" }}>
+        {opts.map((c) => (
+          <button key={c} onClick={() => onChange(c)} data-active={value === c ? "1" : undefined}>
+            {SUBJECT_TITLES[c]}
+          </button>
+        ))}
+      </Seg>
+    );
+  }
+  return (
+    <div ref={wrapRef} style={{ position: "relative", alignSelf: "flex-start" }}>
+      <button className="drop-btn" onClick={() => setOpen((o) => !o)}
+        data-open={open ? "1" : undefined} aria-haspopup="listbox" aria-expanded={open}>
+        <span className="mono" style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--text-3)" }}>Предмет</span>
+        {SUBJECT_TITLES[value]}
+        <span className="chev"><Icon name="chevronDown" size={16} strokeWidth={2.2} /></span>
+      </button>
+      {open && (
+        <div className="drop-menu popdown" role="listbox" style={{ transformOrigin: "top left" }}>
+          {opts.map((c) => (
+            <button key={c} className="drop-item" role="option" aria-selected={value === c}
+              data-active={value === c ? "1" : undefined}
+              onClick={() => { onChange(c); setOpen(false); }}>
+              {SUBJECT_TITLES[c]}
+              {value === c && <Icon name="check" size={17} strokeWidth={2} />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// SubjectSwitch — THE app-wide subject picker. One shared control so the
 // dashboard, the training hub and the subject screen all switch the same
-// app-wide subject in the same place, styled identically (.seg in theme.css).
+// app-wide subject in the same place, styled identically.
 export function SubjectSwitch() {
   const { subject, setSubject } = useApp();
-  return (
-    <Seg style={{ alignSelf: "flex-start" }}>
-      {(["rus", "math", "inf", "soc"] as SubjectCode[]).map((c) => (
-        <button key={c} onClick={() => setSubject(c)} data-active={subject === c ? "1" : undefined}>
-          {SUBJECT_TITLES[c]}
-        </button>
-      ))}
-    </Seg>
-  );
+  return <SubjectPicker value={subject} onChange={setSubject} />;
 }
 
 // The internal practice test carries a sentinel title; show it nicely in feeds.

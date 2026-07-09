@@ -7,7 +7,7 @@ import {
   useAdminTasks, useTests, useTestDetail, useTaskSummary, useInvalidate, useClasses, useClassDetail, useClassOverview, useStudents,
 } from "./api";
 import { useApp } from "./state";
-import { Card, Label, Pill, Button, Async, Empty, Loading, Modal, PasswordInput, Seg, accColor, SUBJECT_TITLES, testTitle, MediaBlock, StatementView, AttemptReviewGrid } from "./ui";
+import { Card, Label, Pill, Button, Async, Empty, Loading, Modal, PasswordInput, Seg, SubjectPicker, accColor, SUBJECT_TITLES, testTitle, MediaBlock, StatementView, AttemptReviewGrid } from "./ui";
 import { ScoreGauge, computeStreak, WeakSpotsList, Section, MasteryChart } from "./charts";
 import { StreakBadge, ASSIGNMENT_STATUS_RU } from "./student";
 import { deadlineInfo } from "./deadline";
@@ -74,13 +74,10 @@ function SubjectTabs({ value, onChange }: { value: SubjectCode; onChange: (s: Su
   if (allowed.length === 1) {
     return <div><Pill tone="accent">{SUBJECT_TITLES[allowed[0]]} · ваш предмет</Pill></div>;
   }
+  // Desktop: the animated Seg; phones: the dropdown (labels never fit a row).
   return (
-    <div>
-      <Seg>
-        {allowed.map((c) => (
-          <button key={c} onClick={() => onChange(c)} data-active={value === c ? "1" : undefined}>{SUBJECT_TITLES[c]}</button>
-        ))}
-      </Seg>
+    <div style={{ display: "flex" }}>
+      <SubjectPicker value={value} onChange={onChange} options={allowed} />
     </div>
   );
 }

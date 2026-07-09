@@ -2,20 +2,10 @@ import { CSSProperties, ReactNode, useEffect, useRef, useState } from "react";
 import { useApp, View } from "./state";
 import { Icon, IconName } from "./icons";
 import { api, User, NotificationItem, useNotifications, useSubjects, useInvalidate } from "./api";
-import { Button, Loading, Modal, Spinner, SUBJECT_TITLES, testTitle } from "./ui";
+import { Button, Loading, Modal, Spinner, SUBJECT_TITLES, testTitle, useIsMobile } from "./ui";
 import { requestSolve } from "./student";
 import { requestTestView } from "./teacher";
 import { ResetLinkModal } from "./reset";
-
-function useIsMobile() {
-  const [m, setM] = useState(window.innerWidth < 900);
-  useEffect(() => {
-    const on = () => setM(window.innerWidth < 900);
-    window.addEventListener("resize", on);
-    return () => window.removeEventListener("resize", on);
-  }, []);
-  return m;
-}
 
 const STUDENT_NAV: { v: View; label: string; icon: IconName }[] = [
   { v: "dashboard", label: "Дашборд", icon: "dashboard" },
@@ -351,14 +341,19 @@ function NotificationsBell() {
                   const action = n.kind === "password_reset_requested" ? "Выдать ссылку для смены пароля" : "Перейти к тесту";
                   return (
                     <button key={n.id} onClick={() => openItem(n)} title={fullTime(n.created_at)}
-                      className="row" data-unread={isUnread ? "1" : undefined} style={{
+                      className="row" data-unread={isUnread ? "1" : undefined}
+                      data-filled={isUnread ? undefined : "1"} style={{
                         display: "flex", gap: 11, alignItems: "flex-start", textAlign: "left", width: "100%",
                         border: "none", borderRadius: 12, padding: "10px 12px", cursor: "pointer",
                       }}>
+                      {/* Unread: vivid accent disc + white glyph (iOS-style). Read: a
+                          neutral text-mixed disc — reads on ANY surface in BOTH themes
+                          (the old surface-on-surface disc vanished in dark mode). */}
                       <span style={{
                         display: "flex", flex: "none", width: 30, height: 30, borderRadius: 999,
-                        alignItems: "center", justifyContent: "center", color: "var(--accent-2)",
-                        background: isUnread ? "var(--surface)" : "var(--surface-2)",
+                        alignItems: "center", justifyContent: "center",
+                        color: isUnread ? "var(--on-accent)" : "var(--text-2)",
+                        background: isUnread ? "var(--accent)" : "color-mix(in srgb, var(--text) 8%, transparent)",
                       }}>
                         <Icon name={iconName} size={17} />
                       </span>

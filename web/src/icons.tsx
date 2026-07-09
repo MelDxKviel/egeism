@@ -10,7 +10,7 @@ export type IconName =
   | "overview" | "user" | "tests" | "assign" | "bank"  // teacher nav
   | "moon" | "sun" | "logout" | "logo"        // shell chrome
   | "flame" | "paperclip" | "bot" | "image" | "check"  // inline markers
-  | "close" | "arrowRight" | "arrowLeft" | "trash" | "pencil"  // affordances
+  | "close" | "arrowRight" | "arrowLeft" | "chevronDown" | "trash" | "pencil"  // affordances
   | "bell"   // notifications
   | "download"  // PDF export
   | "eye" | "eyeOff" | "key";  // password visibility + reset
@@ -148,6 +148,7 @@ const PATHS: Record<IconName, ReactNode> = {
   ),
   arrowRight: <path d="M4 12h15M13 5.5l6.5 6.5-6.5 6.5" />,
   arrowLeft: <path d="M20 12H5M11 18.5 4.5 12 11 5.5" />,
+  chevronDown: <path d="m6 9.5 6 6 6-6" />,
   eye: (
     <>
       <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" />
