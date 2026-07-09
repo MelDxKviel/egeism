@@ -76,9 +76,13 @@ input, select, textarea { font-family: inherit; }
   --edge: inset 0 1px 0 rgba(255, 255, 255, .06);
   --glass: rgba(22, 22, 24, .68); --backdrop: rgba(0, 0, 0, .55);
   --knob: #636366; --ring: rgba(10, 132, 255, .5);
-  /* The glows read stronger on the pure-black canvas. */
-  --glow-a: color-mix(in srgb, var(--accent) 12%, transparent);
-  --glow-b: color-mix(in srgb, #BF5AF2 8%, transparent);
+  /* The glows read stronger on the pure-black canvas — but the system purple
+     (#BF5AF2) read as a muddy rose stain on true-black and fought the blue, so
+     the second wash is cold indigo (#5E5CE6): it harmonizes with the accent and
+     gives a premium, Linear/Vercel-style ambient. Intensity trimmed so the wash
+     breathes instead of sitting as a blot. */
+  --glow-a: color-mix(in srgb, var(--accent) 10%, transparent);
+  --glow-b: color-mix(in srgb, #5E5CE6 6%, transparent);
   color-scheme: dark;
 }
 /* U+2116 «№» is missing or oddly drawn in a number of monospace fonts, so the
@@ -240,10 +244,13 @@ input:focus, textarea:focus, select:focus {
   background: var(--surface); border: 1px solid var(--border);
   border-radius: 18px; box-shadow: var(--edge), var(--shadow);
 }
-/* Dark surfaces get a faint top-light gradient — flat #1C1C1E panels on the
-   black canvas otherwise read as cutouts, not objects. */
+/* Dark surfaces get a whisper-thin top-light. Flat #1C1C1E panels on the
+   black canvas read as cutouts, but the old 94%/58% mix laid down a visible
+   grey band across every card. 99% surface + a 16% stop keeps the lift ONLY at
+   the very top edge (1% white — barely a hint), so it reads as a highlight,
+   not a stain. The inset --edge (6% white, 1px) does the real lifting. */
 .app[data-theme="dark"] .card {
-  background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 94%, #fff), var(--surface) 58%);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 99%, #fff), var(--surface) 16%);
 }
 /* A card (or row) that acts as a button: raise on hover, settle on press. */
 .card-tap {

@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useApp } from "./state";
 import { api } from "./api";
 import { Button, Label, PasswordInput } from "./ui";
-import { Icon } from "./icons";
 
 // Login screen. Self-registration is gone: accounts are created by the admin
 // (admin panel) or by a teacher (student accounts), so this is login-only. The
@@ -53,14 +52,7 @@ export function Login() {
       }}>
         {/* Centered mark + large title — the Apple sign-in composition. */}
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12, marginBottom: 26, textAlign: "center" }}>
-          <div style={{
-            width: 52, height: 52, borderRadius: 14,
-            background: "linear-gradient(180deg, color-mix(in srgb, var(--accent) 88%, #fff), var(--accent))",
-            boxShadow: "0 4px 14px color-mix(in srgb, var(--accent) 40%, transparent)",
-            display: "flex", alignItems: "center", justifyContent: "center", color: "var(--on-accent)",
-          }}>
-            <Icon name="logo" size={26} strokeWidth={2.4} />
-          </div>
+          <img src="/favicon.svg" width={52} height={52} alt="" style={{ borderRadius: 17 }} />
           <div>
             <div style={{ fontWeight: 700, fontSize: 24, letterSpacing: "-0.02em" }}>ЕГЭизм</div>
             <div className="mono" style={{ fontSize: 11, color: "var(--text-3)", marginTop: 3 }}>подготовка · ЕГЭ</div>
