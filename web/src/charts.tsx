@@ -141,9 +141,11 @@ export function WeakSpotsList({ spots, onDrill }: { spots: WeakSpot[]; onDrill: 
       {spots.map((s) => {
         const pct = Math.round(s.accuracy * 100);
         return (
-          <div key={s.number} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div key={s.number} style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
             <div className="mono" style={{ width: 34, fontWeight: 700 }}>№{s.number}</div>
-            <div style={{ flex: 1 }}>
+            {/* The bar keeps a readable minimum; when the row runs out the CTA
+                wraps to the next line instead of crushing the bar to a sliver. */}
+            <div style={{ flex: "1 1 90px", minWidth: 90 }}>
               <div style={{ height: 8, borderRadius: 999, background: "color-mix(in srgb, var(--text) 8%, transparent)", overflow: "hidden" }}>
                 <div style={{ width: `${pct}%`, height: "100%", background: accColor(pct) }} />
               </div>
@@ -160,7 +162,9 @@ export function WeakSpotsList({ spots, onDrill }: { spots: WeakSpot[]; onDrill: 
 export function Section({ title, right, children }: { title: string; right?: ReactNode; children: ReactNode }) {
   return (
     <Card>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+      {/* flexWrap: a long `right` node (a button, a hint) drops below the title
+          on a phone instead of colliding with it. */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, rowGap: 6, flexWrap: "wrap", marginBottom: 16 }}>
         <Label>{title}</Label>{right}
       </div>
       {children}

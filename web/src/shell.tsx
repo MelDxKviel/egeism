@@ -86,10 +86,15 @@ export function Shell({ title, cta, children }: { title: string; cta?: ReactNode
           <header className="glass" style={{
             position: "sticky", top: 0, zIndex: 5, height: 60,
             borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center",
-            justifyContent: "space-between", padding: "0 var(--main-pad)",
+            justifyContent: "space-between", gap: 10, padding: "0 var(--main-pad)",
           }}>
-            <div style={{ fontWeight: 700, fontSize: 20, letterSpacing: "-0.02em" }}>{title}</div>
-            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            {/* The title takes all the shrink (ellipsis) — on a phone the right
+                icon cluster must never push it into a second line. */}
+            <div style={{
+              fontWeight: 700, fontSize: isMobile ? 17 : 20, letterSpacing: "-0.02em",
+              minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            }}>{title}</div>
+            <div style={{ display: "flex", gap: isMobile ? 6 : 10, alignItems: "center", flex: "none" }}>
               {cta}
               <NotificationsBell />
               {isMobile && (
@@ -289,7 +294,7 @@ function NotificationsBell() {
         <div className="popdown" style={{
           position: isMobile ? "fixed" : "absolute",
           ...(isMobile
-            ? { top: 68, left: 8, right: 8, maxHeight: "calc(100vh - 150px)" }
+            ? { top: 68, left: 8, right: 8, maxHeight: "calc(100vh - 150px - env(safe-area-inset-bottom))" }
             : { top: "calc(100% + 10px)", right: 0, width: 384, maxHeight: "min(72vh, 540px)" }),
           background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 18,
           boxShadow: "var(--shadow-lg)", zIndex: 60, transformOrigin: "top right",
@@ -359,7 +364,7 @@ function NotificationsBell() {
                       </span>
                       <span style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0, flex: 1 }}>
                         <span style={{ display: "flex", gap: 8, alignItems: "baseline", justifyContent: "space-between" }}>
-                          <span style={{ fontWeight: isUnread ? 700 : 600, fontSize: 13.5, color: "var(--text)", lineHeight: 1.35 }}>{title}</span>
+                          <span style={{ fontWeight: isUnread ? 700 : 600, fontSize: 13.5, color: "var(--text)", lineHeight: 1.35, minWidth: 0, overflowWrap: "anywhere" }}>{title}</span>
                           <span className="mono" style={{ fontSize: 11, color: "var(--text-3)", flex: "none", whiteSpace: "nowrap" }}>{relTime(n.created_at)}</span>
                         </span>
                         {sub && <span className="mono" style={{ fontSize: 11.5, color: "var(--text-3)" }}>{sub}</span>}

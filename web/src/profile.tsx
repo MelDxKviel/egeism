@@ -18,13 +18,14 @@ export function ProfilePage() {
   return (
     <div style={{ maxWidth: 640, display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
       <Card>
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "clamp(12px, 3vw, 16px)" }}>
           <div style={{
-            width: 56, height: 56, borderRadius: 16, background: "var(--accent-soft)",
+            width: "clamp(44px, 12vw, 56px)", height: "clamp(44px, 12vw, 56px)", flex: "none",
+            borderRadius: 16, background: "var(--accent-soft)",
             display: "flex", alignItems: "center", justifyContent: "center", color: "var(--accent-2)",
           }}><Icon name="user" size={28} /></div>
           <div style={{ minWidth: 0 }}>
-            <div style={{ fontWeight: 700, fontSize: 20, letterSpacing: "-0.01em" }}>{user.name}</div>
+            <div style={{ fontWeight: 700, fontSize: 20, letterSpacing: "-0.01em", overflowWrap: "anywhere" }}>{user.name}</div>
             <div style={{ display: "flex", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
               <Pill tone="accent">{ROLE_RU[user.role]}</Pill>
               {user.role === "teacher" && (
@@ -35,7 +36,7 @@ export function ProfilePage() {
             </div>
           </div>
         </div>
-        <div style={{ marginTop: 18, display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
+        <div style={{ marginTop: 18, display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(min(200px, 100%), 1fr))" }}>
           <div>
             <Label>Логин</Label>
             <div className="mono" style={{ marginTop: 4, fontSize: 15 }}>{user.username || "—"}</div>
@@ -71,9 +72,10 @@ export function ProfilePage() {
                   {(p.teachers ?? []).map((t) => (
                     <div key={t.id} style={{
                       display: "flex", justifyContent: "space-between", alignItems: "center",
+                      gap: 8, flexWrap: "wrap",
                       padding: "10px 12px", background: "var(--surface-2)", borderRadius: 12,
                     }}>
-                      <span style={{ fontWeight: 600 }}>{t.name}</span>
+                      <span style={{ fontWeight: 600, minWidth: 0 }}>{t.name}</span>
                       <span className="mono" style={{ color: "var(--text-3)", fontSize: 12 }}>
                         {t.subject ? SUBJECT_TITLES[t.subject] : "все предметы"}
                       </span>
@@ -100,9 +102,10 @@ export function ProfilePage() {
                       onClick={role === "teacher" ? () => { requestClassView(c.id); go("t-class"); } : undefined}
                       style={{
                         display: "flex", justifyContent: "space-between", alignItems: "center",
+                        gap: 8, flexWrap: "wrap",
                         padding: "10px 12px", background: "var(--surface-2)", borderRadius: 12,
                       }}>
-                      <span style={{ fontWeight: 600 }}>{c.name}</span>
+                      <span style={{ fontWeight: 600, minWidth: 0 }}>{c.name}</span>
                       <span className="mono" style={{ color: "var(--text-3)", fontSize: 12 }}>
                         {role === "teacher" ? `${c.member_count} уч.` : c.teacher_name}
                       </span>

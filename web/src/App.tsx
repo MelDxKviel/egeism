@@ -71,7 +71,7 @@ export default function App() {
       {/* A render crash in one screen shows a recoverable card instead of
           blanking the whole app; the Shell (nav) stays alive so the user can
           switch away, and the boundary auto-resets when view/subject change. */}
-      <ErrorBoundary resetKey={`${view}:${subject}`} theme={theme}>
+      <ErrorBoundary resetKey={`${view}:${subject}`} theme={theme} bare>
         {screen}
       </ErrorBoundary>
       {toast && (

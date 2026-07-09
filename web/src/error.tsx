@@ -11,8 +11,11 @@ import { Component, ErrorInfo, ReactNode } from "react";
 // resetKey: when it changes (we pass `view:subject`), a boundary that is
 // currently showing an error clears itself — so navigating to another tab or
 // switching subject re-attempts the render instead of staying stuck.
+// bare: the per-screen boundary sits INSIDE the Shell's content div, which
+// already applies --main-pad — without it the fallback double-padded (64px of
+// dead space per side on a phone).
 export class ErrorBoundary extends Component<
-  { children: ReactNode; resetKey?: string; theme?: "light" | "dark" },
+  { children: ReactNode; resetKey?: string; theme?: "light" | "dark"; bare?: boolean },
   { error: Error | null }
 > {
   state: { error: Error | null } = { error: null };
@@ -39,8 +42,8 @@ export class ErrorBoundary extends Component<
     const theme = this.props.theme
       ?? ((localStorage.getItem("egeism.theme") as "light" | "dark") || "light");
     return (
-      <div className="app" data-theme={theme} style={{ padding: "var(--main-pad)" }}>
-        <div className="card" style={{ padding: 24, maxWidth: 560, margin: "24px auto" }}>
+      <div className="app" data-theme={theme} style={{ padding: this.props.bare ? 0 : "var(--main-pad)" }}>
+        <div className="card" style={{ padding: "clamp(16px, 4vw, 24px)", maxWidth: 560, margin: "24px auto" }}>
           <div style={{ fontWeight: 700, fontSize: 18, letterSpacing: "-0.01em", marginBottom: 8 }}>
             Что-то пошло не так
           </div>
@@ -55,7 +58,7 @@ export class ErrorBoundary extends Component<
           }}>
             {this.state.error.message || String(this.state.error)}
           </div>
-          <div style={{ marginTop: 16, display: "flex", gap: 10 }}>
+          <div style={{ marginTop: 16, display: "flex", gap: 10, flexWrap: "wrap" }}>
             <button className="btn btn-primary" onClick={() => window.location.reload()}>
               Обновить страницу
             </button>

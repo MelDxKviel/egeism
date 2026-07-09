@@ -46,7 +46,10 @@ export function Login() {
     <div className="app" data-theme={theme} style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
       <form onSubmit={mode === "login" ? submit : submitForgot} className="pop" style={{
         width: "100%", maxWidth: 400, background: "var(--surface)", border: "1px solid var(--border)",
-        borderRadius: 24, padding: "36px 32px 30px", boxShadow: "var(--shadow-lg)",
+        borderRadius: 24, boxShadow: "var(--shadow-lg)",
+        // clamp: the desktop paddings are the maxima, so ≥900px is unchanged;
+        // on a narrow phone the card stops eating a third of the width.
+        padding: "clamp(24px, 7vw, 36px) clamp(20px, 6vw, 32px) clamp(20px, 6vw, 30px)",
       }}>
         {/* Centered mark + large title — the Apple sign-in composition. */}
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12, marginBottom: 26, textAlign: "center" }}>

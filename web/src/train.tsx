@@ -12,7 +12,9 @@ import { pluralRu } from "./plural";
 // session, self-generated пробники and the per-номер training map — everything
 // a student can start without waiting for the teacher.
 
-const grid3 = { display: "grid", gap: "var(--gap)", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))" } as const;
+// min(280px, 100%) keeps the track from exceeding a narrow phone's content
+// width (a bare 280px minimum forced horizontal scroll on ~320px screens).
+const grid3 = { display: "grid", gap: "var(--gap)", gridTemplateColumns: "repeat(auto-fit, minmax(min(280px, 100%), 1fr))" } as const;
 
 export function TrainingHub() {
   const { subject, go, user, showToast } = useApp();
@@ -104,7 +106,7 @@ export function TrainingHub() {
         <Async q={overview}>{(o) => o.numbers.length === 0
           ? <Empty title="Банк пока пуст" hint="Попроси учителя подтянуть задания — карта номеров появится здесь." />
           : (
-            <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))" }}>
+            <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fill, minmax(min(150px, 100%), 1fr))" }}>
               {o.numbers.map((n) => {
                 const pct = n.answers_total > 0 ? Math.round((n.answers_correct / n.answers_total) * 100) : null;
                 const empty = n.bank_active === 0;
@@ -156,8 +158,8 @@ function SelfVariantRow({ v, onStart, onReview }: {
   const solved = !!v.finished_at;
   const pct = v.total > 0 ? Math.round((v.correct / v.total) * 100) : 0;
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: 12, background: "var(--surface-2)", borderRadius: 12 }}>
-      <div>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap", padding: 12, background: "var(--surface-2)", borderRadius: 12 }}>
+      <div style={{ minWidth: 0 }}>
         <div style={{ fontWeight: 600 }}>{v.title}</div>
         <div className="mono" style={{ color: "var(--text-3)", fontSize: 12 }}>
           {new Date(v.created_at).toLocaleString("ru")} · {v.task_count} {pluralRu(v.task_count, ["задание", "задания", "заданий"])}

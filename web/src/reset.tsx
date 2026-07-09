@@ -52,7 +52,7 @@ export function ResetPasswordPage({ token }: { token: string }) {
     <div className="app" data-theme={theme} style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
       <form onSubmit={submit} className="pop" style={{
         width: "100%", maxWidth: 380, background: "var(--surface)", border: "1px solid var(--border)",
-        borderRadius: 24, padding: 28, boxShadow: "var(--shadow-lg)",
+        borderRadius: 24, padding: "clamp(18px, 5vw, 28px)", boxShadow: "var(--shadow-lg)",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 11, marginBottom: 22 }}>
           <div style={{ width: 38, height: 38, borderRadius: 12, background: "var(--accent)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--on-accent)" }}>

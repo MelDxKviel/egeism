@@ -4,7 +4,7 @@ import {
   useMastery, useMasterySeries, useAssignments, useAttempts, useInvalidate, usePracticeOverview,
 } from "./api";
 import { useApp } from "./state";
-import { Card, Label, Pill, Button, Async, Empty, Loading, Modal, accColor, SUBJECT_TITLES, SubjectSwitch, testTitle, MediaBlock, StatementView, AttemptReviewGrid } from "./ui";
+import { Card, Label, Pill, Button, Async, Empty, Loading, Modal, accColor, SUBJECT_TITLES, SubjectSwitch, testTitle, MediaBlock, StatementView, AttemptReviewGrid, useIsMobile } from "./ui";
 import { ScoreGauge, Heatmap, computeStreak, WeakSpotsList, Section, MasteryChart, Sparkline } from "./charts";
 import { AnswerInput } from "./answer";
 import { Icon } from "./icons";
@@ -49,7 +49,9 @@ export const ASSIGNMENT_STATUS_RU: Record<string, string> = {
   scheduled: "запланирован", done: "решён", missed: "просрочен",
 };
 
-const grid12 = { display: "grid", gap: "var(--gap)", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))" } as const;
+// min(300px, 100%) keeps the track from exceeding a narrow phone's content
+// width (a bare 300px minimum forced horizontal scroll on 320–360px screens).
+const grid12 = { display: "grid", gap: "var(--gap)", gridTemplateColumns: "repeat(auto-fit, minmax(min(300px, 100%), 1fr))" } as const;
 
 // useAttemptReview loads a solved assignment's per-task review into a modal — the
 // «как решил» drill-down. It owns the modal, so a screen just renders `modal` and
@@ -89,8 +91,8 @@ function AssignedTestsList({ cards, onSolve, onReview }: {
         const pct = a.total ? Math.round((a.correct / a.total) * 100) : 0;
         const dl = deadlineInfo(a);
         return (
-          <div key={a.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: 12, background: "var(--surface-2)", borderRadius: 12 }}>
-            <div>
+          <div key={a.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap", padding: 12, background: "var(--surface-2)", borderRadius: 12 }}>
+            <div style={{ minWidth: 0 }}>
               <div style={{ fontWeight: 600, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                 {testTitle(a.title)}
                 {dl.pill && <Pill tone={dl.pill.tone}>{dl.pill.label}</Pill>}
@@ -281,6 +283,7 @@ function SessionTimer({ since }: { since: number }) {
 
 export function Solve() {
   const { go, showToast } = useApp();
+  const isMobile = useIsMobile();
   const invalidate = useInvalidate();
   const req = useRef(solveRequest).current;
   const [attemptId, setAttemptId] = useState("");
@@ -370,20 +373,30 @@ export function Solve() {
   return (
     <div style={{ maxWidth: 720, margin: "0 auto", display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
       {req?.title && <div style={{ fontWeight: 700, fontSize: 16 }}>{req.title}</div>}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <span className="mono" style={{ color: "var(--text-2)", display: "inline-flex", alignItems: "center", gap: 12 }}>
           {idx + 1} / {tasks.length}
           <SessionTimer since={sessionStart.current} />
         </span>
-        <div style={{ display: "flex", gap: 6 }}>
-          {tasks.map((t, i) => {
-            const a = done.find((x) => x.taskId === t.id);
-            return <div key={t.id} style={{
-              width: 9, height: 9, borderRadius: 999,
-              background: a ? (a.correct ? "var(--ok)" : "var(--bad)") : i === idx ? "var(--text-3)" : "var(--border-2)",
-            }} />;
-          })}
-        </div>
+        {/* Per-task dots (they wrap instead of squashing the row); on a PHONE a
+            big composed variant gets a slim progress bar instead — 100 dots
+            crushed the counter and «Завершить» off the screen. Desktop keeps
+            the per-task green/red dots at any size. */}
+        {tasks.length <= 30 || !isMobile ? (
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "center", minWidth: 0, flex: "1 1 120px" }}>
+            {tasks.map((t, i) => {
+              const a = done.find((x) => x.taskId === t.id);
+              return <div key={t.id} style={{
+                width: 9, height: 9, borderRadius: 999,
+                background: a ? (a.correct ? "var(--ok)" : "var(--bad)") : i === idx ? "var(--text-3)" : "var(--border-2)",
+              }} />;
+            })}
+          </div>
+        ) : (
+          <div style={{ flex: "1 1 120px", height: 6, borderRadius: 999, background: "color-mix(in srgb, var(--text) 8%, transparent)", overflow: "hidden" }}>
+            <div style={{ width: `${Math.round((done.length / tasks.length) * 100)}%`, height: "100%", background: "var(--accent)" }} />
+          </div>
+        )}
         <Button variant="ghost" style={{ padding: "6px 12px", fontSize: 13 }} onClick={finishSession}>Завершить</Button>
       </div>
 
@@ -412,7 +425,7 @@ export function Solve() {
               )}
             </div>
             {!submitted.ok && submitted.solution && submitted.solution.length > 0 && (
-              <div className="mono" style={{ fontSize: 14 }}>Правильный ответ: {submitted.solution.join(" / ")}</div>
+              <div className="mono" style={{ fontSize: 14, overflowWrap: "anywhere" }}>Правильный ответ: {submitted.solution.join(" / ")}</div>
             )}
           </div>
         )}
@@ -437,7 +450,7 @@ function Results({ tasks, done, onExit }: { tasks: TaskView[]; done: Answered[];
   const pct = tasks.length ? Math.round((correct / tasks.length) * 100) : 0;
   return (
     <div style={{ maxWidth: 640, margin: "0 auto", display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
-      <Card style={{ textAlign: "center", padding: 34 }}>
+      <Card style={{ textAlign: "center", padding: "clamp(20px, 6vw, 34px)" }}>
         <Label>Итоги</Label>
         <div className="mono" style={{ fontSize: 54, fontWeight: 700, letterSpacing: "-0.02em", color: accColor(pct), margin: "10px 0" }}>{pct}%</div>
         <div style={{ color: "var(--text-2)" }}>{correct} из {tasks.length} верно</div>
@@ -516,8 +529,8 @@ export function History() {
           {day.items.length === 0 ? <div style={{ color: "var(--text-2)" }}>В этот день решений не найдено.</div> : (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {day.items.map((it) => (
-                <div key={it.answer_id} style={{ display: "flex", justifyContent: "space-between", padding: "8px 12px", background: "var(--surface-2)", borderRadius: 12 }}>
-                  <span className="mono">№{it.number} · {it.raw_answer}</span>
+                <div key={it.answer_id} style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", padding: "8px 12px", background: "var(--surface-2)", borderRadius: 12 }}>
+                  <span className="mono" style={{ minWidth: 0, overflowWrap: "anywhere" }}>№{it.number} · {it.raw_answer}</span>
                   {/* «верно» = success → green ok token (blue is reserved for actions). */}
                   <span style={{ color: it.is_correct ? "var(--ok)" : "var(--bad)" }}>{it.is_correct ? "верно" : "неверно"}</span>
                 </div>

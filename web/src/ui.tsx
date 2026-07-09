@@ -33,8 +33,8 @@ export function Modal({ title, children, onClose, maxWidth = 560 }:
   // <body> level, leaving the panel transparent and unstyled. Every dialog must
   // go through this component — a bare createPortal loses the theme again.
   return createPortal(
-    <div className="app overlay" data-theme={theme} onClick={onClose} style={{ position: "fixed", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 16, minHeight: 0 }}>
-      <div onClick={(e) => e.stopPropagation()} className="pop" style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 20, padding: 24, maxWidth, width: "100%", maxHeight: "92vh", display: "flex", flexDirection: "column", boxShadow: "var(--shadow-lg)" }}>
+    <div className="app overlay" data-theme={theme} onClick={onClose} style={{ position: "fixed", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: "clamp(10px, 2.5vw, 16px)", minHeight: 0 }}>
+      <div onClick={(e) => e.stopPropagation()} className="pop modal-panel" style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 20, padding: "var(--modal-pad, 24px)", maxWidth, width: "100%", display: "flex", flexDirection: "column", boxShadow: "var(--shadow-lg)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
           <div style={{ fontWeight: 700, fontSize: 17, letterSpacing: "-0.01em", display: "flex", alignItems: "center", gap: 10 }}>{title}</div>
           <button onClick={onClose} title="Закрыть" className="icon-btn" style={{ border: "none", borderRadius: 999, padding: 6, color: "var(--text-3)" }}><Icon name="close" size={19} /></button>
@@ -155,7 +155,7 @@ export function StatementView({ text, media, style }: { text?: string; media?: M
   let para: string[] = [];
   const flush = () => {
     if (para.join("").trim())
-      blocks.push(<div key={blocks.length} style={{ whiteSpace: "pre-wrap" }}>{renderInline(para.join("\n").trim(), media)}</div>);
+      blocks.push(<div key={blocks.length} style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{renderInline(para.join("\n").trim(), media)}</div>);
     para = [];
   };
   for (let i = 0; i < lines.length; ) {
@@ -215,7 +215,7 @@ export function Card({ children, style, className, onClick }:
   // Clickable cards get the .card-tap raise/settle states from theme.css.
   return (
     <div className={["card", onClick ? "card-tap" : "", className || ""].filter(Boolean).join(" ")}
-      onClick={onClick} style={{ padding: 22, ...style }}>{children}</div>
+      onClick={onClick} style={{ padding: "var(--card-pad, 22px)", ...style }}>{children}</div>
   );
 }
 
@@ -306,7 +306,7 @@ export function ErrorBox({ error, onRetry }: { error: unknown; onRetry?: () => v
   </Card>;
 }
 export function Empty({ title, hint, action }: { title: string; hint?: string; action?: ReactNode }) {
-  return <Card style={{ textAlign: "center", padding: 34 }}>
+  return <Card style={{ textAlign: "center", padding: "clamp(20px, 5vw, 34px)" }}>
     <div style={{ fontWeight: 700, fontSize: 16 }}>{title}</div>
     {hint && <div style={{ color: "var(--text-2)", marginTop: 6, fontSize: 14 }}>{hint}</div>}
     {action && <div style={{ marginTop: 16 }}>{action}</div>}
@@ -335,52 +335,64 @@ export const SUBJECT_TITLES: Record<string, string> = {
 export function Seg({ children, className, style }:
   { children: ReactNode; className?: string; style?: CSSProperties }) {
   const ref = useRef<HTMLDivElement>(null);
-  const [knob, setKnob] = useState<{ x: number; w: number } | null>(null);
-  // Last knob position — auto-scroll only when the active segment MOVED, so a
-  // background re-render never yanks a hand-scrolled control back into view.
-  const prevX = useRef<number | null>(null);
+  const knobRef = useRef<HTMLDivElement>(null);
+  // Last placed knob geometry. null = not placed yet (fresh mount, or no
+  // active segment) — the next placement snaps into place without a slide.
+  const prev = useRef<{ x: number; w: number } | null>(null);
 
-  // Measure after every render: callers mark the active button via data-active,
-  // so any click / options change / theme flip lands here before paint.
-  useLayoutEffect(() => {
-    const wrap = ref.current;
-    if (!wrap) return;
+  // The knob is positioned IMPERATIVELY — style writes on the DOM node, never
+  // setState. The previous version kept {x,w} in state and set it from this
+  // layout effect on every commit; in production React ONE real knob move
+  // primed the hook's update queue so that each following commit scheduled
+  // another nested synchronous update, and ~50 commits later React threw
+  // «Maximum update depth exceeded» (#185) — the stable «переключил раздел,
+  // дёрнул тумблер → белый экран» crash. Dev builds masked it (a different
+  // eager-bailout path), so it only reproduced on the deployed bundle.
+  const place = () => {
+    const wrap = ref.current, kn = knobRef.current;
+    if (!wrap || !kn) return;
     const el = wrap.querySelector<HTMLElement>('button[data-active="1"]');
-    if (!el) { setKnob(null); prevX.current = null; return; }
+    if (!el) { kn.style.opacity = "0"; prev.current = null; return; }
     const x = el.offsetLeft, w = el.offsetWidth;
-    setKnob((k) => (k && k.x === x && k.w === w ? k : { x, w }));
-    if (prevX.current !== x) {
+    const first = prev.current === null;
+    if (!first && prev.current!.x === x && prev.current!.w === w) return;
+    if (first) kn.style.transition = "none"; // land silently, no slide-in from 0
+    kn.style.width = `${w}px`;
+    kn.style.transform = `translateX(${x}px)`;
+    kn.style.opacity = "1";
+    if (first) { void kn.offsetWidth; kn.style.transition = ""; } // re-arm the spring
+    if (first || prev.current!.x !== x) {
       // Keep the active segment visible inside the scrollable control. The
       // first placement snaps (no animation yet); later moves glide.
       const right = x + w;
       if (x < wrap.scrollLeft || right > wrap.scrollLeft + wrap.clientWidth) {
-        const still = prevX.current === null ||
-          window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        const still = first || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
         wrap.scrollTo({ left: Math.max(0, x - 24), behavior: still ? "auto" : "smooth" });
       }
-      prevX.current = x;
     }
-  });
+    prev.current = { x, w };
+  };
 
-  // Re-measure when the container itself resizes (viewport, font swap, …).
+  // Re-place after every render: callers mark the active button via
+  // data-active, so any click / options change / theme flip lands here before
+  // paint.
+  useLayoutEffect(place);
+
+  // Re-place when the container itself resizes (viewport, font swap, …) — the
+  // reset makes the new geometry apply as a snap, not a cross-screen slide.
   useEffect(() => {
     const wrap = ref.current;
     if (!wrap) return;
-    const ro = new ResizeObserver(() => {
-      const el = wrap.querySelector<HTMLElement>('button[data-active="1"]');
-      if (!el) return;
-      const x = el.offsetLeft, w = el.offsetWidth;
-      setKnob((k) => (k && k.x === x && k.w === w ? k : { x, w }));
-    });
+    const ro = new ResizeObserver(() => { prev.current = null; place(); });
     ro.observe(wrap);
     return () => ro.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
     <div ref={ref} className={["seg", className].filter(Boolean).join(" ")} style={style}>
-      {/* Mounted only once measured, with transform already set — so the first
-          paint places it silently and only later moves animate. */}
-      {knob && <div className="seg-knob" style={{ width: knob.w, transform: `translateX(${knob.x}px)` }} />}
+      {/* Hidden until the first placement writes its geometry (opacity 1). */}
+      <div ref={knobRef} className="seg-knob" style={{ opacity: 0 }} />
       {children}
     </div>
   );
@@ -470,7 +482,7 @@ export const testTitle = (t: string) => (t === "__practice__" ? "Свободн�
 export function AttemptReviewGrid({ items, selfView }: { items: AttemptReviewItem[]; selfView?: boolean }) {
   if (items.length === 0) return <div style={{ color: "var(--text-2)" }}>В этой попытке нет ответов.</div>;
   return (
-    <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", alignItems: "start" }}>
+    <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fill, minmax(min(340px, 100%), 1fr))", alignItems: "start" }}>
       {items.map((it) => (
         <div key={it.answer_id} style={{ padding: 14, background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 14 }}>
           <div style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
@@ -479,7 +491,7 @@ export function AttemptReviewGrid({ items, selfView }: { items: AttemptReviewIte
           </div>
           <StatementView text={it.statement} media={it.media} style={{ fontSize: 14, lineHeight: 1.45, marginBottom: 8 }} />
           <MediaBlock media={it.media} />
-          <div className="mono" style={{ fontSize: 13, display: "flex", flexDirection: "column", gap: 4 }}>
+          <div className="mono" style={{ fontSize: 13, display: "flex", flexDirection: "column", gap: 4, overflowWrap: "anywhere" }}>
             <div><span style={{ color: "var(--text-3)" }}>{selfView ? "твой ответ" : "ответ ученика"}: </span><b style={{ color: it.is_correct ? "var(--ok)" : "var(--bad)" }}>{it.raw_answer || "—"}</b></div>
             <div><span style={{ color: "var(--text-3)" }}>верный ответ: </span><b style={{ color: "var(--ok)" }}>{it.correct.join(" / ")}</b></div>
           </div>
