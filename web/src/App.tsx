@@ -9,6 +9,7 @@ import { TeacherDashboard, ClassPage, StudentStatsPage, Builder, Assign, Bank, T
 import { AdminStats, AdminUsers } from "./admin";
 import { ProfilePage } from "./profile";
 import { Loading } from "./ui";
+import { ErrorBoundary } from "./error";
 
 const TITLES: Record<string, string> = {
   dashboard: "Дашборд", train: "Тренировка", subject: "Предмет", solve: "Решение", results: "Итоги", history: "История",
@@ -23,7 +24,7 @@ const readResetToken = () =>
   window.location.hash.startsWith("#reset=") ? window.location.hash.slice("#reset=".length) : "";
 
 export default function App() {
-  const { view, ready, user, toast, theme } = useApp();
+  const { view, subject, ready, user, toast, theme } = useApp();
 
   // A reset link (#reset=<token>) opens the standalone new-password page ahead
   // of the auth gate — its holder is precisely someone who can't log in. The
@@ -67,7 +68,12 @@ export default function App() {
 
   return (
     <Shell title={TITLES[view] || "ЕГЭизм"}>
-      {screen}
+      {/* A render crash in one screen shows a recoverable card instead of
+          blanking the whole app; the Shell (nav) stays alive so the user can
+          switch away, and the boundary auto-resets when view/subject change. */}
+      <ErrorBoundary resetKey={`${view}:${subject}`} theme={theme}>
+        {screen}
+      </ErrorBoundary>
       {toast && (
         /* Floating frosted capsule (an iOS banner), not a colored block. */
         <div className="popdown glass" style={{

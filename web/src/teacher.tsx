@@ -706,7 +706,7 @@ export function StudentStatsPage() {
               <XAxis dataKey="label" stroke="var(--text-3)" fontSize={10} tickLine={false} interval={0} angle={-30} textAnchor="end" height={44} />
               <YAxis domain={[0, 100]} stroke="var(--text-3)" fontSize={11} tickLine={false} />
               <Tooltip contentStyle={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 12 }} />
-              <Bar dataKey="acc" minPointSize={2} radius={[4, 4, 0, 0]} cursor="pointer" onClick={(d: any) => { if (d && typeof d.number === "number") setOpen(d.number); }}>
+              <Bar dataKey="acc" minPointSize={2} radius={[4, 4, 0, 0]} cursor="pointer" isAnimationActive={false} onClick={(d: any) => { if (d && typeof d.number === "number") setOpen(d.number); }}>
                 {rows.map((r) => { const p = r.total ? (r.correct / r.total) * 100 : 0; return <Cell key={r.number} fill={accColor(p)} />; })}
               </Bar>
             </BarChart>

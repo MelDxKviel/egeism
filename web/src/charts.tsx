@@ -127,7 +127,7 @@ export function MasteryChart({ points }: { points: MasteryPoint[] }) {
         <XAxis dataKey="week" stroke="var(--text-3)" fontSize={11} tickLine={false} />
         <YAxis domain={[0, 100]} stroke="var(--text-3)" fontSize={11} tickLine={false} />
         <Tooltip contentStyle={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, boxShadow: "var(--shadow-2)", fontSize: 12 }} />
-        <Line type="monotone" dataKey="acc" stroke="var(--accent)" strokeWidth={2.4} dot={{ r: 3 }} />
+        <Line type="monotone" dataKey="acc" stroke="var(--accent)" strokeWidth={2.4} dot={{ r: 3 }} isAnimationActive={false} />
       </LineChart>
     </ResponsiveContainer>
   );
