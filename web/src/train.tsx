@@ -1,9 +1,9 @@
 import { useState } from "react";
 import {
-  api, SubjectCode, SelfVariant, usePracticeOverview, useSelfVariants, useWeakSpots, useInvalidate,
+  api, SelfVariant, usePracticeOverview, useSelfVariants, useWeakSpots, useInvalidate,
 } from "./api";
 import { useApp } from "./state";
-import { Card, Label, Button, Async, Empty, accColor, SUBJECT_TITLES } from "./ui";
+import { Card, Label, Button, Async, Empty, accColor, SubjectSwitch } from "./ui";
 import { Section } from "./charts";
 import { requestSolve, useAttemptReview } from "./student";
 import { pluralRu } from "./plural";
@@ -15,7 +15,7 @@ import { pluralRu } from "./plural";
 const grid3 = { display: "grid", gap: "var(--gap)", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))" } as const;
 
 export function TrainingHub() {
-  const { subject, setSubject, go, user, showToast } = useApp();
+  const { subject, go, user, showToast } = useApp();
   const uid = user?.id ?? "";
   const overview = usePracticeOverview(uid, subject);
   const variants = useSelfVariants(uid, subject);
@@ -49,19 +49,16 @@ export function TrainingHub() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
-      <div className="seg" style={{ alignSelf: "flex-start" }}>
-        {(["rus", "math", "inf", "soc"] as SubjectCode[]).map((c) => (
-          <button key={c} onClick={() => setSubject(c)} data-active={subject === c ? "1" : undefined}>
-            {SUBJECT_TITLES[c]}
-          </button>
-        ))}
-      </div>
+      <SubjectSwitch />
 
+      {/* The three cards flex-column with the CTA pinned to the bottom edge
+          (marginTop:auto), so the buttons sit on one line across the row no
+          matter how long each card's text runs. */}
       <div style={grid3}>
-        <Card>
+        <Card style={{ display: "flex", flexDirection: "column" }}>
           <Label>Работа над ошибками</Label>
           <Async q={overview}>{(o) => (
-            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 10 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 10, flex: 1 }}>
               {o.mistakes > 0 ? (
                 <>
                   <div className="mono" style={{ fontSize: 30, fontWeight: 700, color: "var(--warn)" }}>{o.mistakes}</div>
@@ -69,7 +66,7 @@ export function TrainingHub() {
                     {pluralRu(o.mistakes, ["задание ждёт", "задания ждут", "заданий ждут"])} второго шанса.
                     Реши верно — и они уйдут из очереди.
                   </div>
-                  <Button onClick={startMistakes}>Разобрать ошибки</Button>
+                  <Button style={{ marginTop: "auto" }} onClick={startMistakes}>Разобрать ошибки</Button>
                 </>
               ) : (
                 <div style={{ color: "var(--text-2)", fontSize: 13, lineHeight: 1.45 }}>
@@ -80,23 +77,23 @@ export function TrainingHub() {
           )}</Async>
         </Card>
 
-        <Card>
+        <Card style={{ display: "flex", flexDirection: "column" }}>
           <Label>Умная тренировка</Label>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 10 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 10, flex: 1 }}>
             <div style={{ color: "var(--text-2)", fontSize: 13, lineHeight: 1.45 }}>
               Короткая сессия под тебя: сначала ошибки, потом слабые номера{weakNums.length > 0 ? ` (${weakNums.join(", ")})` : ""}, потом новое.
             </div>
-            <Button onClick={startRecommended}>Начать</Button>
+            <Button style={{ marginTop: "auto" }} onClick={startRecommended}>Начать</Button>
           </div>
         </Card>
 
-        <Card>
+        <Card style={{ display: "flex", flexDirection: "column" }}>
           <Label>Пробный вариант</Label>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 10 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 10, flex: 1 }}>
             <div style={{ color: "var(--text-2)", fontSize: 13, lineHeight: 1.45 }}>
               Полный вариант из банка — по случайному заданию каждого номера, как на экзамене. Таймер идёт.
             </div>
-            <Button onClick={generate} disabled={generating}>{generating ? "Собираем…" : "Собрать пробник"}</Button>
+            <Button style={{ marginTop: "auto" }} onClick={generate} disabled={generating}>{generating ? "Собираем…" : "Собрать пробник"}</Button>
           </div>
         </Card>
       </div>

@@ -58,8 +58,19 @@ input, select, textarea { font-family: inherit; }
   --glass: rgba(22, 22, 24, .68); --backdrop: rgba(0, 0, 0, .55);
   --knob: #636366; --ring: rgba(10, 132, 255, .5);
 }
+/* U+2116 «№» is missing or oddly drawn in a number of monospace fonts, so the
+   browser substitutes a confusing glyph from a random fallback (the «҂1» tiles
+   bug). This face covers ONLY the numero sign and serves it from the regular
+   UI fonts; it sits first in the .mono stack, and when no local font matches
+   the stack simply behaves as before. */
+@font-face {
+  font-family: "Numero";
+  src: local("SF Pro Text"), local("Helvetica Neue"), local("Segoe UI"), local("Roboto"),
+    local("Liberation Sans"), local("DejaVu Sans"), local("Arial");
+  unicode-range: U+2116;
+}
 .mono {
-  font-family: ui-monospace, "SF Mono", Menlo, "Cascadia Code", "JetBrains Mono", "Roboto Mono", monospace;
+  font-family: "Numero", ui-monospace, "SF Mono", Menlo, "Cascadia Code", "JetBrains Mono", "Roboto Mono", monospace;
   font-variant-numeric: tabular-nums;
 }
 
@@ -88,7 +99,7 @@ input, select, textarea { font-family: inherit; }
 
 @media (prefers-reduced-motion: reduce) {
   .fade, .pop, .popdown, .skel, .celebrate, .checkpop, .flame-live { animation: none !important; }
-  .btn, .icon-btn, .card-tap, .navbtn, .row, .seg > button { transition: none !important; }
+  .btn, .icon-btn, .card-tap, .navbtn, .row, .seg > button, .hm-tap { transition: none !important; }
 }
 
 .fade { animation: fade .3s var(--ease) both; }
@@ -236,6 +247,13 @@ input:focus, textarea:focus, select:focus {
   background: var(--knob); color: var(--text);
   box-shadow: 0 1px 4px rgba(0, 0, 0, .16), 0 3px 8px rgba(0, 0, 0, .08);
 }
+
+/* ---------- Activity heatmap ---------- */
+/* A hairline inset keeps empty cells legible on any surface; clickable days
+   pop slightly under the cursor (the dashboard grid links into History). */
+.hm-cell { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 6%, transparent); }
+.hm-tap { transition: transform .14s var(--spring); }
+.hm-tap:hover { transform: scale(1.18); }
 
 /* Inline formulas (РЕШУ <img class=tex>): baseline-aligned, at natural text size
    instead of detached blocks. The source SVGs are pure black, so invert them in

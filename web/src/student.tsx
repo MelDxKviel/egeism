@@ -4,7 +4,7 @@ import {
   useMastery, useMasterySeries, useAssignments, useAttempts, useInvalidate, usePracticeOverview,
 } from "./api";
 import { useApp } from "./state";
-import { Card, Label, Pill, Button, Async, Empty, Loading, Modal, accColor, SUBJECT_TITLES, testTitle, MediaBlock, StatementView, AttemptReviewGrid } from "./ui";
+import { Card, Label, Pill, Button, Async, Empty, Loading, Modal, accColor, SUBJECT_TITLES, SubjectSwitch, testTitle, MediaBlock, StatementView, AttemptReviewGrid } from "./ui";
 import { ScoreGauge, Heatmap, computeStreak, WeakSpotsList, Section, MasteryChart, Sparkline } from "./charts";
 import { AnswerInput } from "./answer";
 import { Icon } from "./icons";
@@ -141,6 +141,9 @@ export function Dashboard() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
+      {/* Switch the working subject right on the dashboard — the forecast, weak
+          spots and training cards below all follow it. */}
+      <SubjectSwitch />
       <div style={grid12}>
         <Card>
           <Label>Прогноз балла · {SUBJECT_TITLES[subject]}</Label>
@@ -204,7 +207,7 @@ export function Dashboard() {
 
 // ---------- Subject screen ----------
 export function SubjectScreen() {
-  const { subject, setSubject, go, user } = useApp();
+  const { subject, go, user } = useApp();
   const sid = user?.id ?? "";
   const mastery = useMastery(sid, subject);
   const series = useMasterySeries(sid, subject);
@@ -223,13 +226,7 @@ export function SubjectScreen() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
-      <div className="seg" style={{ alignSelf: "flex-start" }}>
-        {(["rus", "math", "inf", "soc"] as SubjectCode[]).map((c) => (
-          <button key={c} onClick={() => setSubject(c)} data-active={subject === c ? "1" : undefined}>
-            {SUBJECT_TITLES[c]}
-          </button>
-        ))}
-      </div>
+      <SubjectSwitch />
 
       <Async q={mastery}>{(rows) => rows.length === 0
         ? <Empty title="Нет данных по номерам" hint="Начни решать — здесь появится прогресс по каждому заданию." action={<Button onClick={() => { requestSolve({ subject }); go("solve"); }}>Решать</Button>} />
