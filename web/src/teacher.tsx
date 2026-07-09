@@ -75,15 +75,12 @@ function SubjectTabs({ value, onChange }: { value: SubjectCode; onChange: (s: Su
     return <div><Pill tone="accent">{SUBJECT_TITLES[allowed[0]]} · ваш предмет</Pill></div>;
   }
   return (
-    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-      {allowed.map((c) => (
-        <button key={c} onClick={() => onChange(c)} style={{
-          padding: "8px 16px", borderRadius: 999, fontWeight: 600, fontSize: 14,
-          border: "1px solid " + (value === c ? "var(--accent)" : "var(--border-2)"),
-          background: value === c ? "var(--accent-soft)" : "transparent",
-          color: value === c ? "var(--accent-2)" : "var(--text-2)",
-        }}>{SUBJECT_TITLES[c]}</button>
-      ))}
+    <div>
+      <div className="seg">
+        {allowed.map((c) => (
+          <button key={c} onClick={() => onChange(c)} data-active={value === c ? "1" : undefined}>{SUBJECT_TITLES[c]}</button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -213,9 +210,9 @@ function EnrollStudentModal({ mine, onClose, onDone }: {
 function StudentRow({ s, onOpen, right }: { s: StudentSummary | User; onOpen: () => void; right?: React.ReactNode }) {
   const classes = "classes" in s ? s.classes : [];
   return (
-    <div onClick={onOpen} style={{
+    <div onClick={onOpen} className="card-tap" style={{
       display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10,
-      padding: "10px 12px", background: "var(--surface-2)", borderRadius: 10, cursor: "pointer",
+      padding: "10px 12px", background: "var(--surface-2)", borderRadius: 12,
       opacity: s.is_active === false ? 0.55 : 1,
     }}>
       <div style={{ minWidth: 0 }}>
@@ -280,7 +277,7 @@ export function TeacherDashboard() {
           : (
             <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))" }}>
               {list.map((c) => (
-                <Card key={c.id} onClick={() => { requestClassView(c.id); go("t-class"); }} style={{ cursor: "pointer", padding: 18 }}>
+                <Card key={c.id} onClick={() => { requestClassView(c.id); go("t-class"); }} style={{ padding: 18 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                     <div style={{
                       width: 40, height: 40, borderRadius: 12, background: "var(--accent-soft)",
@@ -352,10 +349,15 @@ function GridCell({ total, correct }: { total: number; correct: number }) {
     return <td className="mono" style={{ textAlign: "center", color: "var(--text-3)" }}>—</td>;
   }
   const pct = accuracyPct(correct, total);
+  // Tinted cell + color-matched text instead of white-on-saturated: the text
+  // mixes toward --text, so it darkens in light theme and lightens in dark —
+  // readable on the bright dark-theme greens/oranges where #fff washed out.
+  const c = accColor(pct);
   return (
     <td className="mono" title={`${correct}/${total} верно`} style={{
-      textAlign: "center", fontWeight: 700, color: "#fff",
-      background: accColor(pct),
+      textAlign: "center", fontWeight: 700,
+      color: `color-mix(in srgb, ${c} 62%, var(--text))`,
+      background: `color-mix(in srgb, ${c} 26%, transparent)`,
     }}>{pct}%</td>
   );
 }
@@ -452,11 +454,8 @@ export function ClassPage() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
-      <button onClick={() => go("t-dashboard")} style={{
-        display: "inline-flex", alignItems: "center", gap: 7, alignSelf: "flex-start",
-        background: "transparent", border: "1px solid var(--border-2)",
-        borderRadius: 10, padding: "8px 14px", fontSize: 14, color: "var(--text-2)",
-      }}><Icon name="arrowLeft" size={16} /> Ко всем ученикам</button>
+      <button onClick={() => go("t-dashboard")} className="btn btn-ghost" style={{ alignSelf: "flex-start" }}>
+        <Icon name="arrowLeft" size={16} /> Ко всем ученикам</button>
 
       <Async q={detail}>{(d) => (
         <>
@@ -469,10 +468,8 @@ export function ClassPage() {
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 <Button variant="soft" onClick={() => setAdding(true)}>+ Ученик</Button>
                 <Button variant="ghost" onClick={() => { requestAssign({ classId: d.class.id }); go("t-assign"); }}>Назначить тест классу</Button>
-                <button onClick={() => deleteClass(d.class.name)} title="Удалить класс" style={{
-                  display: "inline-flex", alignItems: "center", background: "transparent",
-                  border: "1px solid var(--bad)", color: "var(--bad)", borderRadius: 10, padding: "8px 12px",
-                }}><Icon name="trash" size={15} /></button>
+                <button onClick={() => deleteClass(d.class.name)} title="Удалить класс"
+                  className="btn btn-danger" style={{ padding: "8px 12px" }}><Icon name="trash" size={15} /></button>
               </div>
             </div>
           </Card>
@@ -495,10 +492,9 @@ export function ClassPage() {
                   {d.students.map((s) => (
                     <StudentRow key={s.id} s={s} onOpen={() => openStudent(s)}
                       right={
-                        <button onClick={(e) => { e.stopPropagation(); removeMember(s); }} title="Убрать из класса" style={{
-                          display: "inline-flex", alignItems: "center", background: "transparent",
-                          border: "none", color: "var(--text-3)", padding: 4,
-                        }}><Icon name="close" size={16} /></button>
+                        <button onClick={(e) => { e.stopPropagation(); removeMember(s); }} title="Убрать из класса"
+                          className="icon-btn" style={{ border: "none", borderRadius: 999, padding: 4 }}>
+                          <Icon name="close" size={16} /></button>
                       } />
                   ))}
                 </div>
@@ -606,12 +602,12 @@ function EditableClassTitle({ id, title, onRenamed }: { id: string; title: strin
     return (
       <input autoFocus value={val} onChange={(e) => setVal(e.target.value)} onBlur={save}
         onKeyDown={(e) => { if (e.key === "Enter") save(); else if (e.key === "Escape") { setVal(title); setEditing(false); } }}
-        style={{ fontWeight: 700, fontSize: 18, width: "100%", maxWidth: 420 }} />
+        style={{ fontWeight: 700, fontSize: 18, letterSpacing: "-0.01em", width: "100%", maxWidth: 420 }} />
     );
   }
   return (
     <button onClick={() => setEditing(true)} title="Нажми, чтобы переименовать класс"
-      style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "transparent", border: "none", padding: 0, cursor: "text", color: "var(--text)", fontWeight: 700, fontSize: 18 }}>
+      style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "transparent", border: "none", padding: 0, cursor: "text", color: "var(--text)", fontWeight: 700, fontSize: 18, letterSpacing: "-0.01em" }}>
       {title}
       <Icon name="pencil" size={15} />
     </button>
@@ -667,12 +663,9 @@ export function StudentStatsPage() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        <button onClick={() => go("t-dashboard")} style={{
-          display: "inline-flex", alignItems: "center", gap: 7,
-          background: "transparent", border: "1px solid var(--border-2)",
-          borderRadius: 10, padding: "8px 14px", fontSize: 14, color: "var(--text-2)",
-        }}><Icon name="arrowLeft" size={16} /> Ко всем ученикам</button>
-        <div style={{ fontWeight: 800, fontSize: 18 }}>{student.name}</div>
+        <button onClick={() => go("t-dashboard")} className="btn btn-ghost">
+          <Icon name="arrowLeft" size={16} /> Ко всем ученикам</button>
+        <div style={{ fontWeight: 700, fontSize: 18, letterSpacing: "-0.01em" }}>{student.name}</div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <Button variant="ghost" onClick={() => setResetOpen(true)}>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
@@ -680,10 +673,8 @@ export function StudentStatsPage() {
             </span>
           </Button>
           <Button variant="soft" onClick={() => { requestAssign({ studentId: student.id }); go("t-assign"); }}>Назначить тест</Button>
-          <button onClick={unenroll} title="Убрать из моих учеников (аккаунт и история останутся)" style={{
-            display: "inline-flex", alignItems: "center", gap: 7, background: "transparent",
-            border: "1px solid var(--bad)", color: "var(--bad)", borderRadius: 10, padding: "8px 14px", fontSize: 14,
-          }}><Icon name="close" size={15} /> Отчислить</button>
+          <button onClick={unenroll} title="Убрать из моих учеников (аккаунт и история останутся)"
+            className="btn btn-danger"><Icon name="close" size={15} /> Отчислить</button>
         </div>
       </div>
 
@@ -735,7 +726,7 @@ export function StudentStatsPage() {
               const pct = a.total ? Math.round((Number(a.correct) / Number(a.total)) * 100) : 0;
               const dl = deadlineInfo(a);
               return (
-                <div key={a.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "10px 12px", background: "var(--surface-2)", borderRadius: 10 }}>
+                <div key={a.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "10px 12px", background: "var(--surface-2)", borderRadius: 12 }}>
                   <div>
                     <div style={{ fontWeight: 600, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                       {testTitle(a.title)}
@@ -760,7 +751,7 @@ export function StudentStatsPage() {
           return top.length === 0 ? <div style={{ color: "var(--text-2)" }}>Нет данных.</div> : (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {top.map((r) => (
-                <div key={r.number} style={{ display: "flex", justifyContent: "space-between", padding: "8px 12px", background: "var(--surface-2)", borderRadius: 10 }}>
+                <div key={r.number} style={{ display: "flex", justifyContent: "space-between", padding: "8px 12px", background: "var(--surface-2)", borderRadius: 12 }}>
                   <span className="mono">№{r.number}</span>
                   <span className="mono" style={{ color: "var(--warn)" }}>{Math.round(r.avg_time_ms / 1000)} с</span>
                 </div>
@@ -774,8 +765,8 @@ export function StudentStatsPage() {
         <Async q={attempts}>{(list) => list.length === 0 ? <div style={{ color: "var(--text-2)" }}>Ученик ещё не решал.</div> : (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {list.map((a) => (
-              <div key={a.id} onClick={() => openAttempt(a)} title="Открыть решённый вариант"
-                style={{ display: "flex", justifyContent: "space-between", padding: "10px 12px", background: "var(--surface-2)", borderRadius: 10, cursor: "pointer" }}>
+              <div key={a.id} onClick={() => openAttempt(a)} title="Открыть решённый вариант" className="card-tap"
+                style={{ display: "flex", justifyContent: "space-between", padding: "10px 12px", background: "var(--surface-2)", borderRadius: 12 }}>
                 <div><div style={{ fontWeight: 600 }}>{testTitle(a.title)}</div><div className="mono" style={{ color: "var(--text-3)", fontSize: 12 }}>{new Date(a.started_at).toLocaleString("ru")}</div></div>
                 <span className="mono" style={{ color: accColor(a.total ? (Number(a.correct) / Number(a.total)) * 100 : 0), fontWeight: 700 }}>{a.correct}/{a.total}</span>
               </div>
@@ -810,18 +801,14 @@ export const requestTestView = (id: string) => { viewTestId = id; };
 function NumStepper({ value, onChange, min = 0, max = MAX_PER_NUMBER }: {
   value: number; onChange: (v: number) => void; min?: number; max?: number;
 }) {
-  const btn: React.CSSProperties = {
-    width: 26, height: 26, borderRadius: 8, border: "1px solid var(--border-2)",
-    background: "var(--surface)", color: "var(--text)", fontSize: 16, lineHeight: 1,
-    display: "inline-flex", alignItems: "center", justifyContent: "center",
-    opacity: 1, cursor: "pointer",
-  };
+  // Layout-only inline style — radius/hover/active come from .icon-btn.
+  const btn: React.CSSProperties = { width: 26, height: 26, padding: 0, fontSize: 15, lineHeight: 1 };
   return (
     <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-      <button type="button" style={{ ...btn, opacity: value <= min ? 0.4 : 1 }} disabled={value <= min}
+      <button type="button" className="icon-btn" style={{ ...btn, opacity: value <= min ? 0.4 : 1 }} disabled={value <= min}
         onClick={() => onChange(Math.max(min, value - 1))} aria-label="меньше">−</button>
       <span className="mono" style={{ minWidth: 18, textAlign: "center", fontWeight: 700, fontSize: 15 }}>{value}</span>
-      <button type="button" style={{ ...btn, opacity: value >= max ? 0.4 : 1 }} disabled={value >= max}
+      <button type="button" className="icon-btn" style={{ ...btn, opacity: value >= max ? 0.4 : 1 }} disabled={value >= max}
         onClick={() => onChange(Math.min(max, value + 1))} aria-label="больше">+</button>
     </div>
   );
@@ -916,7 +903,7 @@ function ComposedBuilder({ subject }: { subject: SubjectCode }) {
         <span style={{ fontSize: 13, color: "var(--text-2)" }}>каждого</span>
         <Button variant="soft" style={{ padding: "8px 14px", fontSize: 13 }} onClick={fillRange}>Заполнить</Button>
         {slotNums.length > 0 && (
-          <button type="button" onClick={clear} style={{ background: "transparent", border: "none", color: "var(--text-3)", fontSize: 13, textDecoration: "underline", cursor: "pointer" }}>очистить</button>
+          <button type="button" onClick={clear} className="link-btn">очистить</button>
         )}
       </div>
 
@@ -925,10 +912,8 @@ function ComposedBuilder({ subject }: { subject: SubjectCode }) {
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", fontSize: 13, color: "var(--text-2)" }}>
           <span>Каждого выбранного:</span>
           {[1, 2, 3, 5].map((k) => (
-            <button key={k} type="button" onClick={() => applyEach(k)} style={{
-              padding: "4px 12px", borderRadius: 999, fontSize: 13, fontWeight: 600, cursor: "pointer",
-              border: "1px solid var(--border-2)", background: "transparent", color: "var(--text-2)",
-            }}>по {k}</button>
+            <button key={k} type="button" onClick={() => applyEach(k)}
+              className="btn btn-ghost" style={{ padding: "4px 12px", fontSize: 13 }}>по {k}</button>
           ))}
         </div>
       )}
@@ -945,7 +930,8 @@ function ComposedBuilder({ subject }: { subject: SubjectCode }) {
           const cnt = slots[n] || 0;
           const a = avail[n] ?? 0;
           const on = cnt > 0;
-          const availColor = on && a < cnt && a > 0 ? "var(--warn)" : a > 0 ? "var(--text-2)" : "var(--text-3)";
+          // Live availability: green = the bank can fill the slot, amber = thin, grey = empty.
+          const availColor = on && a < cnt && a > 0 ? "var(--warn)" : a > 0 ? "var(--ok)" : "var(--text-3)";
           return (
             <div key={n} style={{
               display: "flex", flexDirection: "column", gap: 8, padding: "10px 12px", borderRadius: 12,
@@ -1020,7 +1006,7 @@ export function Builder() {
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
       <SubjectTabs value={subject} onChange={setSubject} />
       <Section title="Собрать вариант">
-        <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
+        <div className="seg scroll" style={{ marginBottom: 14, maxWidth: "100%", overflowX: "auto" }}>
           <ChoiceTab active={kind === "classic"} onClick={() => setKind("classic")}>Классический (по одному на номер)</ChoiceTab>
           <ChoiceTab active={kind === "composed"} onClick={() => setKind("composed")}>Составной (свой набор)</ChoiceTab>
           <ChoiceTab active={kind === "drill"} onClick={() => setKind("drill")}>Дрилл (N одного номера)</ChoiceTab>
@@ -1051,13 +1037,13 @@ export function Builder() {
         <Async q={tests}>{(list) => list.filter((t) => t.title !== "__practice__").length === 0 ? <div style={{ color: "var(--text-2)" }}>Пока нет тестов.</div> : (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {list.filter((t) => t.title !== "__practice__").map((t) => (
-              <div key={t.id} onClick={() => { requestTestView(t.id); go("t-test"); }} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", background: "var(--surface-2)", borderRadius: 10, cursor: "pointer" }}>
+              <div key={t.id} onClick={() => { requestTestView(t.id); go("t-test"); }} className="card-tap" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", background: "var(--surface-2)", borderRadius: 12 }}>
                 <div><div style={{ fontWeight: 600 }}>{t.title}</div><div className="mono" style={{ color: "var(--text-3)", fontSize: 12 }}>{new Date(t.created_at).toLocaleString("ru", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}</div></div>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   <Pill>{KIND_RU[t.kind] ?? t.kind}</Pill>
                   <button onClick={(e) => { e.stopPropagation(); del(t.id, t.title); }} disabled={deleting === t.id}
                     title="Удалить тест" aria-label="Удалить тест"
-                    style={{ display: "inline-flex", alignItems: "center", background: "transparent", border: "none", color: "var(--text-3)", padding: 4, opacity: deleting === t.id ? 0.4 : 1 }}>
+                    className="btn btn-danger" style={{ padding: 6 }}>
                     <Icon name="trash" size={16} />
                   </button>
                 </div>
@@ -1096,12 +1082,12 @@ function EditableTitle({ id, title }: { id: string; title: string }) {
     return (
       <input autoFocus value={val} onChange={(e) => setVal(e.target.value)} onBlur={save}
         onKeyDown={(e) => { if (e.key === "Enter") save(); else if (e.key === "Escape") { setVal(title); setEditing(false); } }}
-        style={{ fontWeight: 700, fontSize: 18, width: "100%", maxWidth: 420 }} />
+        style={{ fontWeight: 700, fontSize: 18, letterSpacing: "-0.01em", width: "100%", maxWidth: 420 }} />
     );
   }
   return (
     <button onClick={() => setEditing(true)} title="Нажми, чтобы переименовать вариант"
-      style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "transparent", border: "none", padding: 0, cursor: "text", color: "var(--text)", fontWeight: 700, fontSize: 18 }}>
+      style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "transparent", border: "none", padding: 0, cursor: "text", color: "var(--text)", fontWeight: 700, fontSize: 18, letterSpacing: "-0.01em" }}>
       {testTitle(title)}
       <Icon name="pencil" size={15} />
     </button>
@@ -1119,18 +1105,12 @@ function PdfExportButtons({ id, title }: { id: string; title: string }) {
     catch (e) { showToast(String((e as Error).message)); }
     finally { setBusy(false); }
   };
-  const style = {
-    display: "inline-flex", alignItems: "center", gap: 7,
-    background: "transparent", border: "1px solid var(--border-2)",
-    borderRadius: 10, padding: "8px 14px", fontSize: 14, color: "var(--text-2)",
-    opacity: busy ? 0.6 : 1,
-  } as const;
   return (
     <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
-      <button disabled={busy} onClick={() => dl(false)} style={style}>
+      <button disabled={busy} onClick={() => dl(false)} className="btn btn-ghost">
         <Icon name="download" size={16} /> PDF для ученика
       </button>
-      <button disabled={busy} onClick={() => dl(true)} style={style}>
+      <button disabled={busy} onClick={() => dl(true)} className="btn btn-ghost">
         <Icon name="download" size={16} /> PDF с ответами
       </button>
     </div>
@@ -1144,11 +1124,8 @@ export function TestDetailPage() {
   const q = useTestDetail(viewTestId || null);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
-      <button onClick={() => go("t-builder")} style={{
-        display: "inline-flex", alignItems: "center", gap: 7, alignSelf: "flex-start",
-        background: "transparent", border: "1px solid var(--border-2)",
-        borderRadius: 10, padding: "8px 14px", fontSize: 14, color: "var(--text-2)",
-      }}><Icon name="arrowLeft" size={16} /> К тестам</button>
+      <button onClick={() => go("t-builder")} className="btn btn-ghost" style={{ alignSelf: "flex-start" }}>
+        <Icon name="arrowLeft" size={16} /> К тестам</button>
       <Async q={q}>{(d) => (
         <>
           <Card>
@@ -1166,9 +1143,9 @@ export function TestDetailPage() {
                   </div>
                   <StatementView text={t.statement} media={t.media} style={{ fontSize: 15, lineHeight: 1.45, marginBottom: 8 }} />
                   <MediaBlock media={t.media} />
-                  <div className="mono" style={{ fontSize: 14, background: "var(--surface-2)", borderRadius: 8, padding: "8px 12px", display: "inline-block" }}>
+                  <div className="mono" style={{ fontSize: 14, background: "var(--surface-2)", borderRadius: 12, padding: "8px 12px", display: "inline-block" }}>
                     <span style={{ color: "var(--text-3)" }}>ответ: </span>
-                    <b style={{ color: "var(--accent-2)" }}>{t.answer_schema.correct.join(" / ")}</b>
+                    <b style={{ color: "var(--ok)" }}>{t.answer_schema.correct.join(" / ")}</b>
                   </div>
                 </Card>
               ))}
@@ -1244,9 +1221,11 @@ export function Assign() {
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <div>
             <Label>Кому</Label>
-            <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
-              <ChoiceTab active={mode === "student"} onClick={() => setMode("student")}>Ученику</ChoiceTab>
-              <ChoiceTab active={mode === "class"} onClick={() => setMode("class")}>Классу</ChoiceTab>
+            <div style={{ marginTop: 6 }}>
+              <div className="seg">
+                <ChoiceTab active={mode === "student"} onClick={() => setMode("student")}>Ученику</ChoiceTab>
+                <ChoiceTab active={mode === "class"} onClick={() => setMode("class")}>Классу</ChoiceTab>
+              </div>
             </div>
           </div>
           {mode === "student" ? (
@@ -1294,16 +1273,11 @@ export function Assign() {
                   const base = when ? new Date(when) : new Date();
                   base.setDate(base.getDate() + (days as number));
                   setDue(toLocalInput(base));
-                }} style={{
-                  background: "var(--surface-2)", border: "1px solid var(--border-2)", color: "var(--text-2)",
-                  borderRadius: 999, padding: "4px 12px", fontSize: 12.5, cursor: "pointer",
-                }}>{label}</button>
+                }} className="btn btn-ghost" style={{ padding: "4px 12px", fontSize: 12.5 }}>{label}</button>
               ))}
               {due && (
-                <button type="button" onClick={() => setDue("")} style={{
-                  background: "transparent", border: "1px solid var(--border-2)", color: "var(--text-3)",
-                  borderRadius: 999, padding: "4px 12px", fontSize: 12.5, cursor: "pointer",
-                }}>без срока</button>
+                <button type="button" onClick={() => setDue("")}
+                  className="btn btn-ghost" style={{ padding: "4px 12px", fontSize: 12.5 }}>без срока</button>
               )}
             </div>
             <div style={{ color: "var(--text-3)", fontSize: 12.5, marginTop: 6 }}>
@@ -1361,15 +1335,13 @@ export function Bank() {
       <SourcePanel subject={subject} onDone={refresh} />
       <SubjectTabs value={subject} onChange={setSubject} />
       <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-        {(["", "draft", "active", "rejected"] as const).map((s) => (
-          <ChoiceTab key={s} active={status === s} onClick={() => setStatus(s)}>{s === "" ? "Все" : s}</ChoiceTab>
-        ))}
+        <div className="seg">
+          {(["", "draft", "active", "rejected"] as const).map((s) => (
+            <ChoiceTab key={s} active={status === s} onClick={() => setStatus(s)}>{s === "" ? "Все" : s}</ChoiceTab>
+          ))}
+        </div>
         <button onClick={clearBank} title="Удалить все задания предмета (кроме решённых)"
-          style={{
-            marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6,
-            background: "transparent", border: "1px solid var(--bad)", color: "var(--bad)",
-            borderRadius: 999, padding: "7px 14px", fontSize: 13, fontWeight: 600,
-          }}>
+          className="btn btn-danger" style={{ marginLeft: "auto", padding: "7px 14px", fontSize: 13 }}>
           <Icon name="trash" size={15} /> Очистить банк
         </button>
       </div>
@@ -1484,10 +1456,8 @@ function SourcePanel({ subject, onDone }: { subject: SubjectCode; onDone: () => 
         <div style={{ marginTop: 12, borderTop: "1px solid var(--border)", paddingTop: 10, display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{ fontSize: 13, color: "var(--text-3)" }}>или загрузить файлом</span>
           <input ref={inputRef} type="file" accept=".json,.jsonl,application/json" onChange={onPick} style={{ display: "none" }} />
-          <button onClick={() => inputRef.current?.click()} disabled={busy !== null} style={{
-            background: "transparent", border: "1px solid var(--border-2)", borderRadius: 9,
-            padding: "6px 12px", fontSize: 13, color: "var(--text-2)",
-          }}>{busy === "upload" ? "Загрузка…" : ".json / .jsonl"}</button>
+          <button onClick={() => inputRef.current?.click()} disabled={busy !== null}
+            className="btn btn-ghost" style={{ padding: "6px 12px", fontSize: 13 }}>{busy === "upload" ? "Загрузка…" : ".json / .jsonl"}</button>
         </div>
       )}
     </Card>
@@ -1497,7 +1467,8 @@ function SourcePanel({ subject, onDone }: { subject: SubjectCode; onDone: () => 
 function BankCard({ task, onStatus, onEditAnswer }: { task: Task; onStatus: (id: string, s: TaskStatus) => void; onEditAnswer: (s: AnswerSchema) => void }) {
   const [editing, setEditing] = useState(false);
   const [val, setVal] = useState(task.answer_schema.correct.join(", "));
-  const tone = task.status === "active" ? "accent" : task.status === "rejected" ? "bad" : "warn";
+  // active = живое задание в бою → зелёный (успех); accent остаётся действиям.
+  const tone = task.status === "active" ? "ok" : task.status === "rejected" ? "bad" : "warn";
   return (
     <Card>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginBottom: 10 }}>
@@ -1515,8 +1486,8 @@ function BankCard({ task, onStatus, onEditAnswer }: { task: Task; onStatus: (id:
         <Label>Ответ</Label>
         {!editing ? (
           <>
-            <span className="mono" style={{ background: "var(--surface-2)", padding: "4px 10px", borderRadius: 8 }}>{task.answer_schema.correct.join(" / ")}</span>
-            <button onClick={() => setEditing(true)} style={{ background: "none", border: "none", color: "var(--accent-2)", fontSize: 13 }}>править</button>
+            <span className="mono" style={{ background: "var(--surface-2)", padding: "4px 10px", borderRadius: 12 }}>{task.answer_schema.correct.join(" / ")}</span>
+            <button onClick={() => setEditing(true)} className="link-btn">править</button>
           </>
         ) : (
           <>
@@ -1533,11 +1504,8 @@ function BankCard({ task, onStatus, onEditAnswer }: { task: Task; onStatus: (id:
   );
 }
 
+// ChoiceTab — a bare segment button; the parent wraps each mutually-exclusive
+// group in <div className="seg"> (iOS segmented control, colors live in the class).
 function ChoiceTab({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
-  return <button onClick={onClick} style={{
-    padding: "7px 14px", borderRadius: 999, fontSize: 13, fontWeight: 600,
-    border: "1px solid " + (active ? "var(--accent)" : "var(--border-2)"),
-    background: active ? "var(--accent-soft)" : "transparent",
-    color: active ? "var(--accent-2)" : "var(--text-2)",
-  }}>{children}</button>;
+  return <button onClick={onClick} data-active={active ? "1" : undefined}>{children}</button>;
 }

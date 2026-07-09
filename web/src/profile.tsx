@@ -24,7 +24,7 @@ export function ProfilePage() {
             display: "flex", alignItems: "center", justifyContent: "center", color: "var(--accent-2)",
           }}><Icon name="user" size={28} /></div>
           <div style={{ minWidth: 0 }}>
-            <div style={{ fontWeight: 800, fontSize: 20 }}>{user.name}</div>
+            <div style={{ fontWeight: 700, fontSize: 20, letterSpacing: "-0.01em" }}>{user.name}</div>
             <div style={{ display: "flex", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
               <Pill tone="accent">{ROLE_RU[user.role]}</Pill>
               {user.role === "teacher" && (
@@ -42,7 +42,7 @@ export function ProfilePage() {
           </div>
           <div>
             <Label>Telegram</Label>
-            <div style={{ marginTop: 4, fontSize: 15, color: user.telegram_id ? "var(--accent-2)" : "var(--text-3)" }}>
+            <div style={{ marginTop: 4, fontSize: 15, color: user.telegram_id ? "var(--ok)" : "var(--text-3)" }}>
               {user.telegram_id ? "привязан ✓" : "не привязан (кнопка в меню слева)"}
             </div>
           </div>
@@ -71,7 +71,7 @@ export function ProfilePage() {
                   {(p.teachers ?? []).map((t) => (
                     <div key={t.id} style={{
                       display: "flex", justifyContent: "space-between", alignItems: "center",
-                      padding: "10px 12px", background: "var(--surface-2)", borderRadius: 10,
+                      padding: "10px 12px", background: "var(--surface-2)", borderRadius: 12,
                     }}>
                       <span style={{ fontWeight: 600 }}>{t.name}</span>
                       <span className="mono" style={{ color: "var(--text-3)", fontSize: 12 }}>
@@ -96,11 +96,11 @@ export function ProfilePage() {
                 <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 10 }}>
                   {p.classes.map((c) => (
                     <div key={c.id}
+                      className={role === "teacher" ? "card-tap" : undefined}
                       onClick={role === "teacher" ? () => { requestClassView(c.id); go("t-class"); } : undefined}
                       style={{
                         display: "flex", justifyContent: "space-between", alignItems: "center",
-                        padding: "10px 12px", background: "var(--surface-2)", borderRadius: 10,
-                        cursor: role === "teacher" ? "pointer" : "default",
+                        padding: "10px 12px", background: "var(--surface-2)", borderRadius: 12,
                       }}>
                       <span style={{ fontWeight: 600 }}>{c.name}</span>
                       <span className="mono" style={{ color: "var(--text-3)", fontSize: 12 }}>

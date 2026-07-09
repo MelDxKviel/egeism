@@ -232,7 +232,7 @@ export function Pill({ children, tone = "neutral" }: { children: ReactNode; tone
 // Pill button (apple.com CTA shape). Colors + hover/active/focus states live in
 // theme.css (.btn-*); the style prop stays for layout overrides only.
 export function Button({ children, onClick, variant = "primary", disabled, style, type }:
-  { children: ReactNode; onClick?: () => void; variant?: "primary" | "ghost" | "soft" | "danger"; disabled?: boolean; style?: CSSProperties; type?: "button" | "submit" }) {
+  { children: ReactNode; onClick?: () => void; variant?: "primary" | "ghost" | "soft" | "danger" | "ok"; disabled?: boolean; style?: CSSProperties; type?: "button" | "submit" }) {
   return <button type={type || "button"} onClick={onClick} disabled={disabled}
     className={`btn btn-${variant}`} style={style}>{children}</button>;
 }

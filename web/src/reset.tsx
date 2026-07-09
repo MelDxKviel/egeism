@@ -50,16 +50,16 @@ export function ResetPasswordPage({ token }: { token: string }) {
 
   return (
     <div className="app" data-theme={theme} style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-      <form onSubmit={submit} className="fade" style={{
+      <form onSubmit={submit} className="pop" style={{
         width: "100%", maxWidth: 380, background: "var(--surface)", border: "1px solid var(--border)",
-        borderRadius: 20, padding: 28, boxShadow: "var(--shadow-lg)",
+        borderRadius: 24, padding: 28, boxShadow: "var(--shadow-lg)",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 11, marginBottom: 22 }}>
-          <div style={{ width: 38, height: 38, borderRadius: 11, background: "var(--accent)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--on-accent)" }}>
+          <div style={{ width: 38, height: 38, borderRadius: 12, background: "var(--accent)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--on-accent)" }}>
             <Icon name="key" size={20} strokeWidth={2.4} />
           </div>
           <div>
-            <div style={{ fontWeight: 800, fontSize: 19 }}>Новый пароль</div>
+            <div style={{ fontWeight: 700, fontSize: 19, letterSpacing: "-0.01em" }}>Новый пароль</div>
             <div className="mono" style={{ fontSize: 11, color: "var(--text-3)" }}>ЕГЭизм · сброс пароля</div>
           </div>
         </div>
@@ -141,10 +141,10 @@ export function ResetLinkModal({ user, onClose }: { user: { id: string; name: st
             Передай эту ссылку — по ней {user.name} сам(а) задаст новый пароль:
           </div>
           <div className="mono" style={{
-            background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 10,
+            background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 12,
             padding: "10px 12px", fontSize: 12.5, userSelect: "all", wordBreak: "break-all",
           }}>{link}</div>
-          <Button variant={copied ? "soft" : "primary"} onClick={copy} style={{ width: "100%" }}>
+          <Button variant={copied ? "ok" : "primary"} onClick={copy} style={{ width: "100%" }}>
             {copied ? "Скопировано ✓" : "Скопировать ссылку"}
           </Button>
           <div className="mono" style={{ fontSize: 11, color: "var(--text-3)" }}>

@@ -14,7 +14,7 @@ export function AnswerInput({ kind, value, onChange, disabled }:
         <div style={{ display: "flex", gap: 6, minHeight: 40, flexWrap: "wrap", marginBottom: 12 }}>
           {chips.length === 0 && <span style={{ color: "var(--text-3)" }}>Нажимай цифры по порядку…</span>}
           {chips.map((c, i) => (
-            <span key={i} className="mono" style={{ background: "var(--accent-soft)", color: "var(--accent-2)", borderRadius: 10, padding: "8px 12px", fontWeight: 700 }}>{c}</span>
+            <span key={i} className="mono" style={{ background: "var(--accent-soft)", color: "var(--accent-2)", borderRadius: 999, padding: "8px 12px", fontWeight: 700 }}>{c}</span>
           ))}
         </div>
         <Keypad disabled={disabled} onKey={(k) => onChange(value + k)} onBack={() => onChange(value.slice(0, -1))} />
@@ -30,7 +30,7 @@ export function AnswerInput({ kind, value, onChange, disabled }:
           placeholder="числа через пробел, порядок не важен" style={{ width: "100%", fontSize: 18 }} className="mono" />
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
           {chips.map((c, i) => (
-            <span key={i} className="mono" style={{ background: "var(--bg-2)", color: "var(--text-2)", borderRadius: 999, padding: "4px 10px", fontSize: 13 }}>{c}</span>
+            <span key={i} className="mono" style={{ background: "color-mix(in srgb, var(--text) 8%, transparent)", color: "var(--text-2)", borderRadius: 999, padding: "4px 10px", fontSize: 13 }}>{c}</span>
           ))}
         </div>
       </div>
@@ -50,15 +50,12 @@ function Keypad({ onKey, onBack, disabled }: { onKey: (k: string) => void; onBac
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 8, maxWidth: 320 }}>
       {keys.map((k) => (
-        <button key={k} disabled={disabled} onClick={() => onKey(k)} className="mono" style={{
-          padding: "12px 0", borderRadius: 10, border: "1px solid var(--border-2)",
-          background: "var(--surface-2)", fontSize: 18, fontWeight: 700,
+        <button key={k} disabled={disabled} onClick={() => onKey(k)} className="btn btn-ghost mono" style={{
+          padding: "12px 0", fontSize: 18, fontWeight: 700,
         }}>{k}</button>
       ))}
-      <button disabled={disabled} onClick={onBack} style={{
-        gridColumn: "span 5", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7,
-        padding: "10px 0", borderRadius: 10, border: "1px solid var(--border-2)",
-        background: "var(--surface-2)", fontSize: 14,
+      <button disabled={disabled} onClick={onBack} className="btn btn-ghost" style={{
+        gridColumn: "span 5", padding: "10px 0",
       }}><Icon name="arrowLeft" size={15} /> стереть</button>
     </div>
   );

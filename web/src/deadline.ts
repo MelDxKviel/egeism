@@ -9,7 +9,7 @@ export type DeadlineKind = "none" | "upcoming" | "overdue" | "late" | "ontime";
 export interface DeadlineInfo {
   kind: DeadlineKind;
   text: string;
-  pill?: { tone: "bad" | "warn" | "accent"; label: string };
+  pill?: { tone: "bad" | "warn" | "ok"; label: string };
 }
 
 // deadlineInfo derives the deadline state for an assignment card so both the
@@ -28,7 +28,7 @@ export function deadlineInfo(card: AssignmentCard, now: number = Date.now()): De
     const solvedLate = new Date(card.finished_at) > due;
     return solvedLate
       ? { kind: "late", text, pill: { tone: "warn", label: "с опозданием" } }
-      : { kind: "ontime", text, pill: { tone: "accent", label: "вовремя" } };
+      : { kind: "ontime", text, pill: { tone: "ok", label: "вовремя" } };
   }
   if (due.getTime() <= now) {
     return { kind: "overdue", text, pill: { tone: "bad", label: "просрочен" } };

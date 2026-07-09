@@ -40,7 +40,7 @@ describe("deadlineInfo", () => {
     const finished = new Date(NOW - day).toISOString();
     const d = deadlineInfo(base({ due_at: due, finished_at: finished }), NOW);
     expect(d.kind).toBe("ontime");
-    expect(d.pill).toEqual({ tone: "accent", label: "вовремя" });
+    expect(d.pill).toEqual({ tone: "ok", label: "вовремя" });
   });
 
   it("solved after the deadline -> late + orange pill", () => {

@@ -15,7 +15,7 @@ export function ScoreGauge({ score, max = 100 }: { score: number; max?: number }
   return (
     <div style={{ position: "relative", width: 192, height: 116 }}>
       <svg width={192} height={116} viewBox="0 0 192 116">
-        <path d={`M ${sx} ${sy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`} fill="none" stroke="var(--bg-2)" strokeWidth={12} strokeLinecap="round" />
+        <path d={`M ${sx} ${sy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`} fill="none" stroke="color-mix(in srgb, var(--text) 8%, transparent)" strokeWidth={12} strokeLinecap="round" />
         {frac > 0 && (
           <path d={`M ${sx} ${sy} A ${r} ${r} 0 0 1 ${ex} ${ey}`} fill="none" stroke={accColor((score / max) * 100)} strokeWidth={12} strokeLinecap="round" />
         )}
@@ -23,7 +23,7 @@ export function ScoreGauge({ score, max = 100 }: { score: number; max?: number }
       {/* The number sits ON the arc's baseline (cy=96), well clear of the apex
           (y=18): digits end at y≈92, «из N» tucks under the baseline. A top-
           anchored block used to shove the digits into the arc. */}
-      <div className="mono" style={{ position: "absolute", left: 0, right: 0, bottom: 24, textAlign: "center", fontSize: 42, fontWeight: 800, lineHeight: 1 }}>{score}</div>
+      <div className="mono" style={{ position: "absolute", left: 0, right: 0, bottom: 24, textAlign: "center", fontSize: 42, fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1 }}>{score}</div>
       <div className="mono" style={{ position: "absolute", left: 0, right: 0, bottom: 6, textAlign: "center", fontSize: 12, color: "var(--text-3)" }}>из {max}</div>
     </div>
   );
@@ -97,7 +97,7 @@ export function MasteryChart({ points }: { points: MasteryPoint[] }) {
         <CartesianGrid stroke="var(--border)" vertical={false} />
         <XAxis dataKey="week" stroke="var(--text-3)" fontSize={11} tickLine={false} />
         <YAxis domain={[0, 100]} stroke="var(--text-3)" fontSize={11} tickLine={false} />
-        <Tooltip contentStyle={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 12 }} />
+        <Tooltip contentStyle={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, boxShadow: "var(--shadow-2)", fontSize: 12 }} />
         <Line type="monotone" dataKey="acc" stroke="var(--accent)" strokeWidth={2.4} dot={{ r: 3 }} />
       </LineChart>
     </ResponsiveContainer>
@@ -115,7 +115,7 @@ export function WeakSpotsList({ spots, onDrill }: { spots: WeakSpot[]; onDrill: 
           <div key={s.number} style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <div className="mono" style={{ width: 34, fontWeight: 700 }}>№{s.number}</div>
             <div style={{ flex: 1 }}>
-              <div style={{ height: 8, borderRadius: 999, background: "var(--bg-2)", overflow: "hidden" }}>
+              <div style={{ height: 8, borderRadius: 999, background: "color-mix(in srgb, var(--text) 8%, transparent)", overflow: "hidden" }}>
                 <div style={{ width: `${pct}%`, height: "100%", background: accColor(pct) }} />
               </div>
             </div>

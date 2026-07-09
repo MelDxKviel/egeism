@@ -159,7 +159,11 @@ export function Dashboard() {
         <Card>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
             <Label>Активность</Label>
-            <Async q={heat}>{(h) => <Pill tone="accent"><StreakBadge days={computeStreak(h)} /></Pill>}</Async>
+            {/* An alive streak = success → green ok-tone; a cold one stays neutral. */}
+            <Async q={heat}>{(h) => {
+              const days = computeStreak(h);
+              return <Pill tone={days > 0 ? "ok" : "neutral"}><StreakBadge days={days} /></Pill>;
+            }}</Async>
           </div>
           <Async q={heat}>{(h) => <Heatmap cells={h} onDay={() => go("history")} />}</Async>
           <div style={{ color: "var(--text-3)", fontSize: 12, marginTop: 10 }}>Клетки — активность по дням. Открой историю для разбора.</div>
@@ -219,14 +223,11 @@ export function SubjectScreen() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+      <div className="seg" style={{ alignSelf: "flex-start" }}>
         {(["rus", "math", "inf", "soc"] as SubjectCode[]).map((c) => (
-          <button key={c} onClick={() => setSubject(c)} style={{
-            padding: "8px 16px", borderRadius: 999, fontWeight: 600, fontSize: 14,
-            border: "1px solid " + (subject === c ? "var(--accent)" : "var(--border-2)"),
-            background: subject === c ? "var(--accent-soft)" : "transparent",
-            color: subject === c ? "var(--accent-2)" : "var(--text-2)",
-          }}>{SUBJECT_TITLES[c]}</button>
+          <button key={c} onClick={() => setSubject(c)} data-active={subject === c ? "1" : undefined}>
+            {SUBJECT_TITLES[c]}
+          </button>
         ))}
       </div>
 
@@ -237,7 +238,7 @@ export function SubjectScreen() {
             {rows.map((r) => {
               const pct = r.total ? Math.round((r.correct / r.total) * 100) : 0;
               return (
-                <Card key={r.number} onClick={() => setOpen(r.number)} style={{ cursor: "pointer", padding: 16 }}>
+                <Card key={r.number} onClick={() => setOpen(r.number)} style={{ padding: 16 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <span className="mono" style={{ fontWeight: 700, fontSize: 15 }}>№{r.number}</span>
                     <span className="mono" style={{ color: accColor(pct), fontWeight: 700 }}>{pct}%</span>
@@ -382,7 +383,7 @@ export function Solve() {
             const a = done.find((x) => x.taskId === t.id);
             return <div key={t.id} style={{
               width: 9, height: 9, borderRadius: 999,
-              background: a ? (a.correct ? "var(--accent)" : "var(--bad)") : i === idx ? "var(--text-3)" : "var(--border-2)",
+              background: a ? (a.correct ? "var(--ok)" : "var(--bad)") : i === idx ? "var(--text-3)" : "var(--border-2)",
             }} />;
           })}
         </div>
@@ -400,8 +401,8 @@ export function Solve() {
         {submitted && (
           <div className={submitted.ok ? "celebrate" : undefined} style={{
             padding: 16, borderRadius: 12, marginTop: 4,
-            background: submitted.ok ? "var(--accent-soft)" : "var(--bad-soft)",
-            color: submitted.ok ? "var(--accent-2)" : "var(--bad)",
+            background: submitted.ok ? "var(--ok-soft)" : "var(--bad-soft)",
+            color: submitted.ok ? "var(--ok)" : "var(--bad)",
           }}>
             <div style={{ display: "flex", alignItems: "center", gap: 7, fontWeight: 700, marginBottom: submitted.solution?.length ? 8 : 0 }}>
               {submitted.ok && <Icon name="check" size={18} className="checkpop" />}
@@ -441,7 +442,7 @@ function Results({ tasks, done, onExit }: { tasks: TaskView[]; done: Answered[];
     <div style={{ maxWidth: 640, margin: "0 auto", display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
       <Card style={{ textAlign: "center", padding: 34 }}>
         <Label>Итоги</Label>
-        <div className="mono" style={{ fontSize: 54, fontWeight: 800, color: accColor(pct), margin: "10px 0" }}>{pct}%</div>
+        <div className="mono" style={{ fontSize: 54, fontWeight: 700, letterSpacing: "-0.02em", color: accColor(pct), margin: "10px 0" }}>{pct}%</div>
         <div style={{ color: "var(--text-2)" }}>{correct} из {tasks.length} верно</div>
       </Card>
       <Section title="По заданиям">
@@ -449,9 +450,10 @@ function Results({ tasks, done, onExit }: { tasks: TaskView[]; done: Answered[];
           {tasks.map((t) => {
             const a = done.find((d) => d.taskId === t.id);
             return (
-              <div key={t.id} style={{ display: "flex", justifyContent: "space-between", padding: "8px 12px", background: "var(--surface-2)", borderRadius: 10 }}>
+              <div key={t.id} style={{ display: "flex", justifyContent: "space-between", padding: "8px 12px", background: "var(--surface-2)", borderRadius: 12 }}>
                 <span className="mono">№{t.number}</span>
-                <span style={{ color: a ? (a.correct ? "var(--accent)" : "var(--bad)") : "var(--text-3)" }}>
+                {/* «верно» = success → green ok token (blue is reserved for actions). */}
+                <span style={{ color: a ? (a.correct ? "var(--ok)" : "var(--bad)") : "var(--text-3)" }}>
                   {a ? (a.correct ? "верно" : "неверно") : "пропущено"}
                 </span>
               </div>
@@ -499,7 +501,7 @@ export function History() {
           : (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {list.map((a) => (
-                <div key={a.id} style={{ display: "flex", justifyContent: "space-between", padding: "10px 12px", background: "var(--surface-2)", borderRadius: 10 }}>
+                <div key={a.id} style={{ display: "flex", justifyContent: "space-between", padding: "10px 12px", background: "var(--surface-2)", borderRadius: 12 }}>
                   <div>
                     <div style={{ fontWeight: 600 }}>{testTitle(a.title)}</div>
                     <div className="mono" style={{ color: "var(--text-3)", fontSize: 12 }}>{new Date(a.started_at).toLocaleString("ru")}</div>
@@ -517,9 +519,10 @@ export function History() {
           {day.items.length === 0 ? <div style={{ color: "var(--text-2)" }}>В этот день решений не найдено.</div> : (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {day.items.map((it) => (
-                <div key={it.answer_id} style={{ display: "flex", justifyContent: "space-between", padding: "8px 12px", background: "var(--surface-2)", borderRadius: 10 }}>
+                <div key={it.answer_id} style={{ display: "flex", justifyContent: "space-between", padding: "8px 12px", background: "var(--surface-2)", borderRadius: 12 }}>
                   <span className="mono">№{it.number} · {it.raw_answer}</span>
-                  <span style={{ color: it.is_correct ? "var(--accent)" : "var(--bad)" }}>{it.is_correct ? "верно" : "неверно"}</span>
+                  {/* «верно» = success → green ok token (blue is reserved for actions). */}
+                  <span style={{ color: it.is_correct ? "var(--ok)" : "var(--bad)" }}>{it.is_correct ? "верно" : "неверно"}</span>
                 </div>
               ))}
             </div>

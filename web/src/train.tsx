@@ -49,14 +49,11 @@ export function TrainingHub() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+      <div className="seg" style={{ alignSelf: "flex-start" }}>
         {(["rus", "math", "inf", "soc"] as SubjectCode[]).map((c) => (
-          <button key={c} onClick={() => setSubject(c)} style={{
-            padding: "8px 16px", borderRadius: 999, fontWeight: 600, fontSize: 14,
-            border: "1px solid " + (subject === c ? "var(--accent)" : "var(--border-2)"),
-            background: subject === c ? "var(--accent-soft)" : "transparent",
-            color: subject === c ? "var(--accent-2)" : "var(--text-2)",
-          }}>{SUBJECT_TITLES[c]}</button>
+          <button key={c} onClick={() => setSubject(c)} data-active={subject === c ? "1" : undefined}>
+            {SUBJECT_TITLES[c]}
+          </button>
         ))}
       </div>
 
@@ -67,7 +64,7 @@ export function TrainingHub() {
             <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 10 }}>
               {o.mistakes > 0 ? (
                 <>
-                  <div className="mono" style={{ fontSize: 30, fontWeight: 800, color: "var(--warn)" }}>{o.mistakes}</div>
+                  <div className="mono" style={{ fontSize: 30, fontWeight: 700, color: "var(--warn)" }}>{o.mistakes}</div>
                   <div style={{ color: "var(--text-2)", fontSize: 13, lineHeight: 1.45 }}>
                     {pluralRu(o.mistakes, ["задание ждёт", "задания ждут", "заданий ждут"])} второго шанса.
                     Реши верно — и они уйдут из очереди.
@@ -118,17 +115,17 @@ export function TrainingHub() {
                 const progress = n.bank_active > 0 ? Math.min(100, Math.round((n.mastered / n.bank_active) * 100)) : 0;
                 return (
                   <Card key={n.number} onClick={empty ? undefined : () => drill(n.number)}
-                    style={{ padding: 14, cursor: empty ? "default" : "pointer", opacity: empty ? 0.55 : 1 }}>
+                    style={{ padding: 14, opacity: empty ? 0.55 : 1 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                       <span className="mono" style={{ fontWeight: 700, fontSize: 15 }}>№{n.number}</span>
                       {pct !== null
                         ? <span className="mono" style={{ color: accColor(pct), fontWeight: 700, fontSize: 13 }} title="точность твоих ответов">{pct}%</span>
                         : <span className="mono" style={{ color: "var(--text-3)", fontSize: 12 }}>новое</span>}
                     </div>
-                    <div style={{ marginTop: 10, height: 6, borderRadius: 999, background: "var(--surface-2)", overflow: "hidden" }}>
-                      <div style={{ width: `${progress}%`, height: "100%", borderRadius: 999, background: done ? "var(--accent)" : "var(--accent-2)" }} />
+                    <div style={{ marginTop: 10, height: 6, borderRadius: 999, background: "color-mix(in srgb, var(--text) 8%, transparent)", overflow: "hidden" }}>
+                      <div style={{ width: `${progress}%`, height: "100%", borderRadius: 999, background: done ? "var(--ok)" : "var(--hm3)" }} />
                     </div>
-                    <div className="mono" style={{ color: "var(--text-3)", fontSize: 11, marginTop: 6 }}>
+                    <div className="mono" style={{ color: done ? "var(--ok)" : "var(--text-3)", fontSize: 11, marginTop: 6 }}>
                       {empty ? "нет заданий в банке" : done ? "освоено ✓" : `освоено ${n.mastered} из ${n.bank_active}`}
                     </div>
                   </Card>

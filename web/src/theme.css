@@ -158,6 +158,8 @@ input:focus, textarea:focus, select:focus {
 .btn-ghost:hover { background: color-mix(in srgb, var(--text) 6%, transparent); }
 .btn-soft { background: var(--accent-soft); color: var(--accent-2); }
 .btn-soft:hover { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+.btn-ok { background: var(--ok-soft); color: var(--ok); }
+.btn-ok:hover { background: color-mix(in srgb, var(--ok) 22%, transparent); }
 .btn-danger { background: var(--bad-soft); color: var(--bad); }
 .btn-danger:hover { background: color-mix(in srgb, var(--bad) 16%, transparent); }
 
@@ -215,10 +217,14 @@ input:focus, textarea:focus, select:focus {
 .navbtn[data-active="1"] { background: var(--accent-soft); color: var(--accent-2); font-weight: 600; }
 
 /* ---------- Segmented control (iOS-style subject/mode switcher) ---------- */
+/* Scrolls horizontally (scrollbar hidden) when the labels outgrow a phone. */
 .seg {
   display: inline-flex; gap: 2px; padding: 3px; border-radius: 12px;
   background: color-mix(in srgb, var(--text) 7%, transparent);
+  max-width: 100%; overflow-x: auto; scrollbar-width: none;
 }
+.seg::-webkit-scrollbar { display: none; }
+.seg > button { flex: none; }
 .seg > button {
   border: none; background: transparent; padding: 7px 14px; border-radius: 9px;
   font-weight: 600; font-size: 13px; color: var(--text-2); white-space: nowrap;
@@ -242,5 +248,7 @@ input:focus, textarea:focus, select:focus {
 .stmt-table th, .stmt-table td {
   border: 1px solid var(--border-2); padding: 5px 11px; text-align: center; white-space: nowrap;
 }
-.stmt-table th { background: var(--surface-2); color: var(--text-2); font-weight: 600; }
+/* Header fill is text-mixed so it reads on ANY surface level (a surface-2
+   fill vanished inside surface-2 panels like the attempt review). */
+.stmt-table th { background: color-mix(in srgb, var(--text) 7%, transparent); color: var(--text-2); font-weight: 600; }
 .stmt-table td { color: var(--text); }
