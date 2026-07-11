@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useRef, useState } from "react";
+import { ReactNode, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { HeatCell, WeakSpot, MasteryPoint } from "./api";
@@ -132,49 +132,55 @@ export function Heatmap({ cells, onDay, big }: { cells: HeatCell[]; onDay?: (c: 
   // grid lands flush with the card edge instead of a ragged right gutter.
   const cell = weeks > 0 ? Math.min(base + 5, (width - (weeks - 1) * gap) / weeks) : base;
 
-  const byDay = new Map(cells.map((c) => [c.day.slice(0, 10), c]));
-  const today = new Date();
-  const days: HeatCell[] = [];
-  for (let i = weeks * 7 - 1; i >= 0; i--) {
-    const d = new Date(today); d.setDate(d.getDate() - i);
-    const key = d.toISOString().slice(0, 10);
-    days.push(byDay.get(key) || { day: d.toISOString(), total: 0, correct: 0 });
-  }
-  const cols: HeatCell[][] = [];
-  for (let i = 0; i < days.length; i += 7) cols.push(days.slice(i, i + 7));
+  // Memoized: the day map + a Date/ISO pair per cell would otherwise rebuild
+  // on every tooltip show/hide re-render (371 cells on the History page).
+  const cols = useMemo(() => {
+    const byDay = new Map(cells.map((c) => [c.day.slice(0, 10), c]));
+    const today = new Date();
+    const days: HeatCell[] = [];
+    for (let i = weeks * 7 - 1; i >= 0; i--) {
+      const d = new Date(today); d.setDate(d.getDate() - i);
+      const key = d.toISOString().slice(0, 10);
+      days.push(byDay.get(key) || { day: d.toISOString(), total: 0, correct: 0 });
+    }
+    const out: HeatCell[][] = [];
+    for (let i = 0; i < days.length; i += 7) out.push(days.slice(i, i + 7));
+    return out;
+  }, [cells, weeks]);
+
+  const onHover = useCallback((c: HeatCell | null, el?: HTMLElement) => {
+    if (!c || !el) { setTip(null); return; }
+    const r = el.getBoundingClientRect();
+    setTip({ x: r.left + r.width / 2, y: r.top, c });
+  }, []);
 
   return (
     <div ref={ref}>
       {weeks === 0
         ? <div style={{ height: 7 * (base + gap) - gap }} /> /* pre-measure placeholder, keeps the card height stable */
-        : (
-          <div style={{ display: "flex", gap }}>
-            {cols.map((wk, wi) => (
-              <div key={wi} style={{ display: "flex", flexDirection: "column", gap, flex: "none" }}>
-                {wk.map((c, di) => (
-                  <div key={di} className={onDay ? "hm-cell hm-tap" : "hm-cell"}
-                    onMouseEnter={(e) => {
-                      const r = e.currentTarget.getBoundingClientRect();
-                      setTip({ x: r.left + r.width / 2, y: r.top, c });
-                    }}
-                    onMouseLeave={() => setTip(null)}
-                    onClick={() => { setTip(null); onDay?.(c); }}
-                    style={{ width: cell, height: cell, borderRadius: cell >= 13 ? 4 : 3, background: heatColor(c.total), cursor: onDay ? "pointer" : "default" }} />
-                ))}
-              </div>
-            ))}
-          </div>
-        )}
+        : <HeatGrid cols={cols} cell={cell} gap={gap} onDay={onDay} onHover={onHover} />}
       {/* The tooltip portals into the .app scope (NOT bare <body>) so the theme
           tokens resolve — same trap the Modal comment in ui.tsx describes. It
           sits UNDER the modal z-index (50), so an open dialog covers it. */}
       {tip && createPortal(
-        <div className="mono" style={{
-          position: "fixed", left: tip.x, top: tip.y - 9, transform: "translate(-50%, -100%)",
-          zIndex: 45, pointerEvents: "none", whiteSpace: "nowrap",
-          background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10,
-          boxShadow: "var(--shadow-2)", padding: "7px 11px", fontSize: 12, color: "var(--text-2)",
-        }}>
+        <div key={tip.c.day} className="mono"
+          // Clamp into the viewport after layout: the most-hovered cells are
+          // the newest days at the grid's RIGHT edge, where a centered nowrap
+          // tooltip would run off screen and lose its «N верно» tail.
+          ref={(el) => {
+            if (!el) return;
+            const r = el.getBoundingClientRect();
+            const pad = 8;
+            const dx = r.left < pad ? pad - r.left
+              : r.right > window.innerWidth - pad ? window.innerWidth - pad - r.right : 0;
+            if (dx !== 0) el.style.left = `${tip.x + dx}px`;
+          }}
+          style={{
+            position: "fixed", left: tip.x, top: tip.y - 9, transform: "translate(-50%, -100%)",
+            zIndex: 45, pointerEvents: "none", whiteSpace: "nowrap",
+            background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10,
+            boxShadow: "var(--shadow-2)", padding: "7px 11px", fontSize: 12, color: "var(--text-2)",
+          }}>
           <b style={{ color: "var(--text)", fontWeight: 600 }}>
             {/* Format from the UTC day KEY, not the timestamp — new Date(iso)
                 in a western timezone would render the previous day. */}
@@ -192,6 +198,31 @@ export function Heatmap({ cells, onDay, big }: { cells: HeatCell[]; onDay?: (c: 
     </div>
   );
 }
+
+// HeatGrid — the memoized cell grid. Tooltip state lives in the Heatmap
+// wrapper, so hovering a day re-renders only that wrapper; without the memo a
+// cursor sweep re-reconciled every cell div twice per crossing.
+const HeatGrid = memo(function HeatGrid({ cols, cell, gap, onDay, onHover }: {
+  cols: HeatCell[][]; cell: number; gap: number;
+  onDay?: (c: HeatCell) => void;
+  onHover: (c: HeatCell | null, el?: HTMLElement) => void;
+}) {
+  return (
+    <div style={{ display: "flex", gap }}>
+      {cols.map((wk, wi) => (
+        <div key={wi} style={{ display: "flex", flexDirection: "column", gap, flex: "none" }}>
+          {wk.map((c, di) => (
+            <div key={di} className={onDay ? "hm-cell hm-tap" : "hm-cell"}
+              onMouseEnter={(e) => onHover(c, e.currentTarget)}
+              onMouseLeave={() => onHover(null)}
+              onClick={() => { onHover(null); onDay?.(c); }}
+              style={{ width: cell, height: cell, borderRadius: cell >= 13 ? 4 : 3, background: heatColor(c.total), cursor: onDay ? "pointer" : "default" }} />
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+});
 
 // streak = consecutive days up to today with any activity.
 export function computeStreak(cells: HeatCell[]): number {

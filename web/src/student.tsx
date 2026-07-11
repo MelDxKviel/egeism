@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   api, SubjectCode, TaskView, DayAnswer, AssignmentCard, AttemptReviewItem, Forecast, useForecast, useHeatmap,
   useWeakSpots, useMastery, useMasterySeries, useAssignments, useAttempts, useInvalidate, usePracticeOverview,
+  useSubjects,
 } from "./api";
 import { useApp } from "./state";
 import { Card, Label, Pill, Button, Async, Empty, Loading, Modal, accColor, SUBJECT_TITLES, SubjectSwitch, testTitle, MediaBlock, StatementView, AttemptReviewGrid, useIsMobile } from "./ui";
@@ -10,7 +11,7 @@ import { AnswerInput } from "./answer";
 import { Icon, IconName } from "./icons";
 import { deadlineInfo } from "./deadline";
 import { confettiBurst } from "./confetti";
-import { dayKey, todayTotal, dailyGoal, streakAtRisk, streakCelebration, streakColor } from "./engage";
+import { dayKey, todayTotal, dailyGoal, streakAtRisk, effectiveStreak, streakCelebration, streakColor } from "./engage";
 import { pluralRu } from "./plural";
 
 // Russian plural for «день» (1 день · 2 дня · 5 дней).
@@ -164,7 +165,10 @@ export function Dashboard() {
     }
     const seenKey = `egeism.streakSeen.${sid}`;
     const seen = Number(localStorage.getItem(seenKey) || 0);
-    const { milestone, seen: next } = streakCelebration(computeStreak(heatData), seen);
+    // effectiveStreak, NOT computeStreak: before today's first solve the
+    // latter is 0, which would read as "streak broke", reset `seen` and
+    // re-celebrate the same веха after every day's first solve.
+    const { milestone, seen: next } = streakCelebration(effectiveStreak(heatData), seen);
     if (next !== seen) localStorage.setItem(seenKey, String(next));
     if (milestone) {
       confettiBurst({ count: 90 });
@@ -173,12 +177,18 @@ export function Dashboard() {
     }
   }, [heatData, sid, showToast]);
 
+  const subjects = useSubjects();
+
   const startPractice = () => { requestSolve({ subject }); go("solve"); };
   const startMistakes = () => { requestSolve({ subject, mode: "mistakes", title: "Работа над ошибками" }); go("solve"); };
   const startRecommended = () => { requestSolve({ subject, mode: "recommended", title: "Умная тренировка" }); go("solve"); };
   const drill = (n: number) => { requestSolve({ subject, number: n, title: `Тренировка №${n}` }); go("solve"); };
   const solveAssigned = (a: AssignmentCard) => {
-    requestSolve({ subject, testId: a.test_id, assignmentId: a.id, title: testTitle(a.title) });
+    // The assignment list is NOT subject-filtered, so resolve the TEST's
+    // subject for the solve request — Solve's forecast delta must measure the
+    // subject actually solved, not whatever tab the dashboard is on.
+    const code = subjects.data?.find((s) => s.id === a.subject_id)?.code ?? subject;
+    requestSolve({ subject: code, testId: a.test_id, assignmentId: a.id, title: testTitle(a.title) });
     go("solve");
   };
 
@@ -236,10 +246,12 @@ export function Dashboard() {
                   </div>
                 </Ring>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10, minWidth: 0 }}>
+                  {/* The goal is the day's PACE target; the streak counts any
+                      activity (see the ember hint) — don't conflate the two. */}
                   <div style={{ color: "var(--text-2)", fontSize: 13, lineHeight: 1.45 }}>
                     {met
-                      ? <>Цель на сегодня закрыта — день зачтён в серию. Отличный темп!</>
-                      : <>Реши ещё {goal - done} {pluralRu(goal - done, ["задачу", "задачи", "задач"])} — и день зачтётся в серию.</>}
+                      ? <>Цель на сегодня закрыта. Отличный темп!</>
+                      : <>Реши ещё {goal - done} {pluralRu(goal - done, ["задачу", "задачи", "задач"])} — и цель дня закрыта.</>}
                   </div>
                   {met
                     ? <div><Pill tone="ok">выполнено ✓</Pill></div>
@@ -428,8 +440,14 @@ export function Solve() {
     })();
   }, [req]);
 
+  // Set at finish; the delta pill renders only from a forecast fetched AFTER
+  // this moment. Without the gate, Results' first paint compares the cached
+  // pre-session forecast with itself and falsely claims «без изменений» (and
+  // keeps claiming it if the refetch fails).
+  const finishedAt = useRef(0);
   const finishSession = () => {
     api.finish(attemptId).catch(() => {});
+    finishedAt.current = Date.now();
     // An assigned test just became "done" — refresh the dashboard feed.
     if (req?.assignmentId) invalidate("assignments");
     invalidate("attempts");
@@ -446,7 +464,10 @@ export function Solve() {
 
   if (loading) return <Loading label="Готовим задания…" />;
   if (err) return <Empty title={err.title} hint={err.hint} art={err.art} action={<Button onClick={() => go("dashboard")}>На главную</Button>} />;
-  if (finished) return <Results tasks={tasks} done={done} forecast={forecast.data} forecastBefore={forecastBefore.current} onExit={() => go("dashboard")} />;
+  if (finished) {
+    const fresh = forecast.dataUpdatedAt > finishedAt.current ? forecast.data : undefined;
+    return <Results tasks={tasks} done={done} forecast={fresh} forecastBefore={forecastBefore.current} onExit={() => go("dashboard")} />;
+  }
 
   const task = tasks[idx];
   const submit = async () => {
@@ -627,8 +648,11 @@ export function History() {
     const date = dateISO.slice(0, 10);
     try { const items = await api.day(sid, date); setDay({ date, items }); } catch { setDay({ date, items: [] }); }
   };
+  const subjects = useSubjects();
   const solveAssigned = (a: AssignmentCard) => {
-    requestSolve({ subject, testId: a.test_id, assignmentId: a.id, title: testTitle(a.title) });
+    // Same as the dashboard: the solve request carries the TEST's subject.
+    const code = subjects.data?.find((s) => s.id === a.subject_id)?.code ?? subject;
+    requestSolve({ subject: code, testId: a.test_id, assignmentId: a.id, title: testTitle(a.title) });
     go("solve");
   };
 

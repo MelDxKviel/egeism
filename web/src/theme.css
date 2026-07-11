@@ -472,3 +472,4 @@ input:focus, textarea:focus, select:focus {
   .auth-screen {
     position: fixed; inset: 0; height: 100dvh; overflow: auto;
   }
+}

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { HeatCell } from "./api";
-import { dayKey, todayTotal, streakCelebration, streakColor, streakAtRisk, dailyGoal } from "./engage";
+import { dayKey, todayTotal, streakCelebration, streakColor, streakAtRisk, effectiveStreak, dailyGoal } from "./engage";
 
 // A fixed "now" keeps the tests deterministic; helpers below build heatmap
 // cells relative to it, using the same UTC day keys engage.ts reads.
@@ -73,6 +73,30 @@ describe("streakAtRisk", () => {
   it("is 0 when yesterday was empty too (already lost)", () => {
     expect(streakAtRisk([cell(2, 4)], TODAY)).toBe(0);
     expect(streakAtRisk([], TODAY)).toBe(0);
+  });
+});
+
+describe("effectiveStreak", () => {
+  it("counts the run through today when today is active", () => {
+    expect(effectiveStreak([cell(2, 1), cell(1, 2), cell(0, 3)], TODAY)).toBe(3);
+  });
+  it("keeps yesterday's run alive while today is still empty", () => {
+    expect(effectiveStreak([cell(3, 2), cell(2, 1), cell(1, 4)], TODAY)).toBe(3);
+  });
+  it("is 0 only when the streak is genuinely broken (yesterday empty too)", () => {
+    expect(effectiveStreak([cell(2, 4)], TODAY)).toBe(0);
+    expect(effectiveStreak([], TODAY)).toBe(0);
+  });
+  it("a morning visit must not re-arm celebrated milestones", () => {
+    // 8-day run ending yesterday, seen=7 (the 7-day веха already celebrated).
+    // Before today's first solve the effective streak is still 8, so `seen`
+    // stays put and the 7-day веха can NOT re-fire after today's solve.
+    const cells = Array.from({ length: 8 }, (_, i) => cell(i + 1, 3));
+    const alive = effectiveStreak(cells, TODAY);
+    expect(alive).toBe(8);
+    expect(streakCelebration(alive, 7)).toEqual({ milestone: null, seen: 7 });
+    // ...and after the first solve of the day (streak now 9): still silent.
+    expect(streakCelebration(9, 7)).toEqual({ milestone: null, seen: 7 });
   });
 });
 

@@ -56,6 +56,24 @@ export function streakAtRisk(cells: HeatCell[], today = new Date()): number {
   return run;
 }
 
+// effectiveStreak — the streak that is still ALIVE: the run through today, or,
+// while today is empty, the run through yesterday (it isn't lost until the day
+// ends). This is what milestone celebrations must compare against — feeding
+// them computeStreak's strict "0 until today's first solve" would read every
+// morning as a broken streak, reset the celebrated-at mark and re-fire the
+// same milestone after the first solve of EVERY day.
+export function effectiveStreak(cells: HeatCell[], today = new Date()): number {
+  const byDay = totalsByDay(cells);
+  const d = new Date(today);
+  if ((byDay.get(dayKey(d)) ?? 0) === 0) d.setDate(d.getDate() - 1);
+  let run = 0;
+  while ((byDay.get(dayKey(d)) ?? 0) > 0) {
+    run++;
+    d.setDate(d.getDate() - 1);
+  }
+  return run;
+}
+
 // dailyGoal — «реши N сегодня». Adapts to the student's recent pace: the mean
 // of ACTIVE days over the last two weeks (today excluded — it's in progress),
 // clamped to a sane 5..20; a fresh account starts at 10.
