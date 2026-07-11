@@ -1,12 +1,42 @@
 import { ReactNode, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { HeatCell, WeakSpot, MasteryPoint } from "./api";
 import { accColor, heatColor, Card, Label, Button } from "./ui";
+import { prefersReducedMotion } from "./confetti";
 
-// ScoreGauge — the hero forecast number with a semicircle arc.
+// useCountUp animates a number toward `target` (rAF, easeOutCubic): mounting
+// counts up from 0, a later target change glides from the current value.
+// Reduced-motion lands on the target immediately.
+function useCountUp(target: number, ms = 600): number {
+  const [v, setV] = useState(() => (prefersReducedMotion() ? target : 0));
+  const cur = useRef(v);
+  useEffect(() => {
+    if (prefersReducedMotion()) { cur.current = target; setV(target); return; }
+    const from = cur.current;
+    if (from === target) return;
+    let raf = 0;
+    const t0 = performance.now();
+    const step = (t: number) => {
+      const k = Math.min(1, (t - t0) / ms);
+      const eased = 1 - Math.pow(1 - k, 3);
+      const val = from + (target - from) * eased;
+      cur.current = val;
+      setV(val);
+      if (k < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [target, ms]);
+  return v;
+}
+
+// ScoreGauge — the hero forecast number with a semicircle arc. The number
+// counts up and the arc sweeps along with it (§3.5 of the design brief).
 export function ScoreGauge({ score, max = 100 }: { score: number; max?: number }) {
+  const disp = useCountUp(score);
   const r = 78, cx = 96, cy = 96;
-  const frac = Math.max(0, Math.min(1, score / max));
+  const frac = Math.max(0, Math.min(1, disp / max));
   const a0 = Math.PI, a1 = Math.PI * (1 - frac);
   const p = (a: number) => [cx + r * Math.cos(a), cy - r * Math.sin(a)];
   const [sx, sy] = p(a0), [ex, ey] = p(a1);
@@ -17,14 +47,49 @@ export function ScoreGauge({ score, max = 100 }: { score: number; max?: number }
       <svg width={192} height={116} viewBox="0 0 192 116">
         <path d={`M ${sx} ${sy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`} fill="none" stroke="color-mix(in srgb, var(--text) 8%, transparent)" strokeWidth={12} strokeLinecap="round" />
         {frac > 0 && (
-          <path d={`M ${sx} ${sy} A ${r} ${r} 0 0 1 ${ex} ${ey}`} fill="none" stroke={accColor((score / max) * 100)} strokeWidth={12} strokeLinecap="round" />
+          <path d={`M ${sx} ${sy} A ${r} ${r} 0 0 1 ${ex} ${ey}`} fill="none" stroke={accColor((disp / max) * 100)} strokeWidth={12} strokeLinecap="round" />
         )}
       </svg>
       {/* The number sits ON the arc's baseline (cy=96), well clear of the apex
           (y=18): digits end at y≈92, «из N» tucks under the baseline. A top-
           anchored block used to shove the digits into the arc. */}
-      <div className="mono" style={{ position: "absolute", left: 0, right: 0, bottom: 24, textAlign: "center", fontSize: 42, fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1 }}>{score}</div>
+      <div className="mono" style={{ position: "absolute", left: 0, right: 0, bottom: 24, textAlign: "center", fontSize: 42, fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1 }}>{Math.round(disp)}</div>
       <div className="mono" style={{ position: "absolute", left: 0, right: 0, bottom: 6, textAlign: "center", fontSize: 12, color: "var(--text-3)" }}>из {max}</div>
+    </div>
+  );
+}
+
+// Ring — a closing progress ring (the daily-goal circle). Mounts empty and
+// lets the CSS transition (.ring-anim, killed under reduced-motion) sweep the
+// arc to its value, so progress visibly "closes" on every visit. Children
+// render centered inside the ring.
+export function Ring({ value, max, size = 104, stroke = 11, color = "var(--accent)", children }: {
+  value: number; max: number; size?: number; stroke?: number; color?: string; children?: ReactNode;
+}) {
+  const frac = max > 0 ? Math.max(0, Math.min(1, value / max)) : 0;
+  const r = (size - stroke) / 2;
+  const C = 2 * Math.PI * r;
+  const [drawn, setDrawn] = useState(0);
+  useEffect(() => {
+    // Double rAF: the first paint must land with the old offset, or the
+    // transition has nothing to animate from.
+    let id2 = 0;
+    const id = requestAnimationFrame(() => { id2 = requestAnimationFrame(() => setDrawn(frac)); });
+    return () => { cancelAnimationFrame(id); cancelAnimationFrame(id2); };
+  }, [frac]);
+  return (
+    <div style={{ position: "relative", width: size, height: size, flex: "none" }}>
+      {/* rotate(-90°): progress starts at 12 o'clock and closes clockwise. */}
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ transform: "rotate(-90deg)" }}>
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="color-mix(in srgb, var(--text) 8%, transparent)" strokeWidth={stroke} />
+        {frac > 0 && (
+          <circle className="ring-anim" cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color}
+            strokeWidth={stroke} strokeLinecap="round" strokeDasharray={C} strokeDashoffset={C * (1 - drawn)} />
+        )}
+      </svg>
+      <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+        {children}
+      </div>
     </div>
   );
 }
@@ -49,6 +114,8 @@ export function Sparkline({ data, w = 84, h = 26, color }: { data: number[]; w?:
 export function Heatmap({ cells, onDay, big }: { cells: HeatCell[]; onDay?: (c: HeatCell) => void; big?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
+  // Hovered cell → the custom portaled tooltip (replaces the native title=).
+  const [tip, setTip] = useState<{ x: number; y: number; c: HeatCell } | null>(null);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -86,14 +153,42 @@ export function Heatmap({ cells, onDay, big }: { cells: HeatCell[]; onDay?: (c: 
               <div key={wi} style={{ display: "flex", flexDirection: "column", gap, flex: "none" }}>
                 {wk.map((c, di) => (
                   <div key={di} className={onDay ? "hm-cell hm-tap" : "hm-cell"}
-                    title={`${c.day.slice(0, 10)} · ${c.total} задач${c.total ? ` · ${c.correct} верно` : ""}`}
-                    onClick={() => onDay?.(c)}
+                    onMouseEnter={(e) => {
+                      const r = e.currentTarget.getBoundingClientRect();
+                      setTip({ x: r.left + r.width / 2, y: r.top, c });
+                    }}
+                    onMouseLeave={() => setTip(null)}
+                    onClick={() => { setTip(null); onDay?.(c); }}
                     style={{ width: cell, height: cell, borderRadius: cell >= 13 ? 4 : 3, background: heatColor(c.total), cursor: onDay ? "pointer" : "default" }} />
                 ))}
               </div>
             ))}
           </div>
         )}
+      {/* The tooltip portals into the .app scope (NOT bare <body>) so the theme
+          tokens resolve — same trap the Modal comment in ui.tsx describes. It
+          sits UNDER the modal z-index (50), so an open dialog covers it. */}
+      {tip && createPortal(
+        <div className="mono" style={{
+          position: "fixed", left: tip.x, top: tip.y - 9, transform: "translate(-50%, -100%)",
+          zIndex: 45, pointerEvents: "none", whiteSpace: "nowrap",
+          background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10,
+          boxShadow: "var(--shadow-2)", padding: "7px 11px", fontSize: 12, color: "var(--text-2)",
+        }}>
+          <b style={{ color: "var(--text)", fontWeight: 600 }}>
+            {/* Format from the UTC day KEY, not the timestamp — new Date(iso)
+                in a western timezone would render the previous day. */}
+            {(() => {
+              const [y, m, d] = tip.c.day.slice(0, 10).split("-").map(Number);
+              return new Date(y, m - 1, d).toLocaleDateString("ru", { day: "numeric", month: "long" });
+            })()}
+          </b>
+          {tip.c.total > 0
+            ? <> · {tip.c.total} решено · <span style={{ color: "var(--ok)" }}>{tip.c.correct} верно</span></>
+            : " · нет решений"}
+        </div>,
+        document.querySelector(".app") ?? document.body,
+      )}
     </div>
   );
 }

@@ -123,10 +123,16 @@ input, select, textarea { font-family: inherit; }
 /* The glow rides in a currentColor drop-shadow, so the flame burns in whatever
    token color it inherits (the accent pill) and needs no extra element. */
 .flame-live { animation: flamelive 1.7s ease-in-out infinite; transform-origin: 50% 85%; filter: drop-shadow(0 0 3px currentColor); }
+/* A streak in danger: yesterday burned, today is still empty — the flame dims
+   to a fading ember (a slow smoulder, no glow) begging to be saved. */
+@keyframes emberdim { 0%, 100% { opacity: .55; } 50% { opacity: .36; } }
+.flame-ember { opacity: .55; animation: emberdim 2.4s ease-in-out infinite; }
+/* Daily-goal ring: the arc sweeps toward the target instead of snapping. */
+.ring-anim { transition: stroke-dashoffset .8s var(--ease); }
 
 @media (prefers-reduced-motion: reduce) {
-  .fade, .pop, .popdown, .skel, .celebrate, .checkpop, .flame-live, .tab-ic { animation: none !important; }
-  .btn, .icon-btn, .card-tap, .navbtn, .row, .seg > button, .hm-tap,
+  .fade, .pop, .popdown, .skel, .celebrate, .checkpop, .flame-live, .flame-ember, .tab-ic { animation: none !important; }
+  .btn, .icon-btn, .card-tap, .navbtn, .row, .seg > button, .hm-tap, .ring-anim,
   .seg-knob, .tabbar-lens, .tabbar > button, .drop-btn, .drop-btn .chev, .drop-item { transition: none !important; }
 }
 
