@@ -42,7 +42,7 @@ export function Login() {
   const swap = (m: "login" | "forgot") => { setMode(m); setErr(undefined); };
 
   return (
-    <div className="app" data-theme={theme} style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+    <div className="app auth-screen" data-theme={theme}>
       <form onSubmit={mode === "login" ? submit : submitForgot} className="pop" style={{
         width: "100%", maxWidth: 400, background: "var(--surface)", border: "1px solid var(--border)",
         borderRadius: 24, boxShadow: "var(--shadow-lg)",

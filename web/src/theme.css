@@ -417,6 +417,15 @@ input:focus, textarea:focus, select:focus {
 .stmt-table th { background: color-mix(in srgb, var(--text) 7%, transparent); color: var(--text-2); font-weight: 600; }
 .stmt-table td { color: var(--text); }
 
+/* Auth screens (login / reset): center the card in the viewport. dvh tracks the
+   mobile browser's dynamic toolbar so the card sits truly centered instead of
+   being pushed below the fold by the taller-than-visible 100vh box. */
+.auth-screen {
+  min-height: 100vh; min-height: 100dvh;
+  display: flex; align-items: center; justify-content: center;
+  padding: 16px;
+}
+
 /* ---------- Mobile (<900px = ui.tsx's useIsMobile breakpoint) ---------- */
 /* The ONE place phone spacing is tuned: the shell content/header, every Card,
    the Modal and the error boundary all read these tokens, so screens sit near
@@ -449,4 +458,11 @@ input:focus, textarea:focus, select:focus {
     background: color-mix(in srgb, var(--text) 7%, var(--surface));
     box-shadow: inset -1px 0 var(--border-2);
   }
-}
+  /* Login on a phone: pin the auth screen to the visible viewport so the whole
+     page can't scroll — the card stays centered instead of drifting below the
+     fold and forcing a downward drag. overflow: auto is the safety valve for
+     the rare case the card outgrows the viewport (small screen + open
+     keyboard), where the card itself — not the page — scrolls. */
+  .auth-screen {
+    position: fixed; inset: 0; height: 100dvh; overflow: auto;
+  }
