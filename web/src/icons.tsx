@@ -13,7 +13,8 @@ export type IconName =
   | "close" | "arrowRight" | "arrowLeft" | "chevronDown" | "trash" | "pencil"  // affordances
   | "bell"   // notifications
   | "download"  // PDF export
-  | "eye" | "eyeOff" | "key";  // password visibility + reset
+  | "eye" | "eyeOff" | "key"  // password visibility + reset
+  | "sprout" | "telescope" | "medal";  // empty-state illustrations
 
 const PATHS: Record<IconName, ReactNode> = {
   dashboard: (
@@ -169,6 +170,31 @@ const PATHS: Record<IconName, ReactNode> = {
       <path d="m10.8 13.2 9.7-9.7" />
       <path d="m15.5 8.5 3 3" />
       <path d="m19 5 2 2" />
+    </>
+  ),
+  // Empty-state art (first visit / nothing here yet / all done). Same line-art
+  // manner as the rest of the set, just drawn to sit larger inside Empty.
+  sprout: (
+    <>
+      <path d="M12 21.5v-8.5" />
+      <path d="M12 13C12 9.4 9.2 6.5 5 6.5c0 4 2.9 6.5 7 6.5z" />
+      <path d="M12 10.8c0-3 2.4-5.3 6.5-5.3 0 3.4-2.6 5.3-6.5 5.3z" />
+      <path d="M5.5 21.5h13" />
+    </>
+  ),
+  telescope: (
+    <>
+      <path d="M4 11.7 17.4 4.3a1 1 0 0 1 1.4.4l1.5 2.9a1 1 0 0 1-.4 1.4L6.5 16.4a1 1 0 0 1-1.4-.4l-1.5-2.9a1 1 0 0 1 .4-1.4z" />
+      <path d="M17.4 4.3 16.6 2.8" />
+      <path d="m11.2 15.6-3.2 5.9" />
+      <path d="m13.6 14.3 3.1 7.2" />
+    </>
+  ),
+  medal: (
+    <>
+      <circle cx="12" cy="15" r="5.5" />
+      <path d="M9.1 10.3 5.5 3.5h4L12 8.3l2.5-4.8h4l-3.6 6.8" />
+      <path d="m9.9 15.2 1.5 1.5 2.7-2.9" />
     </>
   ),
 };

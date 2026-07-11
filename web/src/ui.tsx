@@ -2,7 +2,7 @@ import { CSSProperties, ReactNode, useEffect, useLayoutEffect, useRef, useState 
 import { createPortal } from "react-dom";
 import { AttemptReviewItem, Media, mediaUrl, SubjectCode } from "./api";
 import { useApp } from "./state";
-import { Icon } from "./icons";
+import { Icon, IconName } from "./icons";
 
 // useIsMobile — the ONE phone/desktop breakpoint (shared by the Shell's tab
 // bar and the SubjectPicker's dropdown mode). Lives here, not in shell.tsx,
@@ -305,8 +305,16 @@ export function ErrorBox({ error, onRetry }: { error: unknown; onRetry?: () => v
     {onRetry && <div style={{ marginTop: 12 }}><Button variant="ghost" onClick={onRetry}>Повторить</Button></div>}
   </Card>;
 }
-export function Empty({ title, hint, action }: { title: string; hint?: string; action?: ReactNode }) {
+// Empty — the shared empty state. `art` adds a contextual line-art illustration
+// (sprout = start here, telescope = nothing to show yet, medal = all done) so a
+// bare screen reads as intentional instead of unfinished.
+export function Empty({ title, hint, action, art }: { title: string; hint?: string; action?: ReactNode; art?: IconName }) {
   return <Card style={{ textAlign: "center", padding: "clamp(20px, 5vw, 34px)" }}>
+    {art && (
+      <div style={{ display: "flex", justifyContent: "center", color: "var(--text-3)", marginBottom: 12 }}>
+        <Icon name={art} size={46} strokeWidth={1.5} />
+      </div>
+    )}
     <div style={{ fontWeight: 700, fontSize: 16 }}>{title}</div>
     {hint && <div style={{ color: "var(--text-2)", marginTop: 6, fontSize: 14 }}>{hint}</div>}
     {action && <div style={{ marginTop: 16 }}>{action}</div>}

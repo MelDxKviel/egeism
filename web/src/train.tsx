@@ -104,7 +104,7 @@ export function TrainingHub() {
         <span style={{ color: "var(--text-3)", fontSize: 12 }}>реши задание верно дважды — номер зачтётся</span>
       }>
         <Async q={overview}>{(o) => o.numbers.length === 0
-          ? <Empty title="Банк пока пуст" hint="Попроси учителя подтянуть задания — карта номеров появится здесь." />
+          ? <Empty art="telescope" title="Банк пока пуст" hint="Попроси учителя подтянуть задания — карта номеров появится здесь." />
           : (
             <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fill, minmax(min(150px, 100%), 1fr))" }}>
               {o.numbers.map((n) => {

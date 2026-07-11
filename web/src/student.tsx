@@ -1,14 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  api, SubjectCode, TaskView, DayAnswer, AssignmentCard, AttemptReviewItem, useForecast, useHeatmap, useWeakSpots,
-  useMastery, useMasterySeries, useAssignments, useAttempts, useInvalidate, usePracticeOverview,
+  api, SubjectCode, TaskView, DayAnswer, AssignmentCard, AttemptReviewItem, Forecast, useForecast, useHeatmap,
+  useWeakSpots, useMastery, useMasterySeries, useAssignments, useAttempts, useInvalidate, usePracticeOverview,
+  useSubjects,
 } from "./api";
 import { useApp } from "./state";
 import { Card, Label, Pill, Button, Async, Empty, Loading, Modal, accColor, SUBJECT_TITLES, SubjectSwitch, testTitle, MediaBlock, StatementView, AttemptReviewGrid, useIsMobile } from "./ui";
-import { ScoreGauge, Heatmap, computeStreak, WeakSpotsList, Section, MasteryChart, Sparkline } from "./charts";
+import { ScoreGauge, Ring, Heatmap, computeStreak, WeakSpotsList, Section, MasteryChart, Sparkline } from "./charts";
 import { AnswerInput } from "./answer";
-import { Icon } from "./icons";
+import { Icon, IconName } from "./icons";
 import { deadlineInfo } from "./deadline";
+import { confettiBurst } from "./confetti";
+import { dayKey, todayTotal, dailyGoal, streakAtRisk, effectiveStreak, streakCelebration, streakColor } from "./engage";
+import { pluralRu } from "./plural";
 
 // Russian plural for «день» (1 день · 2 дня · 5 дней).
 function pluralDays(n: number): string {
@@ -19,11 +23,23 @@ function pluralDays(n: number): string {
 }
 
 // A flame glyph + streak label, sized for use inside a <Pill>. The flame comes
-// alive (a gentle flicker + glow) once the streak is non-zero, so an active
-// streak reads as "burning" while a broken one (0 days) sits cold.
-export function StreakBadge({ days }: { days: number }) {
+// alive (a gentle flicker + glow) once the streak is non-zero, and climbs the
+// milestone ramp (--warn → --accent → --hm4 at 3/7/14, blazing harder at 30+)
+// so a long streak visibly burns hotter. `ember` is the at-risk state: today
+// is still empty, yesterday's run of `days` is about to be lost.
+export function StreakBadge({ days, ember }: { days: number; ember?: boolean }) {
+  if (ember) {
+    return <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+      <Icon name="flame" size={13} className="flame-ember" /> серия {days} — под угрозой
+    </span>;
+  }
+  const color = streakColor(days);
   return <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-    <Icon name="flame" size={13} className={days > 0 ? "flame-live" : undefined} /> {days} {pluralDays(days)} подряд
+    <span style={{ display: "inline-flex", ...(color ? { color } : {}) }}>
+      <Icon name="flame" size={13} className={days > 0 ? "flame-live" : undefined}
+        style={days >= 30 ? { filter: "drop-shadow(0 0 6px currentColor)" } : undefined} />
+    </span>
+    {days} {pluralDays(days)} подряд
   </span>;
 }
 
@@ -123,7 +139,7 @@ function AssignedTestsList({ cards, onSolve, onReview }: {
 
 // ---------- Dashboard ----------
 export function Dashboard() {
-  const { subject, go, user } = useApp();
+  const { subject, go, user, showToast } = useApp();
   const sid = user?.id ?? "";
   const forecast = useForecast(sid, subject);
   const heat = useHeatmap(sid);
@@ -132,12 +148,47 @@ export function Dashboard() {
   const overview = usePracticeOverview(sid, subject);
   const { open: openReview, modal: reviewModal } = useAttemptReview();
 
+  // One-time celebrations, guarded by per-user localStorage marks so a reload
+  // or refocus never re-fires them: a crossed streak milestone (3/7/14/30) and
+  // the closed daily goal. Fires on the dashboard — where the student lands
+  // right after a session.
+  const heatData = heat.data;
+  useEffect(() => {
+    if (!heatData || !sid) return;
+    const goal = dailyGoal(heatData);
+    const goalKey = `egeism.goalDone.${sid}`;
+    const today = dayKey(new Date());
+    if (todayTotal(heatData) >= goal && localStorage.getItem(goalKey) !== today) {
+      localStorage.setItem(goalKey, today);
+      confettiBurst({ count: 70 });
+      showToast("Цель на день выполнена!");
+    }
+    const seenKey = `egeism.streakSeen.${sid}`;
+    const seen = Number(localStorage.getItem(seenKey) || 0);
+    // effectiveStreak, NOT computeStreak: before today's first solve the
+    // latter is 0, which would read as "streak broke", reset `seen` and
+    // re-celebrate the same веха after every day's first solve.
+    const { milestone, seen: next } = streakCelebration(effectiveStreak(heatData), seen);
+    if (next !== seen) localStorage.setItem(seenKey, String(next));
+    if (milestone) {
+      confettiBurst({ count: 90 });
+      // The rarer toast wins if both fire at once (the burst still stacks).
+      showToast(`${milestone} ${pluralDays(milestone)} подряд — так держать!`);
+    }
+  }, [heatData, sid, showToast]);
+
+  const subjects = useSubjects();
+
   const startPractice = () => { requestSolve({ subject }); go("solve"); };
   const startMistakes = () => { requestSolve({ subject, mode: "mistakes", title: "Работа над ошибками" }); go("solve"); };
   const startRecommended = () => { requestSolve({ subject, mode: "recommended", title: "Умная тренировка" }); go("solve"); };
   const drill = (n: number) => { requestSolve({ subject, number: n, title: `Тренировка №${n}` }); go("solve"); };
   const solveAssigned = (a: AssignmentCard) => {
-    requestSolve({ subject, testId: a.test_id, assignmentId: a.id, title: testTitle(a.title) });
+    // The assignment list is NOT subject-filtered, so resolve the TEST's
+    // subject for the solve request — Solve's forecast delta must measure the
+    // subject actually solved, not whatever tab the dashboard is on.
+    const code = subjects.data?.find((s) => s.id === a.subject_id)?.code ?? subject;
+    requestSolve({ subject: code, testId: a.test_id, assignmentId: a.id, title: testTitle(a.title) });
     go("solve");
   };
 
@@ -164,14 +215,51 @@ export function Dashboard() {
         <Card>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
             <Label>Активность</Label>
-            {/* An alive streak = success → green ok-tone; a cold one stays neutral. */}
+            {/* An alive streak = success → green ok-tone; a run about to break
+                shows as the warn-tinted ember; a cold one stays neutral. */}
             <Async q={heat}>{(h) => {
               const days = computeStreak(h);
+              const risk = days === 0 ? streakAtRisk(h) : 0;
+              if (risk > 0) return <Pill tone="warn"><StreakBadge days={risk} ember /></Pill>;
               return <Pill tone={days > 0 ? "ok" : "neutral"}><StreakBadge days={days} /></Pill>;
             }}</Async>
           </div>
-          <Async q={heat}>{(h) => <Heatmap cells={h} onDay={() => go("history")} />}</Async>
-          <div style={{ color: "var(--text-3)", fontSize: 12, marginTop: 10 }}>Клетки — активность по дням. Открой историю для разбора.</div>
+          <Async q={heat}>{(h) => <>
+            <Heatmap cells={h} onDay={() => go("history")} />
+            {computeStreak(h) === 0 && streakAtRisk(h) > 0
+              ? <div style={{ color: "var(--warn)", fontSize: 12, marginTop: 10 }}>Серия догорает — спаси её: реши одну задачу сегодня.</div>
+              : <div style={{ color: "var(--text-3)", fontSize: 12, marginTop: 10 }}>Клетки — активность по дням. Открой историю для разбора.</div>}
+          </>}</Async>
+        </Card>
+
+        <Card>
+          <Label>Цель на день</Label>
+          <Async q={heat}>{(h) => {
+            const goal = dailyGoal(h);
+            const done = todayTotal(h);
+            const met = done >= goal;
+            return (
+              <div style={{ display: "flex", alignItems: "center", gap: 18, marginTop: 14 }}>
+                <Ring value={done} max={goal} color={met ? "var(--ok)" : "var(--accent)"}>
+                  <div className="mono" style={{ fontSize: 24, fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1 }}>
+                    {done}<span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-3)" }}>/{goal}</span>
+                  </div>
+                </Ring>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10, minWidth: 0 }}>
+                  {/* The goal is the day's PACE target; the streak counts any
+                      activity (see the ember hint) — don't conflate the two. */}
+                  <div style={{ color: "var(--text-2)", fontSize: 13, lineHeight: 1.45 }}>
+                    {met
+                      ? <>Цель на сегодня закрыта. Отличный темп!</>
+                      : <>Реши ещё {goal - done} {pluralRu(goal - done, ["задачу", "задачи", "задач"])} — и цель дня закрыта.</>}
+                  </div>
+                  {met
+                    ? <div><Pill tone="ok">выполнено ✓</Pill></div>
+                    : <Button variant="soft" style={{ alignSelf: "flex-start", padding: "6px 14px", fontSize: 13 }} onClick={startPractice}>Решать</Button>}
+                </div>
+              </div>
+            );
+          }}</Async>
         </Card>
 
         <Card>
@@ -198,7 +286,7 @@ export function Dashboard() {
 
         <Section title="Назначено тебе" right={<Button variant="ghost" style={{ padding: "6px 12px", fontSize: 13 }} onClick={() => go("history")}>Вся история</Button>}>
           <Async q={assignments}>{(list) => list.length === 0
-            ? <Empty title="Пока ничего не назначено" hint="Учитель запланирует тест — он появится здесь." action={<Button onClick={startPractice}>Решать самому</Button>} />
+            ? <Empty art="telescope" title="Пока ничего не назначено" hint="Учитель запланирует тест — он появится здесь." action={<Button onClick={startPractice}>Решать самому</Button>} />
             : <AssignedTestsList cards={list} onSolve={solveAssigned} onReview={openReview} />}</Async>
         </Section>
       </div>
@@ -231,7 +319,7 @@ export function SubjectScreen() {
       <SubjectSwitch />
 
       <Async q={mastery}>{(rows) => rows.length === 0
-        ? <Empty title="Нет данных по номерам" hint="Начни решать — здесь появится прогресс по каждому заданию." action={<Button onClick={() => { requestSolve({ subject }); go("solve"); }}>Решать</Button>} />
+        ? <Empty art="sprout" title="Нет данных по номерам" hint="Начни решать — здесь появится прогресс по каждому заданию." action={<Button onClick={() => { requestSolve({ subject }); go("solve"); }}>Решать</Button>} />
         : (
           <div style={{ ...grid12, gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))" }}>
             {rows.map((r) => {
@@ -281,11 +369,17 @@ function SessionTimer({ since }: { since: number }) {
   </span>;
 }
 
+// A dead-end before the session could start. Not always a failure: the
+// mistake queue may be empty (medal) or the bank may have nothing new
+// (telescope) — pick the art and title to match.
+interface SolveStop { title: string; hint: string; art?: IconName; }
+
 export function Solve() {
-  const { go, showToast } = useApp();
+  const { go, showToast, user } = useApp();
   const isMobile = useIsMobile();
   const invalidate = useInvalidate();
   const req = useRef(solveRequest).current;
+  const sid = user?.id ?? "";
   const [attemptId, setAttemptId] = useState("");
   const [tasks, setTasks] = useState<TaskView[]>([]);
   const [idx, setIdx] = useState(0);
@@ -296,20 +390,28 @@ export function Solve() {
   // wrong answer; drives the in-session momentum without any server state.
   const [combo, setCombo] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState<string>();
+  const [err, setErr] = useState<SolveStop>();
   const taskStart = useRef(Date.now());
   const sessionStart = useRef(Date.now());
   const [finished, setFinished] = useState(false);
 
+  // Snapshot the forecast as it was BEFORE this session, so the Results screen
+  // can show the honest «Прогноз 58 → 60» delta after the refetch.
+  const forecast = useForecast(req ? sid : "", req?.subject ?? "math");
+  const forecastBefore = useRef<Forecast | null>(null);
   useEffect(() => {
-    if (!req) { setErr("Не задан предмет"); setLoading(false); return; }
+    if (forecast.data && !forecastBefore.current) forecastBefore.current = forecast.data;
+  }, [forecast.data]);
+
+  useEffect(() => {
+    if (!req) { setErr({ title: "Не получилось", hint: "Не задан предмет" }); setLoading(false); return; }
     (async () => {
       try {
         if (req.testId) {
           // Assigned/composed variant: solve exactly the test's tasks; the
           // attempt carries assignment_id so finishing marks it done.
           const list = await api.testTasks(req.testId);
-          if (list.length === 0) { setErr("В этом тесте нет заданий."); setLoading(false); return; }
+          if (list.length === 0) { setErr({ title: "Пока пусто", hint: "В этом тесте нет заданий.", art: "telescope" }); setLoading(false); return; }
           const att = await api.startAttempt(req.testId, req.assignmentId);
           setAttemptId(att.id); setTasks(list);
         } else {
@@ -323,10 +425,10 @@ export function Solve() {
           else list = await api.practiceTasks(req.subject, req.number ? 15 : 20, req.number);
           if (list.length === 0) {
             setErr(req.mode === "mistakes"
-              ? "Ошибок на разбор нет — так держать!"
+              ? { title: "Так держать!", hint: "Ошибок на разбор нет — очередь пуста.", art: "medal" }
               : req.number
-                ? "Ты уже освоил все задания этого номера — молодец!"
-                : "Пока нет новых заданий: либо всё освоено, либо банк пуст. Учитель может собрать вариант — он подтянет задания.");
+                ? { title: "Номер освоен", hint: "Ты уже решил все задания этого номера — молодец!", art: "medal" }
+                : { title: "Пока нет новых заданий", hint: "Либо всё освоено, либо банк пуст. Учитель может собрать вариант — он подтянет задания.", art: "telescope" });
             setLoading(false); return;
           }
           setAttemptId(attempt_id); setTasks(list.slice(0, 15));
@@ -334,12 +436,18 @@ export function Solve() {
         setLoading(false);
         taskStart.current = Date.now();
         sessionStart.current = Date.now();
-      } catch (e) { setErr(String((e as Error).message)); setLoading(false); }
+      } catch (e) { setErr({ title: "Не получилось", hint: String((e as Error).message) }); setLoading(false); }
     })();
   }, [req]);
 
+  // Set at finish; the delta pill renders only from a forecast fetched AFTER
+  // this moment. Without the gate, Results' first paint compares the cached
+  // pre-session forecast with itself and falsely claims «без изменений» (and
+  // keeps claiming it if the refetch fails).
+  const finishedAt = useRef(0);
   const finishSession = () => {
     api.finish(attemptId).catch(() => {});
+    finishedAt.current = Date.now();
     // An assigned test just became "done" — refresh the dashboard feed.
     if (req?.assignmentId) invalidate("assignments");
     invalidate("attempts");
@@ -347,12 +455,19 @@ export function Solve() {
     // the queue, drilled tasks may be mastered now, a пробник got its score.
     invalidate("practice-overview");
     invalidate("self-variants");
+    // The answers also moved the score forecast (Results shows the delta), the
+    // heatmap and with it the streak and the daily-goal ring.
+    invalidate("forecast");
+    invalidate("heatmap");
     setFinished(true);
   };
 
   if (loading) return <Loading label="Готовим задания…" />;
-  if (err) return <Empty title="Не получилось" hint={err} action={<Button onClick={() => go("dashboard")}>На главную</Button>} />;
-  if (finished) return <Results tasks={tasks} done={done} onExit={() => go("dashboard")} />;
+  if (err) return <Empty title={err.title} hint={err.hint} art={err.art} action={<Button onClick={() => go("dashboard")}>На главную</Button>} />;
+  if (finished) {
+    const fresh = forecast.dataUpdatedAt > finishedAt.current ? forecast.data : undefined;
+    return <Results tasks={tasks} done={done} forecast={fresh} forecastBefore={forecastBefore.current} onExit={() => go("dashboard")} />;
+  }
 
   const task = tasks[idx];
   const submit = async () => {
@@ -363,6 +478,11 @@ export function Solve() {
       setSubmitted({ ok: r.is_correct, solution: r.solution });
       setCombo((c) => (r.is_correct ? c + 1 : 0));
       setDone((d) => [...d.filter((x) => x.taskId !== task.id), { taskId: task.id, number: task.number, correct: r.is_correct }]);
+      if (r.is_correct) {
+        // The salute scales with the run (3/5/10) — a combo earns a bigger sky.
+        const run = combo + 1;
+        confettiBurst({ count: run >= 10 ? 110 : run >= 5 ? 70 : run >= 3 ? 46 : 26 });
+      }
     } catch (e) { showToast(String((e as Error).message)); }
   };
   const next = () => {
@@ -445,15 +565,53 @@ export function Solve() {
 }
 
 // ---------- Results ----------
-function Results({ tasks, done, onExit }: { tasks: TaskView[]; done: Answered[]; onExit: () => void }) {
+// ForecastDelta — the «Прогноз 58 → 60 · +2 первичных» pill: the session's
+// visible effect on the score. Growth celebrates in accent, a dip warns
+// softly, no movement stays neutral; the forecast is honestly labelled an
+// ориентир (scoring.Predict is a placeholder table).
+function ForecastDelta({ before, after }: { before: Forecast; after: Forecast }) {
+  const dTest = after.test_score - before.test_score;
+  const dPrim = after.primary_estimate - before.primary_estimate;
+  const moved = dTest !== 0 || dPrim !== 0;
+  const up = dTest > 0 || (dTest === 0 && dPrim > 0);
+  const [bg, color] = !moved
+    ? ["color-mix(in srgb, var(--text) 8%, transparent)", "var(--text-3)"]
+    : up ? ["var(--accent-soft)", "var(--accent-2)"] : ["var(--warn-soft)", "var(--warn)"];
+  return (
+    <div style={{ marginTop: 14, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+      <span className="mono" style={{ background: bg, color, borderRadius: 999, padding: "6px 14px", fontSize: 13, fontWeight: 700 }}>
+        {dTest !== 0
+          ? <>Прогноз {before.test_score} → {after.test_score}{dPrim !== 0 && <> · {dPrim > 0 ? `▲ +${dPrim}` : `▼ ${dPrim}`} первичн.</>}</>
+          : dPrim !== 0
+            ? <>{dPrim > 0 ? `▲ +${dPrim}` : `▼ ${dPrim}`} {pluralRu(Math.abs(dPrim), ["первичный балл", "первичных балла", "первичных баллов"])}</>
+            : <>Прогноз {after.test_score} — без изменений</>}
+      </span>
+      <span style={{ color: "var(--text-3)", fontSize: 11 }}>Прогноз — ориентир, не гарантия.</span>
+    </div>
+  );
+}
+
+function Results({ tasks, done, forecast, forecastBefore, onExit }: {
+  tasks: TaskView[]; done: Answered[];
+  forecast?: Forecast; forecastBefore?: Forecast | null;
+  onExit: () => void;
+}) {
   const correct = done.filter((d) => d.correct).length;
   const pct = tasks.length ? Math.round((correct / tasks.length) * 100) : 0;
+  const perfect = pct === 100 && tasks.length > 0;
+  // A perfect variant earns one big final salute (reduced-motion → silence,
+  // handled inside confettiBurst).
+  useEffect(() => {
+    if (perfect) confettiBurst({ count: 160 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   return (
     <div style={{ maxWidth: 640, margin: "0 auto", display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
       <Card style={{ textAlign: "center", padding: "clamp(20px, 6vw, 34px)" }}>
         <Label>Итоги</Label>
         <div className="mono" style={{ fontSize: 54, fontWeight: 700, letterSpacing: "-0.02em", color: accColor(pct), margin: "10px 0" }}>{pct}%</div>
-        <div style={{ color: "var(--text-2)" }}>{correct} из {tasks.length} верно</div>
+        <div style={{ color: "var(--text-2)" }}>{correct} из {tasks.length} верно{perfect ? " — идеально!" : ""}</div>
+        {forecast && forecastBefore && <ForecastDelta before={forecastBefore} after={forecast} />}
       </Card>
       <Section title="По заданиям">
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -490,8 +648,11 @@ export function History() {
     const date = dateISO.slice(0, 10);
     try { const items = await api.day(sid, date); setDay({ date, items }); } catch { setDay({ date, items: [] }); }
   };
+  const subjects = useSubjects();
   const solveAssigned = (a: AssignmentCard) => {
-    requestSolve({ subject, testId: a.test_id, assignmentId: a.id, title: testTitle(a.title) });
+    // Same as the dashboard: the solve request carries the TEST's subject.
+    const code = subjects.data?.find((s) => s.id === a.subject_id)?.code ?? subject;
+    requestSolve({ subject: code, testId: a.test_id, assignmentId: a.id, title: testTitle(a.title) });
     go("solve");
   };
 
