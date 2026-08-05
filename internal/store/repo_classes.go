@@ -172,7 +172,7 @@ func (s *Store) ClassMastery(ctx context.Context, classID, subjectID uuid.UUID) 
 	byStudent := make(map[uuid.UUID]*domain.ClassStudentStats, len(members))
 	out := make([]domain.ClassStudentStats, 0, len(members))
 	for _, m := range members {
-		out = append(out, domain.ClassStudentStats{StudentID: m.ID, Name: m.Name, ByNumber: []domain.ClassNumberStat{}})
+		out = append(out, domain.ClassStudentStats{StudentID: m.ID, Name: m.Name, Avatar: m.Avatar, ByNumber: []domain.ClassNumberStat{}})
 	}
 	for i := range out {
 		byStudent[out[i].StudentID] = &out[i]

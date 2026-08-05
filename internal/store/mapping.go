@@ -68,7 +68,22 @@ func toDomainUser(u sqlc.User) domain.User {
 		Subject:    subject,
 		IsActive:   u.IsActive,
 		CreatedAt:  u.CreatedAt,
+		Avatar:     avatarFromJSON(u.Avatar),
 	}
+}
+
+// avatarFromJSON decodes the users.avatar JSONB column. A NULL column or an
+// undecodable blob both come back nil — the clients then fall back to the
+// deterministic default avatar, so bad data can never break a user list.
+func avatarFromJSON(b []byte) *domain.Avatar {
+	if len(b) == 0 {
+		return nil
+	}
+	var a domain.Avatar
+	if err := json.Unmarshal(b, &a); err != nil || a.Kind == "" {
+		return nil
+	}
+	return &a
 }
 
 func toDomainUsers(rows []sqlc.User) []domain.User {

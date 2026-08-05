@@ -6,6 +6,7 @@ import { Button, Loading, Modal, Spinner, SUBJECT_TITLES, testTitle, useIsMobile
 import { requestSolve } from "./student";
 import { requestTestView } from "./teacher";
 import { ResetLinkModal } from "./reset";
+import { Avatar } from "./avatar";
 
 const STUDENT_NAV: { v: View; label: string; icon: IconName }[] = [
   { v: "dashboard", label: "Дашборд", icon: "dashboard" },
@@ -55,11 +56,18 @@ export function Shell({ title, cta, children }: { title: string; cta?: ReactNode
               ))}
             </nav>
             <div style={{ borderTop: "1px solid var(--border)", paddingTop: 12, display: "flex", flexDirection: "column", gap: 10 }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 4px" }}>
-                <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.2, minWidth: 0 }}>
-                  <span style={{ fontWeight: 600, fontSize: 14, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.name}</span>
-                  <span className="mono" style={{ fontSize: 11, color: "var(--text-3)" }}>{ROLE_RU[role || "student"]}</span>
-                </div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "0 4px" }}>
+                {/* Аватар + имя ведут в профиль — там же меняется сам аватар. */}
+                <button onClick={() => go("profile")} title="Профиль" style={{
+                  display: "flex", alignItems: "center", gap: 9, minWidth: 0,
+                  background: "none", border: "none", padding: 0, cursor: "pointer", textAlign: "left",
+                }}>
+                  {user && <Avatar user={user} size={32} />}
+                  <span style={{ display: "flex", flexDirection: "column", lineHeight: 1.2, minWidth: 0 }}>
+                    <span style={{ fontWeight: 600, fontSize: 14, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.name}</span>
+                    <span className="mono" style={{ fontSize: 11, color: "var(--text-3)" }}>{ROLE_RU[role || "student"]}</span>
+                  </span>
+                </button>
                 <button onClick={logout} title="Выйти" className="icon-btn">
                   <Icon name="logout" size={17} />
                 </button>

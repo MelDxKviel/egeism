@@ -8,11 +8,22 @@ export type AnswerKind = "number" | "string" | "set" | "sequence";
 export type TaskStatus = "draft" | "active" | "rejected";
 export type TestKind = "classic" | "drill" | "composed";
 
+// AvatarConfig — конфиг профильного аватара. kind="builder" — параметрический
+// SVG, который рисует клиент (avatar.tsx) из цветов и индексов частей;
+// kind="photo" зарезервирован под будущие загружаемые фото (photo_key = media
+// key). Отсутствие аватара (undefined) = детерминированный дефолт из id.
+export interface AvatarConfig {
+  kind: "builder" | "photo";
+  bg?: string; skin?: string; hair_color?: string;
+  hair: number; eyes: number; mouth: number; accessory: number;
+  photo_key?: string;
+}
 export interface User {
   id: string; role: Role; name: string; username?: string; telegram_id?: number;
   // Teacher subject scope: set = ведёт один предмет, absent = сверхучитель.
   subject?: SubjectCode;
   is_active: boolean; created_at?: string;
+  avatar?: AvatarConfig;
 }
 export interface ClassRef { id: string; name: string; }
 // A roster row: the student plus which of MY classes they're in (teacher view).
@@ -26,7 +37,7 @@ export interface ClassDetail { class: Klass; students: User[]; }
 export interface ClassNumberStat { number: number; total: number; correct: number; }
 // One row of the class overview color grid.
 export interface ClassStudentStats {
-  student_id: string; name: string; total: number; correct: number;
+  student_id: string; name: string; avatar?: AvatarConfig; total: number; correct: number;
   by_number: ClassNumberStat[];
 }
 export interface SubjectActivity { code: SubjectCode; active_tasks: number; answers: number; correct: number; }
@@ -231,6 +242,8 @@ export const api = {
   createPasswordResetLink: (userId: string) =>
     req<{ token: string; expires_at: string }>("POST", `/api/users/${userId}/password-reset-link`),
   profile: () => req<Profile>("GET", "/api/profile"),
+  // Own avatar (any role); null = reset to the deterministic default.
+  setAvatar: (avatar: AvatarConfig | null) => req<User>("PUT", "/api/profile/avatar", { avatar }),
   telegramLinkCode: () =>
     req<{ code: string; deep_link?: string; expires_at: string }>("POST", "/api/auth/telegram/link-code"),
   // Teacher roster (enrolled students, tagged with class names); scope=all

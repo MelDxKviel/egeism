@@ -312,6 +312,38 @@ paths:
       responses:
         '200': { description: "{ user, classes, teachers?, students_count? }" }
 
+  /api/profile/avatar:
+    put:
+      summary: >
+        Set the acting user's avatar (any role). Body {avatar} is a config with
+        kind "builder" (parametric SVG assembled client-side: bg/skin/hair_color
+        hex colors + hair/eyes/mouth/accessory variant indices) or null to reset
+        to the deterministic default. kind "photo" (photo_key) is reserved for
+        future uploaded photos and rejected for now. The avatar rides on every
+        user payload as user.avatar.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                avatar:
+                  type: object
+                  nullable: true
+                  properties:
+                    kind: { type: string, enum: [builder] }
+                    bg: { type: string, example: "#C7D2FE" }
+                    skin: { type: string, example: "#F8C09A" }
+                    hair_color: { type: string, example: "#4A3728" }
+                    hair: { type: integer }
+                    eyes: { type: integer }
+                    mouth: { type: integer }
+                    accessory: { type: integer }
+      responses:
+        '200': { description: the updated user }
+        '422': { description: unrenderable config (bad color / index / kind) }
+
   /api/classes:
     get:
       summary: The teacher's classes with member counts

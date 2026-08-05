@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid } from "recharts";
 import {
   api, SubjectCode, TestKind, VariantSlot, Task, TaskStatus, AnswerSchema, AttemptSummary, AttemptReviewItem,
-  StudentSummary, User, uploadTasks, downloadTestPDF,
+  StudentSummary, User, AvatarConfig, uploadTasks, downloadTestPDF,
   useForecast, useHeatmap, useWeakSpots, useMastery, useMasterySeries, useAttempts, useAssignments,
   useAdminTasks, useTests, useTestDetail, useTaskSummary, useInvalidate, useClasses, useClassDetail, useClassOverview, useStudents,
 } from "./api";
@@ -13,6 +13,7 @@ import { StreakBadge, ASSIGNMENT_STATUS_RU } from "./student";
 import { deadlineInfo } from "./deadline";
 import { Icon } from "./icons";
 import { ResetLinkModal } from "./reset";
+import { Avatar } from "./avatar";
 
 const SUBJECTS: SubjectCode[] = ["rus", "math", "inf", "soc"];
 // Which live source feeds a subject (per CLAUDE.md: openfipi serves информатика,
@@ -52,8 +53,8 @@ export const requestBuilder = (r: NonNullable<typeof builderRequest>) => { build
 // Detail-page handoffs (same pattern as requestTestView below): set before go().
 let viewClassId = "";
 export const requestClassView = (id: string) => { viewClassId = id; };
-let viewStudent: { id: string; name: string } | null = null;
-export const requestStudentView = (id: string, name: string) => { viewStudent = { id, name }; };
+let viewStudent: { id: string; name: string; avatar?: AvatarConfig } | null = null;
+export const requestStudentView = (id: string, name: string, avatar?: AvatarConfig) => { viewStudent = { id, name, avatar }; };
 // Assign prefill: «Назначить тест» from a student/class page lands pre-targeted.
 let assignRequest: { studentId?: string; classId?: string } | null = null;
 export const requestAssign = (r: NonNullable<typeof assignRequest>) => { assignRequest = r; };
@@ -214,13 +215,16 @@ function StudentRow({ s, onOpen, right }: { s: StudentSummary | User; onOpen: ()
       padding: "10px 12px", background: "var(--surface-2)", borderRadius: 12,
       opacity: s.is_active === false ? 0.55 : 1,
     }}>
-      <div style={{ minWidth: 0 }}>
-        <div style={{ fontWeight: 600, display: "flex", alignItems: "center", gap: 8 }}>
-          {s.name}
-          {s.is_active === false && <Pill tone="bad">отключён</Pill>}
-        </div>
-        <div className="mono" style={{ color: "var(--text-3)", fontSize: 12 }}>
-          {s.username || "—"}{classes.length > 0 ? " · " + classes.map((c) => c.name).join(", ") : ""}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+        <Avatar user={s} size={36} />
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontWeight: 600, display: "flex", alignItems: "center", gap: 8 }}>
+            {s.name}
+            {s.is_active === false && <Pill tone="bad">отключён</Pill>}
+          </div>
+          <div className="mono" style={{ color: "var(--text-3)", fontSize: 12 }}>
+            {s.username || "—"}{classes.length > 0 ? " · " + classes.map((c) => c.name).join(", ") : ""}
+          </div>
         </div>
       </div>
       {right ?? <Icon name="arrowRight" size={16} />}
@@ -260,7 +264,7 @@ export function TeacherDashboard() {
     finally { setBusy(false); }
   };
 
-  const openStudent = (s: { id: string; name: string }) => { requestStudentView(s.id, s.name); go("t-student"); };
+  const openStudent = (s: { id: string; name: string; avatar?: AvatarConfig }) => { requestStudentView(s.id, s.name, s.avatar); go("t-student"); };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
@@ -445,7 +449,7 @@ export function ClassPage() {
     } catch (e) { showToast(String((e as Error).message)); }
   };
 
-  const openStudent = (s: { id: string; name: string }) => { requestStudentView(s.id, s.name); go("t-student"); };
+  const openStudent = (s: { id: string; name: string; avatar?: AvatarConfig }) => { requestStudentView(s.id, s.name, s.avatar); go("t-student"); };
 
   if (!viewClassId) {
     return <Empty title="Класс не выбран" action={<Button onClick={() => go("t-dashboard")}>К ученикам</Button>} />;
@@ -514,7 +518,7 @@ export function ClassPage() {
 // итоговая строка агрегирует класс по номеру (что проседает «в общем»).
 function ClassGrid({ rows, onOpen }: {
   rows: import("./api").ClassStudentStats[];
-  onOpen: (s: { id: string; name: string }) => void;
+  onOpen: (s: { id: string; name: string; avatar?: AvatarConfig }) => void;
 }) {
   const isMobile = useIsMobile();
   const numbers = useMemo(() => {
@@ -550,10 +554,11 @@ function ClassGrid({ rows, onOpen }: {
             return (
               <tr key={r.student_id}>
                 <th>
-                  <button onClick={() => onOpen({ id: r.student_id, name: r.name })} style={{
+                  <button onClick={() => onOpen({ id: r.student_id, name: r.name, avatar: r.avatar })} style={{
                     background: "none", border: "none", padding: 0, cursor: "pointer",
                     color: "var(--text)", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 7,
                   }}>
+                    <Avatar user={{ id: r.student_id, avatar: r.avatar }} size={22} />
                     <span style={{ width: 9, height: 9, borderRadius: 999, background: r.total ? accColor(pct) : "var(--border-2)", flex: "none" }} />
                     {/* Truncate only on phones (the sticky column must stay
                         narrow there); desktop shows the full name as before. */}
@@ -669,7 +674,10 @@ export function StudentStatsPage() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
         <button onClick={() => go("t-dashboard")} className="btn btn-ghost">
           <Icon name="arrowLeft" size={16} /> Ко всем ученикам</button>
-        <div style={{ fontWeight: 700, fontSize: 18, letterSpacing: "-0.01em" }}>{student.name}</div>
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 9, fontWeight: 700, fontSize: 18, letterSpacing: "-0.01em" }}>
+          <Avatar user={{ id: student.id, avatar: student.avatar }} size={30} />
+          {student.name}
+        </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <Button variant="ghost" onClick={() => setResetOpen(true)}>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>

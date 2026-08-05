@@ -132,4 +132,5 @@ type User struct {
 	PasswordHash *string   `json:"password_hash"`
 	IsActive     bool      `json:"is_active"`
 	Subject      *string   `json:"subject"`
+	Avatar       []byte    `json:"avatar"`
 }

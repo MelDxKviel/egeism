@@ -146,6 +146,7 @@ type ClassNumberStat struct {
 type ClassStudentStats struct {
 	StudentID uuid.UUID         `json:"student_id"`
 	Name      string            `json:"name"`
+	Avatar    *Avatar           `json:"avatar,omitempty"`
 	Total     int64             `json:"total"`
 	Correct   int64             `json:"correct"`
 	ByNumber  []ClassNumberStat `json:"by_number"`

@@ -88,6 +88,7 @@ func (s *Server) Router() http.Handler {
 			r.Get("/auth/me", s.handleMe)
 			r.Post("/auth/telegram/link-code", s.handleTelegramLinkCode) // web: issue a code to link this account to Telegram
 			r.Get("/profile", s.handleProfile)
+			r.Put("/profile/avatar", s.handleSetAvatar) // set/clear own avatar (any role)
 			r.Get("/students", s.handleListStudents)
 			r.Post("/students", s.handleCreateStudent) // teacher creates a student account
 			// Enrollment link management: a student may have SEVERAL teachers
@@ -195,7 +196,7 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 func corsDev(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)

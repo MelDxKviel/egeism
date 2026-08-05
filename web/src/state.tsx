@@ -22,6 +22,9 @@ interface AppState {
   showToast: (m: string) => void;
   login: (username: string, password: string) => Promise<void>;
   logout: () => void;
+  // Refresh the in-context user after a self-edit (e.g. avatar save) without
+  // re-logging in.
+  updateUser: (u: User) => void;
 }
 
 const Ctx = createContext<AppState | null>(null);
@@ -112,11 +115,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
   const login = async (username: string, password: string) => { applyAuth(await api.login(username, password)); };
   const logout = () => { clearToken(); setUser(undefined); queryClient.clear(); };
+  const updateUser = (u: User) => setUser(u);
 
   return (
     <Ctx.Provider value={{
       theme, subject, view, user, role: user?.role, ready, toast,
-      setTheme, setSubject, go, showToast, login, logout,
+      setTheme, setSubject, go, showToast, login, logout, updateUser,
     }}>
       {children}
     </Ctx.Provider>

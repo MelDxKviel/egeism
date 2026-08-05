@@ -7,6 +7,7 @@ import { useApp } from "./state";
 import { Card, Label, Pill, Button, Async, Empty, Modal, PasswordInput, Seg, accColor, SUBJECT_TITLES } from "./ui";
 import { Icon } from "./icons";
 import { ResetLinkModal } from "./reset";
+import { Avatar } from "./avatar";
 
 const ROLE_RU: Record<Role, string> = { student: "ученик", teacher: "учитель", admin: "админ" };
 const SUBJECTS: SubjectCode[] = ["rus", "math", "inf", "soc"];
@@ -250,6 +251,7 @@ export function AdminUsers() {
             {rows.map((u) => (
               <Card key={u.id} style={{ padding: 14, opacity: u.is_active ? 1 : 0.55 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                  <Avatar user={u} size={38} />
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <div style={{ fontWeight: 700, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                       {u.name}

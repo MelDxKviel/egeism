@@ -174,7 +174,7 @@ func (q *Queries) ListAllClasses(ctx context.Context) ([]ListAllClassesRow, erro
 }
 
 const listClassMembers = `-- name: ListClassMembers :many
-SELECT u.id, u.role, u.telegram_id, u.name, u.created_at, u.username, u.password_hash, u.is_active, u.subject FROM users u
+SELECT u.id, u.role, u.telegram_id, u.name, u.created_at, u.username, u.password_hash, u.is_active, u.subject, u.avatar FROM users u
 JOIN class_members cm ON cm.student_id = u.id
 WHERE cm.class_id = $1
 ORDER BY u.name
@@ -199,6 +199,7 @@ func (q *Queries) ListClassMembers(ctx context.Context, classID uuid.UUID) ([]Us
 			&i.PasswordHash,
 			&i.IsActive,
 			&i.Subject,
+			&i.Avatar,
 		); err != nil {
 			return nil, err
 		}
