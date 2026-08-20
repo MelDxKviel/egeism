@@ -1,0 +1,23 @@
+# Production overlay. Keep secrets and the ACME contact email out of Git:
+# helm upgrade --install ... -f values-production.yaml --set-string acme.email=...
+apps:
+  enabled: true
+  workerEnabled: true
+  botEnabled: true
+
+migration:
+  minio:
+    enabled: false
+
+gateway:
+  enabled: true
+  hostname: egeism.ru
+  serviceType: LoadBalancer
+  tls:
+    enabled: true
+
+acme:
+  enabled: true
+
+config:
+  webUrl: https://egeism.ru

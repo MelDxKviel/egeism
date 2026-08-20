@@ -1,4 +1,4 @@
-Egeism data tier was installed in namespace {{ .Release.Namespace }}.
+Egeism was installed in namespace {{ .Release.Namespace }}.
 
 1. Wait for PostgreSQL, Redis and MinIO:
    kubectl -n {{ .Release.Namespace }} get pods,pvc
@@ -7,5 +7,17 @@ Egeism data tier was installed in namespace {{ .Release.Namespace }}.
    kubectl -n {{ .Release.Namespace }} wait --for=condition=complete job/migrate-{{ .Values.global.imageTag | trunc 8 }} --timeout=5m
    kubectl -n {{ .Release.Namespace }} wait --for=condition=complete job/minio-init-{{ .Values.global.imageTag | trunc 8 }} --timeout=5m
 
-3. After restoring production data, enable application Deployments:
-   helm upgrade {{ .Release.Name }} <chart> -n {{ .Release.Namespace }} --reuse-values --set apps.enabled=true
+3. Inspect application rollouts:
+   kubectl -n {{ .Release.Namespace }} rollout status deployment/api
+   kubectl -n {{ .Release.Namespace }} rollout status deployment/web
+
+{{- if .Values.gateway.enabled }}
+4. Inspect Gateway API status:
+   kubectl -n {{ .Release.Namespace }} describe gateway egeism
+   kubectl -n {{ .Release.Namespace }} describe httproute egeism-web
+{{- end }}
+
+{{- if .Values.gateway.tls.enabled }}
+5. Inspect certificate issuance:
+   kubectl -n {{ .Release.Namespace }} get issuer,certificate,certificaterequest,order,challenge
+{{- end }}

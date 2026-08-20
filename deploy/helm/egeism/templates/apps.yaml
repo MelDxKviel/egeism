@@ -58,6 +58,7 @@ spec:
             periodSeconds: 10
           resources:
             {{- toYaml .Values.resources.api | nindent 12 }}
+{{- if .Values.apps.workerEnabled }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -88,6 +89,8 @@ spec:
             - secretRef: { name: {{ .Values.existingSecret }} }
           resources:
             {{- toYaml .Values.resources.worker | nindent 12 }}
+{{- end }}
+{{- if .Values.apps.botEnabled }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -118,6 +121,7 @@ spec:
             - secretRef: { name: {{ .Values.existingSecret }} }
           resources:
             {{- toYaml .Values.resources.bot | nindent 12 }}
+{{- end }}
 ---
 apiVersion: v1
 kind: Service
@@ -227,4 +231,3 @@ spec:
           resources:
             {{- toYaml .Values.resources.web | nindent 12 }}
 {{- end }}
-

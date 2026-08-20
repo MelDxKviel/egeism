@@ -11,6 +11,37 @@ existingSecret: egeism-secrets
 # for the migration Job, then enable the application Deployments.
 apps:
   enabled: false
+  # Keep these off while the Docker Compose stack is still consuming the same
+  # queues and Telegram token. Enable them only during the final cutover.
+  workerEnabled: false
+  botEnabled: false
+
+# Temporary bridge from the old Docker Compose MinIO to the in-cluster MinIO.
+# It is disabled during normal operation and enabled for a single Helm revision.
+migration:
+  minio:
+    enabled: false
+    oldEndpoint: ""
+    oldSecret: old-minio-credentials
+
+gateway:
+  enabled: true
+  hostname: egeism.ru
+  # NodePort lets us verify Envoy while Docker Caddy still owns host ports
+  # 80/443. The final cutover will switch this to LoadBalancer.
+  serviceType: NodePort
+  tls:
+    enabled: false
+    secretName: egeism-tls
+
+# The email is deliberately empty in Git. Pass it during Helm upgrade with
+# --set-string acme.email=... when TLS is enabled.
+acme:
+  enabled: false
+  email: ""
+  issuerName: letsencrypt
+  server: https://acme-v02.api.letsencrypt.org/directory
+  privateKeySecretName: letsencrypt-account-key
 
 config:
   webUrl: ""
@@ -62,4 +93,3 @@ resources:
   web:
     requests: { cpu: 10m, memory: 16Mi }
     limits: { cpu: 100m, memory: 64Mi }
-
