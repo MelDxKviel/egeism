@@ -1,0 +1,65 @@
+global:
+  imageRegistry: ghcr.io/meldxkviel
+  imageTag: "03a5a04b09eed4ebec46fb6be29590184644a011"
+  imagePullPolicy: IfNotPresent
+
+# Created separately from the existing production deploy/.env. Secrets are
+# deliberately not stored in Git or in this values file.
+existingSecret: egeism-secrets
+
+# First install the data tier with this false, restore production data, wait
+# for the migration Job, then enable the application Deployments.
+apps:
+  enabled: false
+
+config:
+  webUrl: ""
+  mediaPublicUrl: ""
+  timezone: Europe/Moscow
+  minioBucket: egeism-media
+  fetchDeadline: "80"
+  fetchDelay: "0.25"
+
+storage:
+  className: local-path
+  postgresSize: 5Gi
+  minioSize: 10Gi
+
+replicas:
+  api: 1
+  fetcher: 1
+  web: 1
+
+images:
+  postgres: postgres:16-alpine
+  redis: redis:7-alpine
+  minio: minio/minio:latest
+  minioClient: minio/mc:latest
+  wait: busybox:1.37
+
+resources:
+  postgres:
+    requests: { cpu: 100m, memory: 128Mi }
+    limits: { cpu: 600m, memory: 512Mi }
+  redis:
+    requests: { cpu: 25m, memory: 32Mi }
+    limits: { cpu: 200m, memory: 128Mi }
+  minio:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits: { cpu: 500m, memory: 512Mi }
+  api:
+    requests: { cpu: 50m, memory: 64Mi }
+    limits: { cpu: 500m, memory: 256Mi }
+  worker:
+    requests: { cpu: 25m, memory: 64Mi }
+    limits: { cpu: 300m, memory: 256Mi }
+  bot:
+    requests: { cpu: 25m, memory: 32Mi }
+    limits: { cpu: 200m, memory: 128Mi }
+  fetcher:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits: { cpu: 700m, memory: 512Mi }
+  web:
+    requests: { cpu: 10m, memory: 16Mi }
+    limits: { cpu: 100m, memory: 64Mi }
+

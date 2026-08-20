@@ -1,0 +1,11 @@
+Egeism data tier was installed in namespace {{ .Release.Namespace }}.
+
+1. Wait for PostgreSQL, Redis and MinIO:
+   kubectl -n {{ .Release.Namespace }} get pods,pvc
+
+2. Wait for one-shot jobs:
+   kubectl -n {{ .Release.Namespace }} wait --for=condition=complete job/migrate-{{ .Values.global.imageTag | trunc 8 }} --timeout=5m
+   kubectl -n {{ .Release.Namespace }} wait --for=condition=complete job/minio-init-{{ .Values.global.imageTag | trunc 8 }} --timeout=5m
+
+3. After restoring production data, enable application Deployments:
+   helm upgrade {{ .Release.Name }} <chart> -n {{ .Release.Namespace }} --reuse-values --set apps.enabled=true
