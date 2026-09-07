@@ -641,7 +641,7 @@ export function StudentStatsPage() {
   const attempts = useAttempts(sid);
   const assignments = useAssignments(sid);
   const [open, setOpen] = useState<number | null>(null);
-  const [review, setReview] = useState<{ title: string; items: AttemptReviewItem[] } | null>(null);
+  const [review, setReview] = useState<{ id: string; finished: boolean; title: string; items: AttemptReviewItem[] } | null>(null);
   const [resetOpen, setResetOpen] = useState(false);
 
   if (!student) {
@@ -652,8 +652,8 @@ export function StudentStatsPage() {
   // reviewable variant: each task's condition + correct answer, plus the
   // student's answer and verdict.
   const openAttempt = async (a: AttemptSummary) => {
-    try { const items = await api.attemptReview(a.id); setReview({ title: testTitle(a.title), items }); }
-    catch { setReview({ title: testTitle(a.title), items: [] }); }
+    try { const items = await api.attemptReview(a.id); setReview({ id: a.id, finished: !!a.finished_at, title: testTitle(a.title), items }); }
+    catch { setReview({ id: a.id, finished: !!a.finished_at, title: testTitle(a.title), items: [] }); }
   };
   const toDrill = (number?: number) => { requestBuilder({ kind: "drill", number, count: 10 }); go("t-builder"); };
 
@@ -749,7 +749,7 @@ export function StudentStatsPage() {
                       {solved && a.finished_at ? ` · решён ${new Date(a.finished_at).toLocaleString("ru")}` : dl.kind === "none" ? ` · ${ASSIGNMENT_STATUS_RU[a.status] || a.status}` : ` · ${dl.text}`}
                     </div>
                   </div>
-                  {solved && <span className="mono" style={{ color: accColor(pct), fontWeight: 700 }}>{a.correct}/{a.total}</span>}
+                  {solved && <span className="mono" style={{ color: accColor(pct), fontWeight: 700 }}>{a.points}/{a.max_points} балл.{a.pending_review > 0 ? ` · на проверке: ${a.pending_review}` : ""}</span>}
                 </div>
               );
             })}
@@ -780,7 +780,7 @@ export function StudentStatsPage() {
               <div key={a.id} onClick={() => openAttempt(a)} title="Открыть решённый вариант" className="card-tap"
                 style={{ display: "flex", justifyContent: "space-between", padding: "10px 12px", background: "var(--surface-2)", borderRadius: 12 }}>
                 <div><div style={{ fontWeight: 600 }}>{testTitle(a.title)}</div><div className="mono" style={{ color: "var(--text-3)", fontSize: 12 }}>{new Date(a.started_at).toLocaleString("ru")}</div></div>
-                <span className="mono" style={{ color: accColor(a.total ? (Number(a.correct) / Number(a.total)) * 100 : 0), fontWeight: 700 }}>{a.correct}/{a.total}</span>
+                <span className="mono" style={{ color: accColor(a.total ? (Number(a.correct) / Number(a.total)) * 100 : 0), fontWeight: 700 }}>{a.points}/{a.max_points} балл.{a.pending_review > 0 ? ` · на проверке: ${a.pending_review}` : ""}</span>
               </div>
             ))}
           </div>
@@ -795,7 +795,7 @@ export function StudentStatsPage() {
 
       {review && (
         <Modal onClose={() => setReview(null)} title={`Разбор · ${review.title}`} maxWidth="min(1200px, 96vw)">
-          <AttemptReviewGrid items={review.items} />
+          <AttemptReviewGrid key={review.id} items={review.items} attemptId={review.finished ? review.id : undefined} />
         </Modal>
       )}
 
@@ -1195,6 +1195,7 @@ export function Assign() {
   const [when, setWhen] = useState("");
   const [due, setDue] = useState("");
   const [notify, setNotify] = useState(true);
+  const [requireSolution, setRequireSolution] = useState(false);
   // Каждому свой вариант (анти-списывание): по умолчанию ВКЛ для класса —
   // одинаковый тест классу почти гарантирует обмен ответами.
   const [individual, setIndividual] = useState(true);
@@ -1218,7 +1219,7 @@ export function Assign() {
     setBusy(true);
     try {
       const indiv = mode === "class" && individual;
-      const r = await api.createAssignment(testId, target, new Date(when).toISOString(), { notify, individual: indiv, due_at: dueISO });
+      const r = await api.createAssignment(testId, target, new Date(when).toISOString(), { notify, individual: indiv, due_at: dueISO, require_solution: subject === "math" && requireSolution });
       const who = mode === "class" ? `классу (${r.created} уч.${indiv ? ", у каждого свой вариант" : ""})` : "ученику";
       showToast(notify ? `Назначено ${who} · уведомления в Telegram запланированы` : `Назначено ${who} · без уведомлений`);
       invalidate("assignments"); // the student pages' «Назначенные тесты» feed
@@ -1296,6 +1297,10 @@ export function Assign() {
               Без срока ученик решает в любое время. Со сроком — просроченные задания подсвечиваются у ученика и в твоём списке.
             </div>
           </div>
+          {subject === "math" && <label style={{ display: "flex", alignItems: "flex-start", gap: 10, fontSize: 14 }}>
+            <input type="checkbox" checked={requireSolution} onChange={(e) => setRequireSolution(e.target.checked)} style={{ width: "auto", marginTop: 3 }} />
+            <span>Обязательно прикреплять фотографии решений второй части<small style={{ display: "block", color: "var(--text-3)" }}>Для каждого задания №13–19. Без галочки фотографии необязательны; баллы выставляет учитель.</small></span>
+          </label>}
           {mode === "class" && (
             <label style={{ display: "flex", alignItems: "flex-start", gap: 10, fontSize: 14 }}>
               <input type="checkbox" checked={individual} onChange={(e) => setIndividual(e.target.checked)} style={{ width: "auto", marginTop: 3 }} />

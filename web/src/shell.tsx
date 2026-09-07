@@ -3,7 +3,7 @@ import { useApp, View } from "./state";
 import { Icon, IconName } from "./icons";
 import { api, User, NotificationItem, useNotifications, useSubjects, useInvalidate } from "./api";
 import { Button, Loading, Modal, Spinner, SUBJECT_TITLES, testTitle, useIsMobile } from "./ui";
-import { requestSolve } from "./student";
+import { requestSolve, useAttemptReview } from "./student";
 import { requestTestView } from "./teacher";
 import { ResetLinkModal } from "./reset";
 import { Avatar } from "./avatar";
@@ -11,6 +11,7 @@ import { Avatar } from "./avatar";
 const STUDENT_NAV: { v: View; label: string; icon: IconName }[] = [
   { v: "dashboard", label: "Дашборд", icon: "dashboard" },
   { v: "train", label: "Тренировка", icon: "dumbbell" },
+  { v: "student-bank", label: "Банк", icon: "bank" },
   { v: "subject", label: "Предмет", icon: "target" },
   { v: "history", label: "История", icon: "history" },
   { v: "profile", label: "Профиль", icon: "user" },
@@ -158,6 +159,7 @@ function TabBar({ nav, view, go }:
 // due date for an assignment, the subject for a solved test.
 function notifText(n: NotificationItem, subjectCode?: string): { title: string; sub: string } {
   const subj = subjectCode ? SUBJECT_TITLES[subjectCode] : undefined;
+  if (n.kind === "attempt_reviewed") return { title: `Проверен тест «${testTitle(n.test_title)}»`, sub: "Посмотри баллы и комментарии учителя" };
   if (n.kind === "assignment_created") {
     const due = new Date(n.scheduled_at).toLocaleString("ru", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
     const deadline = n.due_at
@@ -213,6 +215,7 @@ function NotificationsBell() {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
   // The user whose «забыл пароль» notification was clicked → reset-link modal.
+  const { open: openReview, modal: reviewModal } = useAttemptReview(role === "teacher" || role === "admin");
   const [resetFor, setResetFor] = useState<{ id: string; name: string } | null>(null);
 
   const codeOf = (subjectId: string) => subjects.data?.find((s) => s.id === subjectId)?.code;
@@ -261,6 +264,7 @@ function NotificationsBell() {
       return;
     }
     setOpen(false);
+    if (n.kind === "attempt_reviewed" || (n.kind === "assignment_done" && n.attempt_id)) { void openReview({ attempt_id: n.attempt_id, title: n.test_title }); return; }
     if (n.kind === "assignment_created") {
       if (n.assignment_status === "done") { showToast("Этот тест уже решён ✓"); return; }
       requestSolve({
@@ -279,6 +283,7 @@ function NotificationsBell() {
 
   return (
     <div ref={wrapRef} style={{ position: "relative", display: "inline-flex" }}>
+      {reviewModal}
       <button onClick={() => setOpen((o) => !o)} title="Уведомления" className="icon-btn"
         data-active={open ? "1" : undefined}>
         <Icon name="bell" size={17} />

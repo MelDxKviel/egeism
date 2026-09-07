@@ -26,6 +26,7 @@ const (
 // kinds carry the assignment/test fields; password_reset_requested carries
 // only the subject user (whose password to reset).
 type Notification struct {
+	AttemptID        *uuid.UUID       `json:"attempt_id,omitempty"`
 	ID               uuid.UUID        `json:"id"`
 	Kind             NotificationKind `json:"kind"`
 	AssignmentID     uuid.UUID        `json:"assignment_id"`

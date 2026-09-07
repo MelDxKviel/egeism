@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 export type Role = "student" | "teacher" | "admin";
 export type SubjectCode = "rus" | "math" | "inf" | "soc";
-export type AnswerKind = "number" | "string" | "set" | "sequence";
+export type AnswerKind = "number" | "string" | "set" | "sequence" | "written";
 export type TaskStatus = "draft" | "active" | "rejected";
 export type TestKind = "classic" | "drill" | "composed";
 
@@ -57,15 +57,17 @@ export interface AnswerSchema {
   ci?: boolean; yo_fold?: boolean; token?: "char" | "split";
 }
 export interface TaskView {
+  part: number; grading_mode: "auto" | "manual"; max_points: number;
   id: string; subject_id: string; number: number; statement: string;
   media: Media[]; status: TaskStatus; answer_kind: AnswerKind; bot_solvable: boolean;
 }
 export interface Task extends TaskView { answer_schema: AnswerSchema; }
 export interface Attempt {
+  require_solution: boolean;
   id: string; test_id: string; assignment_id?: string;
   student_id: string; started_at: string; finished_at?: string;
 }
-export interface SubmitResult { is_correct: boolean; answer_id: string; solution?: string[]; }
+export interface SubmitResult { review_status: "auto" | "pending" | "reviewed"; is_correct: boolean; answer_id: string; solution?: string[]; }
 export interface Forecast {
   subject: string; accuracy: number; primary_estimate: number;
   primary_max: number; test_score: number; note: string;
@@ -80,12 +82,16 @@ export interface DayAnswer {
 }
 // One reviewed answer in an attempt: the task's condition + media, the student's
 // answer, the verdict, and the correct answer — for the teacher's attempt review.
+export interface SolutionPhoto { id: string; attempt_id: string; task_id: string; content_type: string; size_bytes: number; }
 export interface AttemptReviewItem {
+  review_status: "auto" | "pending" | "reviewed"; points: number | null; max_points: number; teacher_comment: string; reviewed_at?: string; photos: SolutionPhoto[];
   answer_id: string; task_id: string; number: number; statement: string;
   media: Media[]; answer_kind: AnswerKind; raw_answer: string;
   is_correct: boolean; correct: string[]; time_spent_ms: number; answered_at: string;
 }
 export interface AssignmentCard {
+  require_solution: boolean;
+  points: number; max_points: number; pending_review: number;
   id: string; test_id: string; title: string; kind: TestKind; subject_id: string;
   scheduled_at: string; notified_at?: string; status: string; task_count: number;
   // Optional deadline (absent = no deadline, self-paced). The UI marks an
@@ -97,6 +103,7 @@ export interface AssignmentCard {
   attempt_id?: string; finished_at?: string; correct: number; total: number;
 }
 export interface AttemptSummary {
+  points: number; max_points: number; pending_review: number;
   id: string; test_id: string; title: string; kind: TestKind; subject_id: string;
   started_at: string; finished_at?: string; total: number; correct: number; time_ms: number;
 }
@@ -104,8 +111,9 @@ export interface AttemptSummary {
 // assignment_done to the teacher who assigned, password_reset_requested to the
 // teachers/admins of a user who hit «забыл пароль». Assignment kinds carry the
 // assignment/test context; the password kind only the subject user.
-export type NotificationKind = "assignment_created" | "assignment_done" | "password_reset_requested";
+export type NotificationKind = "assignment_created" | "assignment_done" | "password_reset_requested" | "attempt_reviewed";
 export interface NotificationItem {
+  attempt_id?: string;
   id: string; kind: NotificationKind; assignment_id: string;
   test_id: string; test_title: string; subject_id: string;
   student_id: string; student_name: string;
@@ -130,9 +138,10 @@ export interface PracticeNumber {
 // The «Тренировка» hub payload: mistake-queue size + per-номер map.
 export interface PracticeOverview { subject: SubjectCode; mistakes: number; numbers: PracticeNumber[]; }
 // The «умная тренировка» session: tasks plus a breakdown for the context line.
-export interface RecommendedSet { tasks: TaskView[]; mistakes: number; weak_numbers: number[]; }
+export interface RecommendedSet { max_number: number; tasks: TaskView[]; mistakes: number; weak_numbers: number[]; }
 // A пробник the student generated for themselves; attempt fields appear once solved.
 export interface SelfVariant {
+  points: number; max_points: number; pending_review: number;
   id: string; subject_id: string; kind: TestKind; title: string; created_at: string;
   task_count: number; attempt_id?: string; finished_at?: string; correct: number; total: number;
 }
@@ -180,6 +189,19 @@ async function req<T>(method: string, path: string, body?: unknown): Promise<T> 
 }
 
 export interface ImportResult { fetched: number; inserted: number; skipped: number; invalid: number; promoted?: number; source?: string; }
+
+export async function uploadSolutionPhoto(attemptId: string, taskId: string, file: File): Promise<SolutionPhoto> {
+  const body = new FormData(); body.append("file", file);
+  const res = await fetch(`${API_BASE}/api/attempts/${attemptId}/tasks/${taskId}/photos`, { method: "POST", headers: { Authorization: `Bearer ${currentToken}` }, body });
+  if (!res.ok) throw new ApiError(res.status, (await res.json()).error || "Не удалось загрузить фото");
+  return res.json();
+}
+
+export async function solutionPhotoBlob(photoId: string): Promise<Blob> {
+  const res = await fetch(`${API_BASE}/api/solution-photos/${photoId}`, { headers: { Authorization: `Bearer ${currentToken}` } });
+  if (!res.ok) throw new ApiError(res.status, "Не удалось открыть фотографию");
+  return res.blob();
+}
 
 // uploadTasks posts a JSON/JSONL task file as multipart form-data. Kept separate
 // from req() because FormData must set its own Content-Type (boundary).
@@ -287,6 +309,7 @@ export const api = {
   // number narrows the pool to one задание — the server-side drill.
   practiceTasks: (subject: SubjectCode, limit: number, number?: number) =>
     req<TaskView[]>("GET", `/api/practice/tasks?subject=${subject}&limit=${limit}${number ? `&number=${number}` : ""}`),
+  fetchStudentBank: (subject: SubjectCode, number?: number) => req<ImportResult>("POST", "/api/practice/bank/fetch", { subject, number: number ?? 0 }),
   practiceOverview: (subject: SubjectCode) =>
     req<PracticeOverview>("GET", `/api/practice/overview?subject=${subject}`),
   mistakeTasks: (subject: SubjectCode, limit: number) =>
@@ -306,6 +329,8 @@ export const api = {
     req<SubmitResult>("POST", `/api/attempts/${attemptId}/answers`, { task_id, raw_answer, time_spent_ms }),
   finish: (attemptId: string) => req<Attempt>("POST", `/api/attempts/${attemptId}/finish`),
   attemptAnswers: (attemptId: string) => req<DayAnswer[]>("GET", `/api/attempts/${attemptId}/answers`),
+  saveReview: (attemptId: string, grades: { answer_id: string; points: number; comment: string }[]) => req<AttemptReviewItem[]>("PUT", `/api/attempts/${attemptId}/review`, { grades }),
+  deleteSolutionPhoto: (photoId: string) => req<void>("DELETE", `/api/solution-photos/${photoId}`),
   attemptReview: (attemptId: string) => req<AttemptReviewItem[]>("GET", `/api/attempts/${attemptId}/review`),
 
   forecast: (sid: string, subject: SubjectCode) =>
@@ -364,11 +389,12 @@ export const api = {
     test_id: string,
     target: { student_id?: string; class_id?: string },
     scheduled_at: string,
-    opts: { notify?: boolean; individual?: boolean; due_at?: string } = {},
+    opts: { notify?: boolean; individual?: boolean; due_at?: string; require_solution?: boolean } = {},
   ) =>
     req<{ created: number }>("POST", "/api/admin/assignments", {
       test_id, ...target, scheduled_at,
       notify: opts.notify ?? true,
+      require_solution: opts.require_solution ?? false,
       individual: opts.individual ?? false,
       ...(opts.due_at ? { due_at: opts.due_at } : {}),
     }),

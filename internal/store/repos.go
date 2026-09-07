@@ -258,6 +258,14 @@ func (s *Store) CreateTask(ctx context.Context, t domain.Task) (domain.Task, err
 	if status == "" {
 		status = domain.TaskDraft
 	}
+	sub, err := s.q.GetSubject(ctx, t.SubjectID)
+	if err != nil {
+		return domain.Task{}, mapErr(err)
+	}
+	part, mode, points := domain.TaskRules(domain.SubjectCode(sub.Code), t.Number)
+	if t.AnswerSchema.Type == domain.AnswerWritten && mode != "manual" {
+		return domain.Task{}, invalid("Письменная проверка для этого задания ещё не включена")
+	}
 	row, err := s.q.CreateTask(ctx, sqlc.CreateTaskParams{
 		SubjectID:    t.SubjectID,
 		Number:       int32(t.Number),
@@ -265,7 +273,7 @@ func (s *Store) CreateTask(ctx context.Context, t domain.Task) (domain.Task, err
 		Media:        media,
 		AnswerSchema: schema,
 		Source:       source,
-		Status:       string(status),
+		Status:       string(status), Part: int32(part), GradingMode: mode, MaxPoints: int32(points),
 	})
 	if err != nil {
 		return domain.Task{}, mapErr(err)
@@ -352,11 +360,17 @@ func (s *Store) PracticeTasks(ctx context.Context, studentID, subjectID uuid.UUI
 // MistakeTasks returns the student's «работа над ошибками» queue for a subject:
 // active tasks whose latest answer is wrong, oldest mistakes first. Answering a
 // task correctly (anywhere) removes it from the queue.
-func (s *Store) MistakeTasks(ctx context.Context, studentID, subjectID uuid.UUID, limit int) ([]domain.Task, error) {
+func (s *Store) MistakeTasks(ctx context.Context, studentID, subjectID uuid.UUID, limit int, maxNumber ...int) ([]domain.Task, error) {
 	if limit <= 0 {
 		limit = 15
 	}
+	var ceiling *int32
+	if len(maxNumber) > 0 {
+		n := int32(maxNumber[0])
+		ceiling = &n
+	}
 	rows, err := s.q.MistakeTasks(ctx, sqlc.MistakeTasksParams{
+		MaxNumber: ceiling,
 		StudentID: studentID, SubjectID: subjectID, Lim: int32(limit),
 	})
 	if err != nil {
@@ -408,6 +422,15 @@ func (s *Store) SetTaskStatus(ctx context.Context, id uuid.UUID, status domain.T
 }
 
 func (s *Store) UpdateTaskAnswer(ctx context.Context, id uuid.UUID, schema domain.AnswerSchema) (domain.Task, error) {
+	if schema.Type == domain.AnswerWritten {
+		task, err := s.GetTask(ctx, id)
+		if err != nil {
+			return domain.Task{}, err
+		}
+		if task.GradingMode != "manual" {
+			return domain.Task{}, invalid("Письменная проверка для этого задания ещё не включена")
+		}
+	}
 	if err := schema.Validate(); err != nil {
 		return domain.Task{}, err
 	}
@@ -539,12 +562,13 @@ func (s *Store) ListAnswersForAttempt(ctx context.Context, attemptID uuid.UUID) 
 
 // ---- Assignments ----
 
-func (s *Store) CreateAssignment(ctx context.Context, testID, studentID, assignedBy uuid.UUID, at time.Time, dueAt *time.Time) (domain.Assignment, error) {
+func (s *Store) CreateAssignment(ctx context.Context, testID, studentID, assignedBy uuid.UUID, at time.Time, dueAt *time.Time, requireSolution ...bool) (domain.Assignment, error) {
 	a, err := s.q.CreateAssignment(ctx, sqlc.CreateAssignmentParams{
-		TestID: testID, StudentID: studentID, AssignedBy: assignedBy, ScheduledAt: at, DueAt: dueAt,
+		TestID: testID, StudentID: studentID, AssignedBy: assignedBy, ScheduledAt: at, DueAt: dueAt, RequireSolution: len(requireSolution) > 0 && requireSolution[0],
 	})
 	if err != nil {
-		return domain.Assignment{}, mapErr(err)
+		return domain.Assignment{
+			RequireSolution: a.RequireSolution}, mapErr(err)
 	}
 	return toDomainAssignment(a), nil
 }
@@ -552,7 +576,8 @@ func (s *Store) CreateAssignment(ctx context.Context, testID, studentID, assigne
 func (s *Store) GetAssignment(ctx context.Context, id uuid.UUID) (domain.Assignment, error) {
 	a, err := s.q.GetAssignment(ctx, id)
 	if err != nil {
-		return domain.Assignment{}, mapErr(err)
+		return domain.Assignment{
+			RequireSolution: a.RequireSolution}, mapErr(err)
 	}
 	return toDomainAssignment(a), nil
 }
@@ -578,6 +603,7 @@ func (s *Store) ListAssignmentCards(ctx context.Context, studentID uuid.UUID) ([
 	out := make([]domain.AssignmentCard, 0, len(rows))
 	for _, r := range rows {
 		card := domain.AssignmentCard{
+			RequireSolution: r.RequireSolution, Points: r.Points, MaxPoints: r.MaxPoints, PendingReview: r.PendingReview,
 			ID:          r.ID,
 			TestID:      r.TestID,
 			Title:       r.Title,
@@ -617,6 +643,7 @@ func (s *Store) ListAttemptSummaries(ctx context.Context, studentID uuid.UUID, l
 	out := make([]domain.AttemptSummary, 0, len(rows))
 	for _, r := range rows {
 		out = append(out, domain.AttemptSummary{
+			Points: r.Points, MaxPoints: r.MaxPoints, PendingReview: r.PendingReview,
 			ID:         r.ID,
 			TestID:     r.TestID,
 			Title:      r.Title,
@@ -635,7 +662,8 @@ func (s *Store) ListAttemptSummaries(ctx context.Context, studentID uuid.UUID, l
 func (s *Store) MarkAssignmentNotified(ctx context.Context, id uuid.UUID) (domain.Assignment, error) {
 	a, err := s.q.MarkAssignmentNotified(ctx, id)
 	if err != nil {
-		return domain.Assignment{}, mapErr(err)
+		return domain.Assignment{
+			RequireSolution: a.RequireSolution}, mapErr(err)
 	}
 	return toDomainAssignment(a), nil
 }
@@ -647,7 +675,8 @@ func (s *Store) SetAssignmentStatus(ctx context.Context, id uuid.UUID, status do
 		ID: id, Status: string(status),
 	})
 	if err != nil {
-		return domain.Assignment{}, mapErr(err)
+		return domain.Assignment{
+			RequireSolution: a.RequireSolution}, mapErr(err)
 	}
 	return toDomainAssignment(a), nil
 }
@@ -675,13 +704,14 @@ func (s *Store) MarkOverdueAssignments(ctx context.Context, t time.Time) (int64,
 
 func toDomainAssignment(a sqlc.Assignment) domain.Assignment {
 	return domain.Assignment{
-		ID:          a.ID,
-		TestID:      a.TestID,
-		StudentID:   a.StudentID,
-		AssignedBy:  a.AssignedBy,
-		ScheduledAt: a.ScheduledAt,
-		NotifiedAt:  a.NotifiedAt,
-		Status:      domain.AssignmentStatus(a.Status),
-		DueAt:       a.DueAt,
+		RequireSolution: a.RequireSolution,
+		ID:              a.ID,
+		TestID:          a.TestID,
+		StudentID:       a.StudentID,
+		AssignedBy:      a.AssignedBy,
+		ScheduledAt:     a.ScheduledAt,
+		NotifiedAt:      a.NotifiedAt,
+		Status:          domain.AssignmentStatus(a.Status),
+		DueAt:           a.DueAt,
 	}
 }

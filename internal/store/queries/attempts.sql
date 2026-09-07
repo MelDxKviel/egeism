@@ -23,7 +23,10 @@ SELECT * FROM answers WHERE attempt_id = $1 ORDER BY answered_at;
 -- Attempts feed ("Недавние решения" / "Свежие попытки") with per-attempt score.
 SELECT att.id, att.test_id, att.started_at, att.finished_at,
        t.title, t.kind, t.subject_id,
-       count(ans.id)                              AS total,
+       count(ans.id) FILTER (WHERE ans.review_status <> 'pending') AS total,
+       count(ans.id) FILTER (WHERE ans.review_status = 'pending') AS pending_review,
+       coalesce(sum(ans.points),0)::bigint AS points,
+       coalesce(sum(ans.max_points),0)::bigint AS max_points,
        count(ans.id) FILTER (WHERE ans.is_correct) AS correct,
        coalesce(sum(ans.time_spent_ms), 0)::bigint AS time_ms
 FROM attempts att

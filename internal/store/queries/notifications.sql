@@ -1,6 +1,6 @@
 -- name: CreateNotification :exec
-INSERT INTO notifications (user_id, kind, assignment_id)
-VALUES ($1, $2, $3);
+INSERT INTO notifications (user_id, kind, assignment_id, attempt_id)
+VALUES ($1, $2, $3, $4);
 
 -- name: CreatePasswordResetNotification :exec
 -- «Ученик забыл пароль» for a teacher/admin. The NOT EXISTS guard swallows
@@ -19,15 +19,16 @@ WHERE NOT EXISTS (
 -- the UI can render «назначен тест …» / «N решил тест …» and jump to the test.
 -- LEFT JOINs because password_reset_requested rows carry no assignment — they
 -- reference a user instead (subject_user_id → «N забыл пароль»).
-SELECT n.id, n.kind, n.assignment_id, n.read_at, n.created_at,
-       a.test_id, a.student_id, a.scheduled_at, a.due_at, a.status AS assignment_status,
+SELECT n.attempt_id, n.id, n.kind, n.assignment_id, n.read_at, n.created_at,
+       t.id AS test_id, coalesce(a.student_id, att.student_id, '00000000-0000-0000-0000-000000000000'::uuid) AS student_id, a.scheduled_at, a.due_at, a.status AS assignment_status,
        t.title AS test_title, t.subject_id,
        su.name AS student_name,
        n.subject_user_id, ru.name AS subject_user_name
 FROM notifications n
 LEFT JOIN assignments a ON a.id = n.assignment_id
-LEFT JOIN tests t ON t.id = a.test_id
-LEFT JOIN users su ON su.id = a.student_id
+LEFT JOIN attempts att ON att.id = n.attempt_id
+LEFT JOIN tests t ON t.id = coalesce(a.test_id, att.test_id)
+LEFT JOIN users su ON su.id = coalesce(a.student_id, att.student_id)
 LEFT JOIN users ru ON ru.id = n.subject_user_id
 WHERE n.user_id = $1
 ORDER BY n.created_at DESC

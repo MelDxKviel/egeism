@@ -56,19 +56,23 @@ type DayAnswer struct {
 // what, and how each assigned test was solved. AttemptID/FinishedAt are nil and
 // Correct/Total are 0 until the assignment has been solved at least once.
 type AssignmentCard struct {
-	ID          uuid.UUID        `json:"id"`
-	TestID      uuid.UUID        `json:"test_id"`
-	Title       string           `json:"title"`
-	Kind        TestKind         `json:"kind"`
-	SubjectID   uuid.UUID        `json:"subject_id"`
-	ScheduledAt time.Time        `json:"scheduled_at"`
-	NotifiedAt  *time.Time       `json:"notified_at,omitempty"`
-	Status      AssignmentStatus `json:"status"`
+	RequireSolution bool             `json:"require_solution"`
+	Points          int64            `json:"points"`
+	MaxPoints       int64            `json:"max_points"`
+	PendingReview   int64            `json:"pending_review"`
+	ID              uuid.UUID        `json:"id"`
+	TestID          uuid.UUID        `json:"test_id"`
+	Title           string           `json:"title"`
+	Kind            TestKind         `json:"kind"`
+	SubjectID       uuid.UUID        `json:"subject_id"`
+	ScheduledAt     time.Time        `json:"scheduled_at"`
+	NotifiedAt      *time.Time       `json:"notified_at,omitempty"`
+	Status          AssignmentStatus `json:"status"`
 	// DueAt is the optional deadline (NULL = no deadline). The UI marks an
 	// assignment overdue when due_at < now and still unsolved; "late" when it
 	// was solved after due_at.
-	DueAt    *time.Time `json:"due_at,omitempty"`
-	TaskCount int64     `json:"task_count"`
+	DueAt     *time.Time `json:"due_at,omitempty"`
+	TaskCount int64      `json:"task_count"`
 	// Result of the latest finished attempt (the assigned test's history).
 	AttemptID  *uuid.UUID `json:"attempt_id,omitempty"`
 	FinishedAt *time.Time `json:"finished_at,omitempty"`
@@ -78,16 +82,19 @@ type AssignmentCard struct {
 
 // AttemptSummary is one row of the attempts feed with its score.
 type AttemptSummary struct {
-	ID         uuid.UUID  `json:"id"`
-	TestID     uuid.UUID  `json:"test_id"`
-	Title      string     `json:"title"`
-	Kind       TestKind   `json:"kind"`
-	SubjectID  uuid.UUID  `json:"subject_id"`
-	StartedAt  time.Time  `json:"started_at"`
-	FinishedAt *time.Time `json:"finished_at,omitempty"`
-	Total      int64      `json:"total"`
-	Correct    int64      `json:"correct"`
-	TimeMS     int64      `json:"time_ms"`
+	Points        int64      `json:"points"`
+	MaxPoints     int64      `json:"max_points"`
+	PendingReview int64      `json:"pending_review"`
+	ID            uuid.UUID  `json:"id"`
+	TestID        uuid.UUID  `json:"test_id"`
+	Title         string     `json:"title"`
+	Kind          TestKind   `json:"kind"`
+	SubjectID     uuid.UUID  `json:"subject_id"`
+	StartedAt     time.Time  `json:"started_at"`
+	FinishedAt    *time.Time `json:"finished_at,omitempty"`
+	Total         int64      `json:"total"`
+	Correct       int64      `json:"correct"`
+	TimeMS        int64      `json:"time_ms"`
 }
 
 // PracticeNumber is one row of the student's training map: per задание-номер,
@@ -104,16 +111,19 @@ type PracticeNumber struct {
 // SelfVariant is a пробник the student generated for themselves, with the
 // latest finished attempt's score once solved (AttemptID/FinishedAt nil until).
 type SelfVariant struct {
-	ID         uuid.UUID  `json:"id"`
-	SubjectID  uuid.UUID  `json:"subject_id"`
-	Kind       TestKind   `json:"kind"`
-	Title      string     `json:"title"`
-	CreatedAt  time.Time  `json:"created_at"`
-	TaskCount  int64      `json:"task_count"`
-	AttemptID  *uuid.UUID `json:"attempt_id,omitempty"`
-	FinishedAt *time.Time `json:"finished_at,omitempty"`
-	Correct    int64      `json:"correct"`
-	Total      int64      `json:"total"`
+	Points        int64      `json:"points"`
+	MaxPoints     int64      `json:"max_points"`
+	PendingReview int64      `json:"pending_review"`
+	ID            uuid.UUID  `json:"id"`
+	SubjectID     uuid.UUID  `json:"subject_id"`
+	Kind          TestKind   `json:"kind"`
+	Title         string     `json:"title"`
+	CreatedAt     time.Time  `json:"created_at"`
+	TaskCount     int64      `json:"task_count"`
+	AttemptID     *uuid.UUID `json:"attempt_id,omitempty"`
+	FinishedAt    *time.Time `json:"finished_at,omitempty"`
+	Correct       int64      `json:"correct"`
+	Total         int64      `json:"total"`
 }
 
 // MasteryPoint is one (number, week) success bucket for the mastery line.

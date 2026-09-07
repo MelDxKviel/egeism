@@ -1,6 +1,7 @@
+import { SolutionPhotoPreview } from "./solution-photos";
 import { CSSProperties, ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { AttemptReviewItem, Media, mediaUrl, SubjectCode } from "./api";
+import { api, useInvalidate, AttemptReviewItem, Media, mediaUrl, SubjectCode } from "./api";
 import { useApp } from "./state";
 import { Icon, IconName } from "./icons";
 
@@ -487,24 +488,63 @@ export const testTitle = (t: string) => (t === "__practice__" ? "Свободн�
 // history (the «как решил» drill-down), so the two stay identical. Pass
 // selfView when the solver is viewing their own attempt («твой ответ» vs the
 // teacher's «ответ ученика»). Wrap it in a <Modal maxWidth="min(1200px, 96vw)">.
-export function AttemptReviewGrid({ items, selfView }: { items: AttemptReviewItem[]; selfView?: boolean }) {
+export function AttemptReviewGrid({ items: initialItems, selfView, attemptId }: { items: AttemptReviewItem[]; selfView?: boolean; attemptId?: string }) {
+  const { showToast } = useApp();
+  const invalidate = useInvalidate();
+  const [items, setItems] = useState(initialItems);
+  const [grades, setGrades] = useState<Record<string, { points: string; comment: string }>>(() => Object.fromEntries(initialItems.map((it) => [it.answer_id, { points: it.points == null ? "" : String(it.points), comment: it.teacher_comment ?? "" }])));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const manual = items.filter((it) => it.review_status !== "auto");
+  const pending = manual.filter((it) => it.review_status === "pending").length;
+  const editable = !!attemptId && !selfView && manual.length > 0;
+  const save = async () => {
+    if (!attemptId) return;
+    const valid = manual.every((it) => {
+      const value = grades[it.answer_id]?.points ?? "";
+      return value.trim() !== "" && Number.isInteger(Number(value)) && Number(value) >= 0 && Number(value) <= it.max_points;
+    });
+    if (!valid) { setError("Выставь баллы за каждое задание второй части в указанном диапазоне"); return; }
+    setBusy(true); setError("");
+    try {
+      setItems(await api.saveReview(attemptId, manual.map((it) => ({ answer_id: it.answer_id, points: Number(grades[it.answer_id].points), comment: grades[it.answer_id].comment }))));
+      ["assignments", "attempts", "self-variants", "mastery", "mastery-series", "forecast", "weak-spots", "heatmap", "practice-overview", "class-overview"].forEach(invalidate);
+      showToast("Проверка сохранена. Ученик получит уведомление");
+    } catch (e) { setError((e as Error).message); }
+    finally { setBusy(false); }
+  };
   if (items.length === 0) return <div style={{ color: "var(--text-2)" }}>В этой попытке нет ответов.</div>;
-  return (
+  return <div style={{ display: "grid", gap: 16 }}>
+    <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+      <b>Баллы: {items.reduce((sum, it) => sum + (it.points ?? 0), 0)} / {items.reduce((sum, it) => sum + it.max_points, 0)}</b>
+      {pending > 0 && <Pill tone="warn">Ожидают проверки: {pending} · баллы предварительные</Pill>}
+    </div>
     <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fill, minmax(min(340px, 100%), 1fr))", alignItems: "start" }}>
       {items.map((it) => (
         <div key={it.answer_id} style={{ padding: 14, background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 14 }}>
-          <div style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
+          <div style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center", flexWrap: "wrap" }}>
             <Pill tone="neutral">№{it.number}</Pill>
-            <Pill tone={it.is_correct ? "ok" : "bad"}>{it.is_correct ? "верно" : "неверно"}</Pill>
+            <Pill tone={it.review_status === "pending" ? "warn" : it.is_correct ? "ok" : "neutral"}>
+              {it.review_status === "pending" ? "На проверке" : `${it.points ?? 0} / ${it.max_points} балл.`}
+            </Pill>
           </div>
           <StatementView text={it.statement} media={it.media} style={{ fontSize: 14, lineHeight: 1.45, marginBottom: 8 }} />
           <MediaBlock media={it.media} />
-          <div className="mono" style={{ fontSize: 13, display: "flex", flexDirection: "column", gap: 4, overflowWrap: "anywhere" }}>
-            <div><span style={{ color: "var(--text-3)" }}>{selfView ? "твой ответ" : "ответ ученика"}: </span><b style={{ color: it.is_correct ? "var(--ok)" : "var(--bad)" }}>{it.raw_answer || "—"}</b></div>
-            <div><span style={{ color: "var(--text-3)" }}>верный ответ: </span><b style={{ color: "var(--ok)" }}>{it.correct.join(" / ")}</b></div>
+          <div style={{ fontSize: 13, display: "grid", gap: 8, overflowWrap: "anywhere" }}>
+            <div><span style={{ color: "var(--text-3)" }}>{selfView ? "Твой ответ" : "Ответ ученика"}: </span><b style={{ whiteSpace: "pre-wrap" }}>{it.raw_answer || "—"}</b></div>
+            {(it.correct ?? []).length > 0 && <div><span style={{ color: "var(--text-3)" }}>Верный ответ: </span><b>{it.correct.join(" / ")}</b></div>}
+            {(it.photos ?? []).length > 0 && <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>{it.photos.map((p) => <SolutionPhotoPreview key={p.id} photo={p} />)}</div>}
+            {it.review_status !== "auto" && !it.photos?.length && <div style={{ color: "var(--text-3)" }}>Фотографии решения не приложены</div>}
+            {editable && it.review_status !== "auto" ? <>
+              <label>Баллы (0–{it.max_points})<input aria-label={`Баллы за задание ${it.number}`} type="number" min={0} max={it.max_points} step={1} value={grades[it.answer_id]?.points ?? ""} disabled={busy} onChange={(e) => setGrades((g) => ({ ...g, [it.answer_id]: { ...g[it.answer_id], points: e.target.value } }))} style={{ width: 90, marginLeft: 8 }} /></label>
+              <label>Комментарий к решению<textarea aria-label={`Комментарий к заданию ${it.number}`} maxLength={5000} value={grades[it.answer_id]?.comment ?? ""} disabled={busy} onChange={(e) => setGrades((g) => ({ ...g, [it.answer_id]: { ...g[it.answer_id], comment: e.target.value } }))} rows={4} style={{ width: "100%", marginTop: 6 }} /></label>
+            </> : it.teacher_comment && <div style={{ whiteSpace: "pre-wrap", padding: 10, background: "var(--surface)", borderRadius: 8 }}><b>Комментарий учителя</b><br />{it.teacher_comment}</div>}
+            {it.reviewed_at && <small style={{ color: "var(--text-3)" }}>Проверено {new Date(it.reviewed_at).toLocaleString("ru")}</small>}
           </div>
         </div>
       ))}
     </div>
-  );
+    {error && <div role="alert" style={{ color: "var(--bad)" }}>{error}</div>}
+    {editable && <Button onClick={save} disabled={busy}>{busy ? "Сохраняем…" : pending > 0 ? "Завершить проверку и уведомить ученика" : "Сохранить изменения баллов и комментариев"}</Button>}
+  </div>;
 }

@@ -29,6 +29,7 @@ func toDomainTask(t sqlc.Task) (domain.Task, error) {
 		src = &s
 	}
 	return domain.Task{
+		Part: int(t.Part), GradingMode: t.GradingMode, MaxPoints: int(t.MaxPoints),
 		ID:           t.ID,
 		SubjectID:    t.SubjectID,
 		Number:       int(t.Number),
@@ -111,6 +112,7 @@ func toDomainAttempt(a sqlc.Attempt) domain.Attempt {
 
 func toDomainAnswer(a sqlc.Answer) domain.Answer {
 	return domain.Answer{
+		ReviewStatus: a.ReviewStatus, Points: a.Points, MaxPoints: int(a.MaxPoints), TeacherComment: a.TeacherComment, ReviewedAt: a.ReviewedAt,
 		ID:          a.ID,
 		AttemptID:   a.AttemptID,
 		TaskID:      a.TaskID,

@@ -9,6 +9,8 @@ import { Card, Label, Pill, Button, Async, Empty, Loading, Modal, accColor, SUBJ
 import { ScoreGauge, Ring, Heatmap, computeStreak, WeakSpotsList, Section, MasteryChart, Sparkline } from "./charts";
 import { AnswerInput } from "./answer";
 import { Icon, IconName } from "./icons";
+import { SolutionPhotoInput, SolutionPhotoPreview } from "./solution-photos";
+import { SolutionPhoto } from "./api";
 import { deadlineInfo } from "./deadline";
 import { confettiBurst } from "./confetti";
 import { dayKey, todayTotal, dailyGoal, streakAtRisk, effectiveStreak, streakCelebration, streakColor } from "./engage";
@@ -52,6 +54,7 @@ export function StreakBadge({ days, ember }: { days: number; ember?: boolean }) 
 export interface SolveRequest {
   subject: SubjectCode;
   number?: number;
+  taskId?: string;
   mode?: "mistakes" | "recommended";
   testId?: string;
   assignmentId?: string;
@@ -73,17 +76,18 @@ const grid12 = { display: "grid", gap: "var(--gap)", gridTemplateColumns: "repea
 // «как решил» drill-down. It owns the modal, so a screen just renders `modal` and
 // calls `open(card)`. Shared by the dashboard's assigned cards and the History
 // screen's assigned-tests list.
-export function useAttemptReview() {
-  const [review, setReview] = useState<{ title: string; items: AttemptReviewItem[] } | null>(null);
+export function useAttemptReview(editable = false) {
+  const { showToast } = useApp();
+  const [review, setReview] = useState<{ id: string; title: string; items: AttemptReviewItem[] } | null>(null);
   const open = async (card: { attempt_id?: string; title: string }) => {
     if (!card.attempt_id) return;
     const title = testTitle(card.title);
-    try { const items = await api.attemptReview(card.attempt_id); setReview({ title, items }); }
-    catch { setReview({ title, items: [] }); }
+    try { const items = await api.attemptReview(card.attempt_id); setReview({ id: card.attempt_id, title, items }); }
+    catch (e) { showToast((e as Error).message); }
   };
   const modal = review && (
     <Modal onClose={() => setReview(null)} title={`Разбор · ${review.title}`} maxWidth="min(1200px, 96vw)">
-      <AttemptReviewGrid items={review.items} selfView />
+      <AttemptReviewGrid key={review.id} items={review.items} selfView={!editable} attemptId={editable ? review.id : undefined} />
     </Modal>
   );
   return { open, modal };
@@ -125,7 +129,7 @@ function AssignedTestsList({ cards, onSolve, onReview }: {
             {solved
               ? (
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span className="mono" title={`${pct}% верно`} style={{ color: accColor(pct), fontWeight: 700 }}>{a.correct}/{a.total}</span>
+                  <span className="mono" title={`${pct}% верно`} style={{ color: accColor(pct), fontWeight: 700 }}>{a.points}/{a.max_points} балл.{a.pending_review > 0 ? ` · на проверке: ${a.pending_review}` : ""}</span>
                   {a.attempt_id && <Button variant="ghost" style={{ padding: "6px 12px", fontSize: 13 }} onClick={() => onReview(a)}>Разбор</Button>}
                 </div>
               )
@@ -351,7 +355,7 @@ export function SubjectScreen() {
 }
 
 // ---------- Solve session ----------
-interface Answered { taskId: string; number: number; correct: boolean; }
+interface Answered { taskId: string; number: number; correct: boolean; pending?: boolean; solution?: string[]; }
 
 // SessionTimer shows elapsed time since the session started (design §3.3: the
 // exam is timed). Per-task time is measured separately for time_spent_ms.
@@ -384,7 +388,7 @@ export function Solve() {
   const [tasks, setTasks] = useState<TaskView[]>([]);
   const [idx, setIdx] = useState(0);
   const [draft, setDraft] = useState("");
-  const [submitted, setSubmitted] = useState<{ ok: boolean; solution?: string[] } | null>(null);
+  const [submitted, setSubmitted] = useState<{ ok: boolean; pending?: boolean; solution?: string[] } | null>(null);
   const [done, setDone] = useState<Answered[]>([]);
   // Consecutive-correct run, shown as «серия ×N» once it reaches 2. Resets on a
   // wrong answer; drives the in-session momentum without any server state.
@@ -394,6 +398,11 @@ export function Solve() {
   const taskStart = useRef(Date.now());
   const sessionStart = useRef(Date.now());
   const [finished, setFinished] = useState(false);
+  const [requireSolution, setRequireSolution] = useState(false);
+  const [photos, setPhotos] = useState<Record<string, SolutionPhoto[]>>({});
+  const [busy, setBusy] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [level, setLevel] = useState<number>();
 
   // Snapshot the forecast as it was BEFORE this session, so the Results screen
   // can show the honest «Прогноз 58 → 60» delta after the refetch.
@@ -413,22 +422,28 @@ export function Solve() {
           const list = await api.testTasks(req.testId);
           if (list.length === 0) { setErr({ title: "Пока пусто", hint: "В этом тесте нет заданий.", art: "telescope" }); setLoading(false); return; }
           const att = await api.startAttempt(req.testId, req.assignmentId);
-          setAttemptId(att.id); setTasks(list);
+          setAttemptId(att.id); setTasks(list); setRequireSolution(att.require_solution);
         } else {
           const { attempt_id } = await api.startPractice(req.subject);
           // The pools are assembled server-side and all exclude what's already
           // mastered (solved correctly ≥2×): the mistake queue, the smart mix,
           // the per-номер drill, or free practice across the subject.
           let list: TaskView[];
-          if (req.mode === "mistakes") list = await api.mistakeTasks(req.subject, 15);
-          else if (req.mode === "recommended") list = (await api.recommended(req.subject, 12)).tasks;
+          if (req.taskId) list = [await api.task(req.taskId)];
+          else if (req.mode === "mistakes") list = await api.mistakeTasks(req.subject, 15);
+          else if (req.mode === "recommended") { const plan = await api.recommended(req.subject, 12); list = plan.tasks; setLevel(plan.max_number); }
           else list = await api.practiceTasks(req.subject, req.number ? 15 : 20, req.number);
+          if (list.length === 0 && req.mode !== "mistakes") {
+            await api.fetchStudentBank(req.subject, req.number);
+            if (req.mode === "recommended") { const plan = await api.recommended(req.subject, 12); list = plan.tasks; setLevel(plan.max_number); }
+            else list = await api.practiceTasks(req.subject, req.number ? 15 : 20, req.number);
+          }
           if (list.length === 0) {
             setErr(req.mode === "mistakes"
               ? { title: "Так держать!", hint: "Ошибок на разбор нет — очередь пуста.", art: "medal" }
               : req.number
                 ? { title: "Номер освоен", hint: "Ты уже решил все задания этого номера — молодец!", art: "medal" }
-                : { title: "Пока нет новых заданий", hint: "Либо всё освоено, либо банк пуст. Учитель может собрать вариант — он подтянет задания.", art: "telescope" });
+                : { title: "Пока нет новых заданий", hint: "Для твоего уровня пока нет новых заданий. Обнови банк в разделе «Банк заданий» и попробуй снова.", art: "telescope" });
             setLoading(false); return;
           }
           setAttemptId(attempt_id); setTasks(list.slice(0, 15));
@@ -445,21 +460,20 @@ export function Solve() {
   // pre-session forecast with itself and falsely claims «без изменений» (and
   // keeps claiming it if the refetch fails).
   const finishedAt = useRef(0);
-  const finishSession = () => {
-    api.finish(attemptId).catch(() => {});
-    finishedAt.current = Date.now();
-    // An assigned test just became "done" — refresh the dashboard feed.
-    if (req?.assignmentId) invalidate("assignments");
-    invalidate("attempts");
-    // The session just moved the training state: mistakes solved correctly left
-    // the queue, drilled tasks may be mastered now, a пробник got its score.
-    invalidate("practice-overview");
-    invalidate("self-variants");
-    // The answers also moved the score forecast (Results shows the delta), the
-    // heatmap and with it the streak and the daily-goal ring.
-    invalidate("forecast");
-    invalidate("heatmap");
-    setFinished(true);
+  const finishSession = async () => {
+    if (busy || uploading) return;
+    if (requireSolution) {
+      const missing = tasks.findIndex((t) => t.grading_mode === "manual" && !(photos[t.id]?.length));
+      if (missing >= 0) { setIdx(missing); setDraft(""); setSubmitted(null); showToast(`Прикрепи решение задания №${tasks[missing].number}`); return; }
+    }
+    setBusy(true);
+    try {
+      await api.finish(attemptId);
+      finishedAt.current = Date.now();
+      ["assignments", "attempts", "practice-overview", "self-variants", "mastery", "forecast", "heatmap"].forEach(invalidate);
+      setFinished(true);
+    } catch (e) { showToast((e as Error).message); }
+    finally { setBusy(false); }
   };
 
   if (loading) return <Loading label="Готовим задания…" />;
@@ -471,28 +485,36 @@ export function Solve() {
 
   const task = tasks[idx];
   const submit = async () => {
-    if (!draft.trim()) { showToast("Введите ответ"); return; }
+    if (busy || uploading) return;
+    const manual = task.grading_mode === "manual";
+    if (!draft.trim() && !(manual && photos[task.id]?.length)) { showToast(manual ? "Напиши ответ или прикрепи фотографию решения" : "Введите ответ"); return; }
+    if (manual && requireSolution && !photos[task.id]?.length) { showToast("Прикрепи фотографию решения"); return; }
+    setBusy(true);
     const dt = Date.now() - taskStart.current;
     try {
       const r = await api.submit(attemptId, task.id, draft, dt);
-      setSubmitted({ ok: r.is_correct, solution: r.solution });
+      setSubmitted({ ok: r.is_correct, solution: r.solution, pending: r.review_status === "pending" });
       setCombo((c) => (r.is_correct ? c + 1 : 0));
-      setDone((d) => [...d.filter((x) => x.taskId !== task.id), { taskId: task.id, number: task.number, correct: r.is_correct }]);
+      setDone((d) => [...d.filter((x) => x.taskId !== task.id), { taskId: task.id, number: task.number, correct: r.is_correct, pending: r.review_status === "pending", solution: r.solution }]);
       if (r.is_correct) {
         // The salute scales with the run (3/5/10) — a combo earns a bigger sky.
         const run = combo + 1;
         confettiBurst({ count: run >= 10 ? 110 : run >= 5 ? 70 : run >= 3 ? 46 : 26 });
       }
     } catch (e) { showToast(String((e as Error).message)); }
+    finally { setBusy(false); }
   };
   const next = () => {
     if (idx >= tasks.length - 1) { finishSession(); return; }
-    setIdx(idx + 1); setDraft(""); setSubmitted(null); taskStart.current = Date.now();
+    const answered = done.find((a) => a.taskId === tasks[idx + 1].id);
+    setIdx(idx + 1); setDraft(""); setSubmitted(answered ? { ok: answered.correct, pending: answered.pending, solution: answered.solution } : null); taskStart.current = Date.now();
   };
 
   return (
     <div style={{ maxWidth: 720, margin: "0 auto", display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
       {req?.title && <div style={{ fontWeight: 700, fontSize: 16 }}>{req.title}</div>}
+      {level != null && <div style={{ color: "var(--text-2)", fontSize: 13 }}>Текущий этап: №1–{level}. Сложность растёт после устойчивых результатов на предыдущих номерах.</div>}
+      {requireSolution && <Pill tone="warn">Для каждого задания второй части нужна фотография решения</Pill>}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <span className="mono" style={{ color: "var(--text-2)", display: "inline-flex", alignItems: "center", gap: 12 }}>
           {idx + 1} / {tasks.length}
@@ -508,7 +530,7 @@ export function Solve() {
               const a = done.find((x) => x.taskId === t.id);
               return <div key={t.id} style={{
                 width: 9, height: 9, borderRadius: 999,
-                background: a ? (a.correct ? "var(--ok)" : "var(--bad)") : i === idx ? "var(--text-3)" : "var(--border-2)",
+                background: a ? (a.pending ? "var(--warn)" : a.correct ? "var(--ok)" : "var(--bad)") : i === idx ? "var(--text-3)" : "var(--border-2)",
               }} />;
             })}
           </div>
@@ -517,26 +539,30 @@ export function Solve() {
             <div style={{ width: `${Math.round((done.length / tasks.length) * 100)}%`, height: "100%", background: "var(--accent)" }} />
           </div>
         )}
-        <Button variant="ghost" style={{ padding: "6px 12px", fontSize: 13 }} onClick={finishSession}>Завершить</Button>
+        <Button variant="ghost" style={{ padding: "6px 12px", fontSize: 13 }} disabled={busy || uploading} onClick={finishSession}>{busy ? "Сохраняем…" : "Завершить"}</Button>
       </div>
 
       <Card>
         <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
           <Pill tone="neutral">№{task.number}</Pill>
-          <Pill>{task.answer_kind}</Pill>
+          <Pill>{task.grading_mode === "manual" ? `Часть 2 · ${task.max_points} балл. · проверяет учитель` : task.answer_kind}</Pill>
         </div>
         <StatementView text={task.statement} media={task.media} style={{ fontSize: 17, lineHeight: 1.5, marginBottom: 18 }} />
         <MediaBlock media={task.media} />
-        {!submitted && <AnswerInput kind={task.answer_kind} value={draft} onChange={setDraft} />}
+        {!submitted && (task.grading_mode === "manual" ? <>
+          <label>Ответ или пояснение<textarea aria-label="Ответ или пояснение" rows={4} maxLength={10000} value={draft} disabled={busy || uploading} onChange={(e) => setDraft(e.target.value)} placeholder="Можно оставить пустым, если всё решение на фотографии" style={{ width: "100%", marginTop: 6 }} /></label>
+          <SolutionPhotoInput key={task.id} attemptId={attemptId} taskId={task.id} photos={photos[task.id] ?? []} onChange={(p) => setPhotos((all) => ({ ...all, [task.id]: p }))} onBusy={setUploading} required={requireSolution} />
+        </> : <AnswerInput kind={task.answer_kind} value={draft} onChange={setDraft} disabled={busy} />)}
+        {submitted && (photos[task.id] ?? []).map((p) => <SolutionPhotoPreview key={p.id} photo={p} />)}
         {submitted && (
           <div className={submitted.ok ? "celebrate" : undefined} style={{
             padding: 16, borderRadius: 12, marginTop: 4,
-            background: submitted.ok ? "var(--ok-soft)" : "var(--bad-soft)",
-            color: submitted.ok ? "var(--ok)" : "var(--bad)",
+            background: submitted.pending ? "var(--warn-soft)" : submitted.ok ? "var(--ok-soft)" : "var(--bad-soft)",
+            color: submitted.pending ? "var(--warn)" : submitted.ok ? "var(--ok)" : "var(--bad)",
           }}>
             <div style={{ display: "flex", alignItems: "center", gap: 7, fontWeight: 700, marginBottom: submitted.solution?.length ? 8 : 0 }}>
               {submitted.ok && <Icon name="check" size={18} className="checkpop" />}
-              {submitted.ok ? "Верно!" : "Пока неверно"}
+              {submitted.pending ? "Решение сохранено. После сдачи теста его проверит учитель" : submitted.ok ? "Верно!" : "Пока неверно"}
               {submitted.ok && combo >= 2 && (
                 <span className="mono" style={{
                   marginLeft: "auto", background: "var(--warn-soft)", color: "var(--warn)",
@@ -553,8 +579,8 @@ export function Solve() {
 
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
         {!submitted
-          ? <Button onClick={submit}>Ответить</Button>
-          : <Button onClick={next}>
+          ? <Button disabled={busy || uploading} onClick={submit}>{busy ? "Сохраняем…" : task.grading_mode === "manual" ? "Отправить решение" : "Ответить"}</Button>
+          : <Button disabled={busy || uploading} onClick={next}>
               {idx >= tasks.length - 1 ? "Итоги" : (
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>Дальше <Icon name="arrowRight" size={16} /></span>
               )}
@@ -597,8 +623,10 @@ function Results({ tasks, done, forecast, forecastBefore, onExit }: {
   onExit: () => void;
 }) {
   const correct = done.filter((d) => d.correct).length;
-  const pct = tasks.length ? Math.round((correct / tasks.length) * 100) : 0;
-  const perfect = pct === 100 && tasks.length > 0;
+  const pending = tasks.filter((t) => t.grading_mode === "manual").length;
+  const gradedCount = tasks.length - pending;
+  const pct = gradedCount ? Math.round((correct / gradedCount) * 100) : 0;
+  const perfect = pending === 0 && pct === 100 && tasks.length > 0;
   // A perfect variant earns one big final salute (reduced-motion → silence,
   // handled inside confettiBurst).
   useEffect(() => {
@@ -609,8 +637,9 @@ function Results({ tasks, done, forecast, forecastBefore, onExit }: {
     <div style={{ maxWidth: 640, margin: "0 auto", display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
       <Card style={{ textAlign: "center", padding: "clamp(20px, 6vw, 34px)" }}>
         <Label>Итоги</Label>
-        <div className="mono" style={{ fontSize: 54, fontWeight: 700, letterSpacing: "-0.02em", color: accColor(pct), margin: "10px 0" }}>{pct}%</div>
-        <div style={{ color: "var(--text-2)" }}>{correct} из {tasks.length} верно{perfect ? " — идеально!" : ""}</div>
+        <div className="mono" style={{ fontSize: 54, fontWeight: 700, letterSpacing: "-0.02em", color: accColor(pct), margin: "10px 0" }}>{pending ? "Тест сдан" : `${pct}%`}</div>
+        <div style={{ color: "var(--text-2)" }}>{correct} из {gradedCount} автоматически проверенных заданий верно{perfect ? " — идеально!" : ""}</div>
+        {pending > 0 && <p>На проверке у учителя: {pending}. Баллы и комментарии появятся в разборе. Мы пришлём уведомление.</p>}
         {forecast && forecastBefore && <ForecastDelta before={forecastBefore} after={forecast} />}
       </Card>
       <Section title="По заданиям">
@@ -621,8 +650,8 @@ function Results({ tasks, done, forecast, forecastBefore, onExit }: {
               <div key={t.id} style={{ display: "flex", justifyContent: "space-between", padding: "8px 12px", background: "var(--surface-2)", borderRadius: 12 }}>
                 <span className="mono">№{t.number}</span>
                 {/* «верно» = success → green ok token (blue is reserved for actions). */}
-                <span style={{ color: a ? (a.correct ? "var(--ok)" : "var(--bad)") : "var(--text-3)" }}>
-                  {a ? (a.correct ? "верно" : "неверно") : "пропущено"}
+                <span style={{ color: t.grading_mode === "manual" ? "var(--warn)" : a ? (a.correct ? "var(--ok)" : "var(--bad)") : "var(--text-3)" }}>
+                  {t.grading_mode === "manual" ? "на проверке" : a ? (a.correct ? "верно" : "неверно") : "пропущено"}
                 </span>
               </div>
             );

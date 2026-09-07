@@ -9,7 +9,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
-	"egeism/internal/checker"
 	"egeism/internal/domain"
 )
 
@@ -20,6 +19,10 @@ type startAttemptReq struct {
 
 func (s *Server) handleStartAttempt(w http.ResponseWriter, r *http.Request) {
 	user, _ := userFrom(r.Context())
+	if user.Role != domain.RoleStudent {
+		writeErr(w, 403, "Тесты решают ученики")
+		return
+	}
 	var req startAttemptReq
 	if !decodeJSON(w, r, &req) {
 		return
@@ -46,10 +49,29 @@ func (s *Server) handleStartAttempt(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if req.AssignmentID == nil {
+		test, err := s.store.GetTest(r.Context(), req.TestID)
+		if err != nil {
+			writeStoreErr(w, err)
+			return
+		}
+		if test.CreatedBy != user.ID {
+			writeErr(w, 403, "Начни тест из своего назначения")
+			return
+		}
+	}
 	att, err := s.store.StartAttempt(r.Context(), user.ID, req.TestID, req.AssignmentID)
 	if err != nil {
 		writeStoreErr(w, err)
 		return
+	}
+	if req.AssignmentID != nil {
+		asg, err := s.store.GetAssignment(r.Context(), *req.AssignmentID)
+		if err != nil {
+			writeStoreErr(w, err)
+			return
+		}
+		att.RequireSolution = asg.RequireSolution
 	}
 	writeJSON(w, http.StatusCreated, att)
 }
@@ -61,8 +83,9 @@ type submitAnswerReq struct {
 }
 
 type submitAnswerResp struct {
-	IsCorrect bool   `json:"is_correct"`
-	AnswerID  string `json:"answer_id"`
+	ReviewStatus string `json:"review_status"`
+	IsCorrect    bool   `json:"is_correct"`
+	AnswerID     string `json:"answer_id"`
 	// Solution is revealed only on a wrong answer (post-commit), so the client
 	// can show a разбор without ever seeing the answer before submitting (§3.4).
 	Solution []string `json:"solution,omitempty"`
@@ -105,15 +128,13 @@ func (s *Server) handleSubmitAnswer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	correct := checker.Check(task.AnswerSchema, req.RawAnswer)
-
-	ans, err := s.store.RecordAnswer(r.Context(), attemptID, req.TaskID, req.RawAnswer, correct, req.TimeSpentMS)
+	ans, err := s.store.SubmitAnswer(r.Context(), attemptID, req.TaskID, req.RawAnswer, req.TimeSpentMS)
 	if err != nil {
 		writeStoreErr(w, err)
 		return
 	}
-	resp := submitAnswerResp{IsCorrect: ans.IsCorrect, AnswerID: ans.ID.String()}
-	if !correct {
+	resp := submitAnswerResp{IsCorrect: ans.IsCorrect, AnswerID: ans.ID.String(), ReviewStatus: ans.ReviewStatus}
+	if !ans.IsCorrect && ans.ReviewStatus == "auto" {
 		resp.Solution = task.AnswerSchema.Correct
 	}
 	writeJSON(w, http.StatusCreated, resp)
@@ -135,7 +156,7 @@ func (s *Server) handleFinishAttempt(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusForbidden, "attempt does not belong to user")
 		return
 	}
-	finished, err := s.store.FinishAttempt(r.Context(), attemptID)
+	finished, err := s.store.FinishSubmission(r.Context(), attemptID)
 	if err != nil {
 		writeStoreErr(w, err)
 		return
@@ -144,7 +165,7 @@ func (s *Server) handleFinishAttempt(w http.ResponseWriter, r *http.Request) {
 	// the "Назначено тебе" feed and the teacher's overview reflect it. Best-effort:
 	// the finished attempt itself is already the source of truth.
 	if att.AssignmentID != nil {
-		s.completeAssignment(r.Context(), *att.AssignmentID)
+		s.completeAssignment(r.Context(), *att.AssignmentID, att.ID)
 	}
 	writeJSON(w, http.StatusOK, finished)
 }
@@ -154,7 +175,7 @@ func (s *Server) handleFinishAttempt(w http.ResponseWriter, r *http.Request) {
 // web bell). A later re-finish of another attempt on the same assignment stays
 // silent. Failures are logged, not surfaced: the finished attempt is already
 // the source of truth.
-func (s *Server) completeAssignment(ctx context.Context, assignmentID uuid.UUID) {
+func (s *Server) completeAssignment(ctx context.Context, assignmentID uuid.UUID, attemptID ...uuid.UUID) {
 	asg, err := s.store.GetAssignment(ctx, assignmentID)
 	if err != nil {
 		slog.Warn("load assignment on finish failed", "assignment", assignmentID, "err", err)
@@ -167,7 +188,7 @@ func (s *Server) completeAssignment(ctx context.Context, assignmentID uuid.UUID)
 		slog.Warn("mark assignment done failed", "assignment", assignmentID, "err", err)
 		return
 	}
-	if err := s.store.CreateNotification(ctx, asg.AssignedBy, domain.NotificationAssignmentDone, assignmentID); err != nil {
+	if err := s.store.CreateNotification(ctx, asg.AssignedBy, domain.NotificationAssignmentDone, assignmentID, attemptID...); err != nil {
 		slog.Warn("create done-notification failed", "assignment", assignmentID, "err", err)
 	}
 }
@@ -186,7 +207,11 @@ func (s *Server) attemptReadable(w http.ResponseWriter, r *http.Request, attempt
 		return false
 	}
 	if user.Role == domain.RoleTeacher {
-		return s.studentOfTeacher(w, r, user, att.StudentID)
+		if !s.studentOfTeacher(w, r, user, att.StudentID) {
+			return false
+		}
+		_, ok := s.testInScope(w, r, user, att.TestID)
+		return ok
 	}
 	if att.StudentID != user.ID {
 		writeErr(w, http.StatusForbidden, "attempt does not belong to user")
@@ -216,17 +241,23 @@ func (s *Server) handleListAttemptAnswers(w http.ResponseWriter, r *http.Request
 // condition + media and the correct answer, so a teacher can review what the
 // student saw and how they answered (not just the bare number).
 type attemptReviewItem struct {
-	AnswerID    uuid.UUID         `json:"answer_id"`
-	TaskID      uuid.UUID         `json:"task_id"`
-	Number      int               `json:"number"`
-	Statement   string            `json:"statement"`
-	Media       []domain.Media    `json:"media"`
-	AnswerKind  domain.AnswerType `json:"answer_kind"`
-	RawAnswer   string            `json:"raw_answer"`
-	IsCorrect   bool              `json:"is_correct"`
-	Correct     []string          `json:"correct"`
-	TimeSpentMS int64             `json:"time_spent_ms"`
-	AnsweredAt  time.Time         `json:"answered_at"`
+	ReviewStatus   string                 `json:"review_status"`
+	Points         *int32                 `json:"points"`
+	MaxPoints      int                    `json:"max_points"`
+	TeacherComment string                 `json:"teacher_comment"`
+	ReviewedAt     *time.Time             `json:"reviewed_at,omitempty"`
+	Photos         []domain.SolutionPhoto `json:"photos"`
+	AnswerID       uuid.UUID              `json:"answer_id"`
+	TaskID         uuid.UUID              `json:"task_id"`
+	Number         int                    `json:"number"`
+	Statement      string                 `json:"statement"`
+	Media          []domain.Media         `json:"media"`
+	AnswerKind     domain.AnswerType      `json:"answer_kind"`
+	RawAnswer      string                 `json:"raw_answer"`
+	IsCorrect      bool                   `json:"is_correct"`
+	Correct        []string               `json:"correct"`
+	TimeSpentMS    int64                  `json:"time_spent_ms"`
+	AnsweredAt     time.Time              `json:"answered_at"`
 }
 
 // handleAttemptReview returns an attempt's answers joined to their tasks — the
@@ -246,9 +277,15 @@ func (s *Server) handleAttemptReview(w http.ResponseWriter, r *http.Request) {
 		writeStoreErr(w, err)
 		return
 	}
+	photos, err := s.store.SolutionPhotos(r.Context(), attemptID)
+	if err != nil {
+		writeStoreErr(w, err)
+		return
+	}
 	items := make([]attemptReviewItem, 0, len(answers))
 	for _, a := range answers {
 		it := attemptReviewItem{
+			ReviewStatus: a.ReviewStatus, Points: a.Points, MaxPoints: a.MaxPoints, TeacherComment: a.TeacherComment, ReviewedAt: a.ReviewedAt, Photos: []domain.SolutionPhoto{},
 			AnswerID:    a.ID,
 			TaskID:      a.TaskID,
 			RawAnswer:   a.RawAnswer,
@@ -266,7 +303,16 @@ func (s *Server) handleAttemptReview(w http.ResponseWriter, r *http.Request) {
 				it.Media = task.Media
 			}
 			it.AnswerKind = task.AnswerSchema.Type
-			it.Correct = task.AnswerSchema.Correct
+			if task.GradingMode != "manual" || a.ReviewStatus == "reviewed" {
+				it.Correct = task.AnswerSchema.Correct
+			} else if user, _ := userFrom(r.Context()); user.Role != domain.RoleStudent {
+				it.Correct = task.AnswerSchema.Correct
+			}
+		}
+		for _, p := range photos {
+			if p.TaskID == a.TaskID {
+				it.Photos = append(it.Photos, p)
+			}
 		}
 		items = append(items, it)
 	}

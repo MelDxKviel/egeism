@@ -14,9 +14,14 @@ import (
 // CreateNotification records an in-app notification about an assignment event.
 // Recipient: the student for assignment_created, the assigning teacher for
 // assignment_done.
-func (s *Store) CreateNotification(ctx context.Context, userID uuid.UUID, kind domain.NotificationKind, assignmentID uuid.UUID) error {
+func (s *Store) CreateNotification(ctx context.Context, userID uuid.UUID, kind domain.NotificationKind, assignmentID uuid.UUID, attemptID ...uuid.UUID) error {
+	var att *uuid.UUID
+	if len(attemptID) > 0 {
+		att = &attemptID[0]
+	}
 	err := s.q.CreateNotification(ctx, sqlc.CreateNotificationParams{
-		UserID: userID, Kind: string(kind), AssignmentID: &assignmentID,
+		AttemptID: att,
+		UserID:    userID, Kind: string(kind), AssignmentID: &assignmentID,
 	})
 	if err != nil {
 		return mapErr(err)
@@ -56,6 +61,7 @@ func (s *Store) ListNotifications(ctx context.Context, userID uuid.UUID, limit i
 		// missing pieces collapse to zero values the JSON encoder omits or the
 		// web ignores — clients key on Kind before touching them.
 		n := domain.Notification{
+			AttemptID: r.AttemptID,
 			ID:        r.ID,
 			Kind:      domain.NotificationKind(r.Kind),
 			ReadAt:    r.ReadAt,
@@ -73,9 +79,7 @@ func (s *Store) ListNotifications(ctx context.Context, userID uuid.UUID, limit i
 		if r.SubjectID != nil {
 			n.SubjectID = *r.SubjectID
 		}
-		if r.StudentID != nil {
-			n.StudentID = *r.StudentID
-		}
+		n.StudentID = r.StudentID
 		if r.StudentName != nil {
 			n.StudentName = *r.StudentName
 		}

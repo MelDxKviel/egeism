@@ -76,11 +76,12 @@ type MediaRef struct {
 
 // TaskView mirrors the API student-facing task shape (no correct answer).
 type TaskView struct {
-	ID         string     `json:"id"`
-	Number     int        `json:"number"`
-	Statement  string     `json:"statement"`
-	Media      []MediaRef `json:"media"`
-	AnswerKind string     `json:"answer_kind"`
+	GradingMode string     `json:"grading_mode"`
+	ID          string     `json:"id"`
+	Number      int        `json:"number"`
+	Statement   string     `json:"statement"`
+	Media       []MediaRef `json:"media"`
+	AnswerKind  string     `json:"answer_kind"`
 }
 
 type practiceResp struct {

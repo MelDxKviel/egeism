@@ -16,14 +16,17 @@ import (
 // server-side. answer_kind + bot_solvable let the UI pick the right input
 // widget (§3.3, §8).
 type taskView struct {
-	ID          uuid.UUID          `json:"id"`
-	SubjectID   uuid.UUID          `json:"subject_id"`
-	Number      int                `json:"number"`
-	Statement   string             `json:"statement"`
-	Media       []domain.Media     `json:"media"`
-	Status      domain.TaskStatus  `json:"status"`
-	AnswerKind  domain.AnswerType  `json:"answer_kind"`
-	BotSolvable bool               `json:"bot_solvable"`
+	Part        int               `json:"part"`
+	GradingMode string            `json:"grading_mode"`
+	MaxPoints   int               `json:"max_points"`
+	ID          uuid.UUID         `json:"id"`
+	SubjectID   uuid.UUID         `json:"subject_id"`
+	Number      int               `json:"number"`
+	Statement   string            `json:"statement"`
+	Media       []domain.Media    `json:"media"`
+	Status      domain.TaskStatus `json:"status"`
+	AnswerKind  domain.AnswerType `json:"answer_kind"`
+	BotSolvable bool              `json:"bot_solvable"`
 }
 
 func toTaskView(t domain.Task) taskView {
@@ -32,6 +35,7 @@ func toTaskView(t domain.Task) taskView {
 		media = []domain.Media{}
 	}
 	return taskView{
+		Part: t.Part, GradingMode: t.GradingMode, MaxPoints: t.MaxPoints,
 		ID:          t.ID,
 		SubjectID:   t.SubjectID,
 		Number:      t.Number,

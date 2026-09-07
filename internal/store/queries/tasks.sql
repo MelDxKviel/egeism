@@ -2,8 +2,8 @@
 SELECT * FROM tasks WHERE id = $1;
 
 -- name: CreateTask :one
-INSERT INTO tasks (subject_id, number, statement, media, answer_schema, source, status)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO tasks (subject_id, number, statement, media, answer_schema, source, status, part, grading_mode, max_points)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 RETURNING *;
 
 -- name: ListTasks :many
@@ -38,7 +38,7 @@ WHERE t.subject_id = sqlc.arg('subject_id') AND t.status = 'active'
   AND (
     SELECT count(*) FROM answers a
     JOIN attempts att ON att.id = a.attempt_id
-    WHERE att.student_id = sqlc.arg('student_id') AND a.task_id = t.id AND a.is_correct
+    WHERE a.review_status <> 'pending' AND att.student_id = sqlc.arg('student_id') AND a.task_id = t.id AND a.is_correct
   ) < sqlc.arg('mastered')::bigint
 ORDER BY random()
 LIMIT sqlc.arg('lim');
@@ -52,11 +52,12 @@ JOIN LATERAL (
     SELECT a.is_correct, a.answered_at
     FROM answers a
     JOIN attempts att ON att.id = a.attempt_id
-    WHERE att.student_id = sqlc.arg('student_id') AND a.task_id = t.id
+    WHERE a.review_status <> 'pending' AND att.student_id = sqlc.arg('student_id') AND a.task_id = t.id
     ORDER BY a.answered_at DESC
     LIMIT 1
 ) last ON NOT last.is_correct
 WHERE t.subject_id = sqlc.arg('subject_id') AND t.status = 'active'
+  AND (sqlc.narg('max_number')::int IS NULL OR t.number <= sqlc.narg('max_number'))
 ORDER BY last.answered_at
 LIMIT sqlc.arg('lim');
 
@@ -67,7 +68,7 @@ JOIN LATERAL (
     SELECT a.is_correct
     FROM answers a
     JOIN attempts att ON att.id = a.attempt_id
-    WHERE att.student_id = sqlc.arg('student_id') AND a.task_id = t.id
+    WHERE a.review_status <> 'pending' AND att.student_id = sqlc.arg('student_id') AND a.task_id = t.id
     ORDER BY a.answered_at DESC
     LIMIT 1
 ) last ON NOT last.is_correct
@@ -89,7 +90,7 @@ LEFT JOIN LATERAL (
     SELECT count(*) AS total_cnt, count(*) FILTER (WHERE a.is_correct) AS correct_cnt
     FROM answers a
     JOIN attempts att ON att.id = a.attempt_id
-    WHERE a.task_id = t.id AND att.student_id = sqlc.arg('student_id')
+    WHERE a.review_status <> 'pending' AND a.task_id = t.id AND att.student_id = sqlc.arg('student_id')
 ) st ON TRUE
 WHERE t.subject_id = sqlc.arg('subject_id')
 GROUP BY t.number

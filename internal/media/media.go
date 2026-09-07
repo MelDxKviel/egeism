@@ -42,7 +42,29 @@ func New(ctx context.Context, cfg config.Config) (*Store, error) {
 	if err := s.ensureBucket(ctx); err != nil {
 		return nil, err
 	}
+	// Student photos must never inherit the task bucket's anonymous-download
+	// policy (used by Telegram). A separate bucket stays private.
+	privateBucket := s.bucket + "-solutions"
+	exists, err := client.BucketExists(ctx, privateBucket)
+	if err != nil {
+		return nil, err
+	}
+	if !exists {
+		if err := client.MakeBucket(ctx, privateBucket, minio.MakeBucketOptions{}); err != nil {
+			return nil, err
+		}
+	}
+	if err := client.SetBucketPolicy(ctx, privateBucket, ""); err != nil {
+		return nil, err
+	}
 	return s, nil
+}
+
+func (s *Store) objectBucket(key string) string {
+	if strings.HasPrefix(key, "solutions/") {
+		return s.bucket + "-solutions"
+	}
+	return s.bucket
 }
 
 func (s *Store) ensureBucket(ctx context.Context) error {
@@ -63,6 +85,16 @@ type Object struct {
 	Body        io.ReadCloser
 	ContentType string
 	Size        int64
+}
+
+// Private uploads use random keys in a namespace excluded from public serving.
+func (s *Store) PutPrivate(ctx context.Context, key string, data []byte, contentType string) error {
+	_, err := s.client.PutObject(ctx, s.bucket+"-solutions", key, bytes.NewReader(data), int64(len(data)), minio.PutObjectOptions{ContentType: contentType})
+	return err
+}
+
+func (s *Store) Delete(ctx context.Context, key string) error {
+	return s.client.RemoveObject(ctx, s.objectBucket(key), key, minio.RemoveObjectOptions{})
 }
 
 // Put stores bytes under a content-addressed key and returns the key. keyHint
@@ -109,7 +141,7 @@ func (s *Store) PutFromURL(ctx context.Context, srcURL string) (string, error) {
 // Get streams an object back for serving.
 func (s *Store) Get(ctx context.Context, key string) (*Object, error) {
 	key = strings.TrimPrefix(key, "/")
-	obj, err := s.client.GetObject(ctx, s.bucket, key, minio.GetObjectOptions{})
+	obj, err := s.client.GetObject(ctx, s.objectBucket(key), key, minio.GetObjectOptions{})
 	if err != nil {
 		return nil, err
 	}

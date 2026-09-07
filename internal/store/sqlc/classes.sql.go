@@ -34,7 +34,7 @@ SELECT att.student_id, t.number,
 FROM answers a
 JOIN attempts att ON att.id = a.attempt_id
 JOIN tasks t      ON t.id = a.task_id
-WHERE t.subject_id = $2
+WHERE a.review_status <> 'pending' AND t.subject_id = $2
   AND att.student_id IN (SELECT student_id FROM class_members WHERE class_id = $1)
 GROUP BY att.student_id, t.number
 ORDER BY att.student_id, t.number

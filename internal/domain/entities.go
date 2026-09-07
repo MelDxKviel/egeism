@@ -189,6 +189,9 @@ type Source struct {
 
 // Task is a single part-1 exercise.
 type Task struct {
+	Part         int          `json:"part"`
+	GradingMode  string       `json:"grading_mode"`
+	MaxPoints    int          `json:"max_points"`
 	ID           uuid.UUID    `json:"id"`
 	SubjectID    uuid.UUID    `json:"subject_id"`
 	Number       int          `json:"number"` // номер задания в ЕГЭ
@@ -203,7 +206,7 @@ type Task struct {
 // BotSolvable reports whether the task can be solved inside a chat: short
 // answers with no attached media (§8). Everything else is web-only.
 func (t Task) BotSolvable() bool {
-	if len(t.Media) > 0 {
+	if t.GradingMode == "manual" || len(t.Media) > 0 {
 		return false
 	}
 	switch t.AnswerSchema.Type {
@@ -252,35 +255,42 @@ type NumberAvailability struct {
 // passing it flips a still-unsolved assignment to "missed", but the student
 // can still solve it late (finish then flips missed → done).
 type Assignment struct {
-	ID          uuid.UUID        `json:"id"`
-	TestID      uuid.UUID        `json:"test_id"`
-	StudentID   uuid.UUID        `json:"student_id"`
-	AssignedBy  uuid.UUID        `json:"assigned_by"`
-	ScheduledAt time.Time        `json:"scheduled_at"`
-	NotifiedAt  *time.Time       `json:"notified_at,omitempty"`
-	Status      AssignmentStatus `json:"status"`
-	DueAt       *time.Time       `json:"due_at,omitempty"`
+	RequireSolution bool             `json:"require_solution"`
+	ID              uuid.UUID        `json:"id"`
+	TestID          uuid.UUID        `json:"test_id"`
+	StudentID       uuid.UUID        `json:"student_id"`
+	AssignedBy      uuid.UUID        `json:"assigned_by"`
+	ScheduledAt     time.Time        `json:"scheduled_at"`
+	NotifiedAt      *time.Time       `json:"notified_at,omitempty"`
+	Status          AssignmentStatus `json:"status"`
+	DueAt           *time.Time       `json:"due_at,omitempty"`
 }
 
 // Attempt is a student working through a test. AssignmentID is nullable so a
 // student can practice on their own with no assignment.
 type Attempt struct {
-	ID           uuid.UUID  `json:"id"`
-	AssignmentID *uuid.UUID `json:"assignment_id,omitempty"`
-	TestID       uuid.UUID  `json:"test_id"`
-	StudentID    uuid.UUID  `json:"student_id"`
-	StartedAt    time.Time  `json:"started_at"`
-	FinishedAt   *time.Time `json:"finished_at,omitempty"`
+	RequireSolution bool       `json:"require_solution"`
+	ID              uuid.UUID  `json:"id"`
+	AssignmentID    *uuid.UUID `json:"assignment_id,omitempty"`
+	TestID          uuid.UUID  `json:"test_id"`
+	StudentID       uuid.UUID  `json:"student_id"`
+	StartedAt       time.Time  `json:"started_at"`
+	FinishedAt      *time.Time `json:"finished_at,omitempty"`
 }
 
 // Answer is one submitted response, already checked. is_correct plus
 // time_spent_ms feeds heatmap, weak-spots and per-task timing.
 type Answer struct {
-	ID          uuid.UUID `json:"id"`
-	AttemptID   uuid.UUID `json:"attempt_id"`
-	TaskID      uuid.UUID `json:"task_id"`
-	RawAnswer   string    `json:"raw_answer"`
-	IsCorrect   bool      `json:"is_correct"`
-	TimeSpentMS int64     `json:"time_spent_ms"`
-	AnsweredAt  time.Time `json:"answered_at"`
+	ReviewStatus   string     `json:"review_status"`
+	Points         *int32     `json:"points"`
+	MaxPoints      int        `json:"max_points"`
+	TeacherComment string     `json:"teacher_comment"`
+	ReviewedAt     *time.Time `json:"reviewed_at,omitempty"`
+	ID             uuid.UUID  `json:"id"`
+	AttemptID      uuid.UUID  `json:"attempt_id"`
+	TaskID         uuid.UUID  `json:"task_id"`
+	RawAnswer      string     `json:"raw_answer"`
+	IsCorrect      bool       `json:"is_correct"`
+	TimeSpentMS    int64      `json:"time_spent_ms"`
+	AnsweredAt     time.Time  `json:"answered_at"`
 }
