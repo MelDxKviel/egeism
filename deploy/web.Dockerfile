@@ -8,5 +8,7 @@ COPY web/ ./
 RUN npm run build
 
 FROM nginx:alpine
+ARG APP_REVISION=dev
+RUN printf '{"revision":"%s"}\n' "$APP_REVISION" > /usr/share/nginx/html/version.json
 COPY deploy/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /web/dist /usr/share/nginx/html

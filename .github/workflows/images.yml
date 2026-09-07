@@ -4,6 +4,11 @@ on:
   push:
     branches: [codex/k3s-bootstrap]
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      revision:
+        required: true
+        type: string
 
 concurrency:
   group: images-${{ github.ref }}
@@ -42,6 +47,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.revision || github.sha }}
 
       - name: Log in to GHCR
         uses: docker/login-action@v4
@@ -58,9 +65,11 @@ jobs:
         with:
           context: .
           file: ${{ matrix.dockerfile }}
-          build-args: ${{ matrix.build_args }}
+          build-args: |
+            ${{ matrix.build_args }}
+            APP_REVISION=${{ inputs.revision || github.sha }}
           push: true
-          tags: ghcr.io/meldxkviel/egeism-${{ matrix.name }}:${{ github.sha }}
+          tags: ghcr.io/meldxkviel/egeism-${{ matrix.name }}:${{ inputs.revision || github.sha }}
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
-            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.revision=${{ inputs.revision || github.sha }}

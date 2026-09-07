@@ -1,15 +1,33 @@
 name: Deploy
 
 on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
+  packages: write
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
 
 jobs:
-  inspect:
-    name: Inspect production runtime
+  images:
+    if: (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') || (github.event.workflow_run.event == 'push' && github.event.workflow_run.conclusion == 'success')
+    uses: ./.github/workflows/images.yml
+    with:
+      revision: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+  deploy:
+    needs: images
+    name: Deploy tested images to production k3s
     runs-on: ubuntu-latest
+    env:
+      DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
     steps:
       - uses: appleboy/ssh-action@v1
         with:
@@ -17,13 +35,22 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
           port: ${{ secrets.SSH_PORT || 22 }}
+          command_timeout: 15m
+          envs: DEPLOY_SHA
           script: |
             set -e
-            hostname
-            command -v helm || true
-            command -v k3s || true
-            sudo -n k3s kubectl get nodes -o wide
-            sudo -n k3s kubectl get deployments,statefulsets,jobs -A -o wide
-            sudo -n k3s kubectl get gateways,httproutes -A
-            sudo -n env KUBECONFIG=/etc/rancher/k3s/k3s.yaml helm list -A
-            docker ps --format '{{.Names}} {{.Status}} {{.Ports}}'
+            cd ~/egeism
+            git fetch origin main
+            if [ "$(git rev-parse origin/main)" != "$DEPLOY_SHA" ]; then
+              echo "Skipping superseded deploy"
+              exit 0
+            fi
+            work=$(mktemp -d /tmp/egeism-deploy.XXXXXX)
+            trap 'rm -rf -- "$work"' EXIT
+            git archive "$DEPLOY_SHA" deploy/helm/egeism deploy/k3s-deploy.sh | tar -x -C "$work"
+            sudo -n bash "$work/deploy/k3s-deploy.sh" "$DEPLOY_SHA" "$work/deploy/helm/egeism"
+            # The old Compose services must not compete for Telegram or serve
+            # a second database after the k3s production release is verified.
+            if [ -f deploy/.env ]; then
+              docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env stop
+            fi

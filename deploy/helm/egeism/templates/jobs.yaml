@@ -2,6 +2,12 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: minio-init-{{ .Values.global.imageTag | trunc 8 }}
+  {{- if .Release.IsUpgrade }}
+  annotations:
+    helm.sh/hook: pre-upgrade
+    helm.sh/hook-weight: "-10"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+  {{- end }}
   labels:
     {{- include "egeism.labels" . | nindent 4 }}
     app.kubernetes.io/component: minio-init
@@ -24,14 +30,23 @@ spec:
           command: [/bin/sh, -c]
           args:
             - |
+              set -e
               until mc alias set local http://minio:9000 "$MINIO_ACCESS_KEY" "$MINIO_SECRET_KEY"; do sleep 2; done
               mc mb --ignore-existing local/{{ .Values.config.minioBucket }}
               mc anonymous set download local/{{ .Values.config.minioBucket }}
+              mc mb --ignore-existing local/{{ .Values.config.minioBucket }}-solutions
+              mc anonymous set none local/{{ .Values.config.minioBucket }}-solutions
 ---
 apiVersion: batch/v1
 kind: Job
 metadata:
   name: migrate-{{ .Values.global.imageTag | trunc 8 }}
+  {{- if .Release.IsUpgrade }}
+  annotations:
+    helm.sh/hook: pre-upgrade
+    helm.sh/hook-weight: "-5"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+  {{- end }}
   labels:
     {{- include "egeism.labels" . | nindent 4 }}
     app.kubernetes.io/component: migrate
