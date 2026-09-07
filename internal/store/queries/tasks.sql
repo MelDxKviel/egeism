@@ -147,6 +147,7 @@ WHERE task_id IN (
     SELECT id FROM tasks
     WHERE subject_id = $1
       AND NOT EXISTS (SELECT 1 FROM answers a WHERE a.task_id = tasks.id)
+      AND NOT EXISTS (SELECT 1 FROM solution_photos p WHERE p.task_id = tasks.id)
 );
 
 -- name: DeleteUnansweredTasksBySubject :execrows
@@ -154,4 +155,5 @@ WHERE task_id IN (
 -- history (has a recorded answer) so attempts/stats never orphan.
 DELETE FROM tasks
 WHERE subject_id = $1
-  AND NOT EXISTS (SELECT 1 FROM answers a WHERE a.task_id = tasks.id);
+  AND NOT EXISTS (SELECT 1 FROM answers a WHERE a.task_id = tasks.id)
+  AND NOT EXISTS (SELECT 1 FROM solution_photos p WHERE p.task_id = tasks.id);

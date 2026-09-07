@@ -551,7 +551,7 @@ export function Solve() {
         <MediaBlock media={task.media} />
         {!submitted && (task.grading_mode === "manual" ? <>
           <label>Ответ или пояснение<textarea aria-label="Ответ или пояснение" rows={4} maxLength={10000} value={draft} disabled={busy || uploading} onChange={(e) => setDraft(e.target.value)} placeholder="Можно оставить пустым, если всё решение на фотографии" style={{ width: "100%", marginTop: 6 }} /></label>
-          <SolutionPhotoInput key={task.id} attemptId={attemptId} taskId={task.id} photos={photos[task.id] ?? []} onChange={(p) => setPhotos((all) => ({ ...all, [task.id]: p }))} onBusy={setUploading} required={requireSolution} />
+          <SolutionPhotoInput key={task.id} attemptId={attemptId} taskId={task.id} photos={photos[task.id] ?? []} onChange={(p) => setPhotos((all) => ({ ...all, [task.id]: p }))} onBusy={setUploading} required={requireSolution} disabled={busy} />
         </> : <AnswerInput kind={task.answer_kind} value={draft} onChange={setDraft} disabled={busy} />)}
         {submitted && (photos[task.id] ?? []).map((p) => <SolutionPhotoPreview key={p.id} photo={p} />)}
         {submitted && (

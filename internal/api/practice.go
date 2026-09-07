@@ -142,7 +142,11 @@ func (s *Server) handleRecommendedTasks(w http.ResponseWriter, r *http.Request) 
 		writeStoreErr(w, err)
 		return
 	}
-	ceiling := domain.TrainingCeiling(stats, 99)
+	lastNumber := 99
+	if r.URL.Query().Get("subject") == string(domain.SubjectMath) {
+		lastNumber = 19
+	}
+	ceiling := domain.TrainingCeiling(stats, lastNumber)
 	// The 12/13 boundary is a stage boundary: math part 2 is reached only
 	// after all twelve short-answer numbers meet the prerequisites.
 	mistakes, err := s.store.MistakeTasks(r.Context(), user.ID, subjectID, (limit+2)/3, ceiling)

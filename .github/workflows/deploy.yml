@@ -1,6 +1,6 @@
 name: Deploy
 
-# Continuous deployment: on every push to main (after you've done the one-time
+# Continuous deployment: after a successful CI run on main (after the one-time
 # server bootstrap below), and on-demand via the Actions "Run workflow" button.
 #
 # One-time setup before this can succeed:
@@ -17,7 +17,9 @@ name: Deploy
 #  repo, or add a read deploy key on the server for a private one).
 
 on:
-  push:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
     branches: [main]
   workflow_dispatch:
 
@@ -28,8 +30,11 @@ concurrency:
 
 jobs:
   deploy:
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.event == 'push' && github.event.workflow_run.conclusion == 'success')
     name: SSH deploy to server
     runs-on: ubuntu-latest
+    env:
+      DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
     steps:
       - name: Pull latest + (re)build the prod stack over SSH
         uses: appleboy/ssh-action@v1
@@ -38,11 +43,29 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
           port: ${{ secrets.SSH_PORT || 22 }}
+          envs: DEPLOY_SHA
           script: |
             set -e
             cd ~/egeism
-            git pull --ff-only
+            git fetch origin main
+            # A newer push gets its own CI run; never deploy an untested head.
+            if [ "$(git rev-parse origin/main)" != "$DEPLOY_SHA" ]; then
+              echo "Skipping superseded deploy"
+              exit 0
+            fi
+            git merge --ff-only "$DEPLOY_SHA"
+            test "$(git rev-parse HEAD)" = "$DEPLOY_SHA"
             # Raw compose command (mirrors `make prod-up`) so the server needs no
             # `make`. Migrations run as a one-shot before the API; Caddy renews TLS.
             docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env up --build -d
+            # Verify the web proxy can reach the API and its migrated database.
+            ready=false
+            for n in $(seq 1 12); do
+              if docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env exec -T web wget -q -O - http://127.0.0.1/health; then
+                ready=true
+                break
+              fi
+              sleep 5
+            done
+            test "$ready" = true
             docker image prune -f

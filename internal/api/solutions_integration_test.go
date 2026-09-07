@@ -235,4 +235,49 @@ func TestWrittenReviewLifecycle(t *testing.T) {
 	if len(rows) != 2 {
 		t.Fatal("skipped tasks missing from review")
 	}
+	// Practice revisits short answers, but each written solution has one grade.
+	practice, err := s.store.GetOrCreatePracticeTest(ctx, sub.ID, other.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	patt, err := s.store.StartAttempt(ctx, other.ID, practice.ID, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 2; i++ {
+		if _, err := s.store.SubmitAnswer(ctx, patt.ID, short.ID, "41", 100); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_, err = s.store.MutateSolutionPhoto(ctx, domain.SolutionPhoto{AttemptID: patt.ID, TaskID: foreign.ID, ObjectKey: "solutions/" + uuid.NewString(), ContentType: "image/png", SizeBytes: 100}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Clearing an unsubmitted photo's bank must not delete its task or fail FK checks.
+	if _, _, err := s.store.ClearBank(ctx, sub.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.store.FinishSubmission(ctx, patt.ID); err != nil {
+		t.Fatal(err)
+	}
+	rows, err = s.store.ListAnswersForAttempt(ctx, patt.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 3 || rows[2].ReviewStatus != "pending" || rows[2].TaskID != foreign.ID {
+		t.Fatalf("unsubmitted practice photo lost: %+v", rows)
+	}
+	resp = request(other, "GET", "/api/practice/recommended?subject=math", nil, 200)
+	var plan recommendedResp
+	if err := json.Unmarshal(resp.Body.Bytes(), &plan); err != nil {
+		t.Fatal(err)
+	}
+	if plan.MaxNumber != 3 || len(plan.Tasks) == 0 {
+		t.Fatalf("beginner plan: %+v", plan)
+	}
+	for _, task := range plan.Tasks {
+		if task.Number > 3 || task.GradingMode == "manual" {
+			t.Fatalf("advanced task given to beginner: %+v", task)
+		}
+	}
 }

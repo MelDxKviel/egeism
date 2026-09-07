@@ -127,6 +127,7 @@ WHERE task_id IN (
     SELECT id FROM tasks
     WHERE subject_id = $1
       AND NOT EXISTS (SELECT 1 FROM answers a WHERE a.task_id = tasks.id)
+      AND NOT EXISTS (SELECT 1 FROM solution_photos p WHERE p.task_id = tasks.id)
 )
 `
 
@@ -142,6 +143,7 @@ const deleteUnansweredTasksBySubject = `-- name: DeleteUnansweredTasksBySubject 
 DELETE FROM tasks
 WHERE subject_id = $1
   AND NOT EXISTS (SELECT 1 FROM answers a WHERE a.task_id = tasks.id)
+  AND NOT EXISTS (SELECT 1 FROM solution_photos p WHERE p.task_id = tasks.id)
 `
 
 // Clear the bank for a subject, preserving any task that carries student

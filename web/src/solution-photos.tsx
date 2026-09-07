@@ -19,8 +19,8 @@ export function SolutionPhotoPreview({ photo }: { photo: SolutionPhoto }) {
   </a>;
 }
 
-export function SolutionPhotoInput({ attemptId, taskId, photos, onChange, onBusy, required }: {
-  attemptId: string; taskId: string; photos: SolutionPhoto[]; onChange: (photos: SolutionPhoto[]) => void; onBusy: (busy: boolean) => void; required: boolean;
+export function SolutionPhotoInput({ attemptId, taskId, photos, onChange, onBusy, required, disabled }: {
+  attemptId: string; taskId: string; photos: SolutionPhoto[]; onChange: (photos: SolutionPhoto[]) => void; onBusy: (busy: boolean) => void; required: boolean; disabled?: boolean;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -46,14 +46,14 @@ export function SolutionPhotoInput({ attemptId, taskId, photos, onChange, onBusy
   };
   return <div style={{ marginTop: 14, display: "grid", gap: 10 }}>
     <label>Фотографии решения · {required ? "обязательно" : "необязательно"}
-      <input type="file" accept="image/jpeg,image/png" multiple disabled={busy || photos.length >= 5} onChange={(e) => { const files = Array.from(e.target.files ?? []); e.target.value = ""; void upload(files); }} style={{ display: "block", marginTop: 8, maxWidth: "100%" }} />
+      <input type="file" accept="image/jpeg,image/png" multiple disabled={disabled || busy || photos.length >= 5} onChange={(e) => { const files = Array.from(e.target.files ?? []); e.target.value = ""; void upload(files); }} style={{ display: "block", marginTop: 8, maxWidth: "100%" }} />
     </label>
     <small style={{ color: "var(--text-3)" }}>До 5 фото JPEG или PNG, до 10 МБ каждое. Сними все шаги решения так, чтобы текст был читаемым.</small>
     {busy && <div role="status">Сохраняем фотографии…</div>}
     {error && <div role="alert" style={{ color: "var(--bad)" }}>{error}</div>}
     <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>{photos.map((p, i) => <div key={p.id} style={{ maxWidth: 220 }}>
       <SolutionPhotoPreview photo={p} />
-      <button className="btn btn-ghost" disabled={busy} onClick={() => void remove(p.id)}>Удалить фото {i + 1}</button>
+      <button className="btn btn-ghost" disabled={disabled || busy} onClick={() => void remove(p.id)}>Удалить фото {i + 1}</button>
     </div>)}</div>
   </div>;
 }

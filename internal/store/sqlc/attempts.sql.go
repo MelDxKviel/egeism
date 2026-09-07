@@ -163,8 +163,8 @@ func (q *Queries) ListAttemptsForStudent(ctx context.Context, arg ListAttemptsFo
 }
 
 const recordAnswer = `-- name: RecordAnswer :one
-INSERT INTO answers (attempt_id, task_id, raw_answer, is_correct, time_spent_ms)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO answers (attempt_id, task_id, raw_answer, is_correct, time_spent_ms, points)
+VALUES ($1, $2, $3, $4, $5, CASE WHEN $4::boolean THEN 1 ELSE 0 END)
 RETURNING id, attempt_id, task_id, raw_answer, is_correct, time_spent_ms, answered_at, review_status, points, max_points, teacher_comment, reviewed_by, reviewed_at
 `
 

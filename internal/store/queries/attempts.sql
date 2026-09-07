@@ -12,8 +12,8 @@ WHERE id = $1 AND finished_at IS NULL
 RETURNING *;
 
 -- name: RecordAnswer :one
-INSERT INTO answers (attempt_id, task_id, raw_answer, is_correct, time_spent_ms)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO answers (attempt_id, task_id, raw_answer, is_correct, time_spent_ms, points)
+VALUES ($1, $2, $3, $4, $5, CASE WHEN $4::boolean THEN 1 ELSE 0 END)
 RETURNING *;
 
 -- name: ListAnswersForAttempt :many

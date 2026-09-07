@@ -78,8 +78,15 @@ func (s *Store) SubmitAnswer(ctx context.Context, attemptID, taskID uuid.UUID, r
 	if err != nil {
 		return domain.Answer{}, err
 	}
+	test, err := q.GetTest(ctx, att.TestID)
+	if err != nil {
+		return domain.Answer{}, err
+	}
+	// Free practice can revisit a short-answer task in the same session.
+	// Assigned tests and written solutions are submitted only once.
+	repeatable := test.Title == "__practice__" && test.CreatedBy == att.StudentID && task.GradingMode == "auto"
 	for _, a := range answers {
-		if a.TaskID == taskID {
+		if a.TaskID == taskID && !repeatable {
 			return domain.Answer{}, invalid("Ответ уже отправлен")
 		}
 	}
@@ -188,6 +195,20 @@ func (s *Store) FinishSubmission(ctx context.Context, id uuid.UUID) (domain.Atte
 			return domain.Attempt{}, err
 		}
 		answered[item.TaskID] = true
+	}
+	// Ad-hoc practice has no test_items. Preserve an uploaded solution even
+	// when the student presses Finish before separately submitting its answer.
+	for taskID := range photoTasks {
+		if answered[taskID] {
+			continue
+		}
+		task, err := submissionTask(ctx, q, att, taskID)
+		if err != nil {
+			return domain.Attempt{}, err
+		}
+		if _, err := q.InsertSubmission(ctx, sqlc.InsertSubmissionParams{AttemptID: id, TaskID: taskID, ReviewStatus: "pending", MaxPoints: int32(task.MaxPoints)}); err != nil {
+			return domain.Attempt{}, err
+		}
 	}
 	att, err = q.FinishAttempt(ctx, id)
 	if err != nil {

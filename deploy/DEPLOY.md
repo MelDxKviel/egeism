@@ -57,10 +57,12 @@ If you don't have `make` on the server, the raw command is the same:
 ## CI/CD (GitHub Actions)
 
 - **CI** (`.github/workflows/ci.yml`) runs on every push/PR to `main`: Go
-  build/vet/test (incl. the checker suite), the Python fetcher tests, and the
-  web build/typecheck.
-- **CD** (`.github/workflows/deploy.yml`) runs on push to `main` (and a manual
-  button): it SSHes to the server and runs the redeploy command above. After the
+  build/vet/test (including migrations and written-review integration tests on
+  PostgreSQL 16), the Python fetcher tests, and web tests/build/typecheck.
+- **CD** (`.github/workflows/deploy.yml`) runs after successful CI for a push to
+  `main` (and via a manual button): it SSHes to the server, fast-forwards to the
+  tested commit, runs the redeploy command and checks `/health` through the web
+  proxy. Superseded commits are skipped. After the
   one-time bootstrap here, every merge to `main` ships itself.
 
 To enable CD, add these repo **Secrets** (Settings → Secrets and variables →
@@ -75,7 +77,7 @@ Actions):
 
 Generate a dedicated CI key with `ssh-keygen -t ed25519 -f deploy_key`, put
 `deploy_key.pub` on the server, and paste `deploy_key` (private) into `SSH_KEY`.
-The deploy pulls with `git pull`, so a **public** repo works out of the box; for
+The deploy fetches from `origin`, so a **public** repo works out of the box; for
 a private repo add a read deploy key on the server too.
 
 ## Media in the bot's rich messages
@@ -88,6 +90,13 @@ straight from MinIO: uncomment the `handle_path /media/*` block in
 `deploy/.env`.
 
 ## Backups
+
+Written-solution photos use the separate private bucket `egeism-media-solutions`
+inside the existing MinIO volume. The API creates it on startup and removes any
+anonymous policy; its MinIO credentials must allow bucket creation and policy
+management. Never expose this bucket through the public task-media route.
+Migration `00011` preserves historical grades and enables teacher grading for
+new math part-2 submissions. Nginx permits the 10 MiB photo plus multipart overhead.
 
 The data lives in Docker volumes `pgdata` (Postgres) and `miniodata` (task
 media). At minimum, a nightly `pg_dump`:
