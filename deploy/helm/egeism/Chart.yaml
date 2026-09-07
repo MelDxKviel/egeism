@@ -1,0 +1,7 @@
+apiVersion: v2
+name: egeism
+description: Egeism application stack for a single-node k3s cluster
+type: application
+version: 0.1.0
+appVersion: "03a5a04"
+

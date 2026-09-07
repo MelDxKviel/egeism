@@ -1,0 +1,61 @@
+{{- if .Values.migration.minio.enabled }}
+{{- $oldEndpoint := required "migration.minio.oldEndpoint is required when MinIO migration is enabled" .Values.migration.minio.oldEndpoint }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: minio-copy-hostnet-v2-{{ .Values.global.imageTag | trunc 8 }}
+  labels:
+    {{- include "egeism.labels" . | nindent 4 }}
+    app.kubernetes.io/component: minio-copy
+spec:
+  backoffLimit: 2
+  template:
+    metadata:
+      labels:
+        {{- include "egeism.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: minio-copy
+    spec:
+      restartPolicy: Never
+      # Temporary bridge only: the old MinIO lives on a Docker bridge that the
+      # k3s Pod network cannot route into. ClusterFirstWithHostNet preserves
+      # access to the in-cluster `minio` Service name.
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      containers:
+        - name: minio-copy
+          image: {{ .Values.images.minioClient }}
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: OLD_MINIO_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.migration.minio.oldSecret }}
+                  key: MINIO_ACCESS_KEY
+            - name: OLD_MINIO_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.migration.minio.oldSecret }}
+                  key: MINIO_SECRET_KEY
+            - name: NEW_MINIO_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.existingSecret }}
+                  key: MINIO_ACCESS_KEY
+            - name: NEW_MINIO_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.existingSecret }}
+                  key: MINIO_SECRET_KEY
+          command: [/bin/sh, -c]
+          args:
+            - |
+              set -eu
+              mc alias set old {{ $oldEndpoint | quote }} "$OLD_MINIO_ACCESS_KEY" "$OLD_MINIO_SECRET_KEY"
+              mc alias set new http://minio:9000 "$NEW_MINIO_ACCESS_KEY" "$NEW_MINIO_SECRET_KEY"
+              mc mirror --overwrite old/{{ .Values.config.minioBucket }} new/{{ .Values.config.minioBucket }}
+
+              old_count="$(mc ls --recursive old/{{ .Values.config.minioBucket }} | wc -l)"
+              new_count="$(mc ls --recursive new/{{ .Values.config.minioBucket }} | wc -l)"
+              printf 'old=%s new=%s\n' "$old_count" "$new_count"
+              test "$old_count" = "$new_count"
+{{- end }}

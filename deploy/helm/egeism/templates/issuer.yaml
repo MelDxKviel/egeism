@@ -1,0 +1,22 @@
+{{- if .Values.acme.enabled }}
+{{- $email := required "acme.email is required when acme.enabled=true" .Values.acme.email }}
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: {{ .Values.acme.issuerName }}
+  labels:
+    {{- include "egeism.labels" . | nindent 4 }}
+spec:
+  acme:
+    email: {{ $email | quote }}
+    server: {{ .Values.acme.server | quote }}
+    privateKeySecretRef:
+      name: {{ .Values.acme.privateKeySecretName }}
+    solvers:
+      - http01:
+          gatewayHTTPRoute:
+            parentRefs:
+              - name: egeism
+                namespace: {{ .Release.Namespace }}
+                kind: Gateway
+{{- end }}
