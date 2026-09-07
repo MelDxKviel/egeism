@@ -7,6 +7,7 @@ package api
 import (
 	"context"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -193,7 +194,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 // Self-registration was removed for good (accounts come from the admin panel or
 // a teacher), so the flag is a constant kept only for older clients.
 func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]bool{"allow_registration": false})
+	writeJSON(w, http.StatusOK, map[string]any{"allow_registration": false, "revision": os.Getenv("APP_REVISION")})
 }
 
 // corsDev is a permissive CORS policy for local web development. Tighten before

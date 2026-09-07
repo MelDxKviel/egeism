@@ -1,9 +1,39 @@
-# Production deploy
+# Production deploy (k3s)
 
-The whole stack runs in Docker behind **Caddy**, which gets and renews a
-**Let's Encrypt** TLS cert automatically. Only Caddy is exposed to the internet
-(80/443); Postgres, Redis, MinIO, the API, worker, bot and fetcher live only on
-the internal Docker network.
+Production `https://egeism.ru` runs in the existing **k3s** cluster, namespace
+and Helm release `egeism`, behind Envoy Gateway. The chart originally lived on
+`codex/k3s-bootstrap`; it is now included in `main` with the application code.
+
+Publishing to `main` runs CI (including PostgreSQL integration tests and Helm
+validation), then builds six GHCR images tagged with the tested commit SHA.
+Deploy connects with the existing `SSH_HOST`, `SSH_USER`, `SSH_KEY`, `SSH_PORT`
+secrets and runs `deploy/k3s-deploy.sh` on the node. It uses the local k3s
+kubeconfig; credentials never leave the node.
+
+The script backs up the cluster database to `/var/backups/egeism`, downloads
+a checksum-pinned temporary Helm binary and upgrades with `--reuse-values`.
+This preserves production TLS, storage and secret references. Pre-upgrade
+jobs initialize private photo storage and apply migrations **before** new pods
+start. Failed rollouts restore the previous Helm release; additive database
+migrations are not reversed automatically.
+
+The job verifies all five application Deployment image tags and checks the
+public `/health`, `/version.json` and `/api/config` endpoints. The latter two
+must report the exact deployed SHA. It then stops the obsolete Compose stack
+without deleting its volumes. This prevents duplicate Telegram/worker processes.
+
+Inspect a deployment with the GitHub Actions `Deploy` run, or on the node:
+
+```sh
+sudo k3s kubectl -n egeism get deployments,pods,jobs
+curl -fsS https://egeism.ru/version.json
+curl -fsS https://egeism.ru/api/config
+```
+
+The following Compose instructions are retained for local use and the old
+installation. **They are not the production publishing path.**
+
+# Legacy Docker Compose installation
 
 ## What you need
 
@@ -54,16 +84,13 @@ Migrations run automatically (the one-shot `migrate` service before the API).
 If you don't have `make` on the server, the raw command is the same:
 `docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env up --build -d`.
 
-## CI/CD (GitHub Actions)
+## Legacy Compose setup
 
 - **CI** (`.github/workflows/ci.yml`) runs on every push/PR to `main`: Go
   build/vet/test (including migrations and written-review integration tests on
   PostgreSQL 16), the Python fetcher tests, and web tests/build/typecheck.
-- **CD** (`.github/workflows/deploy.yml`) runs after successful CI for a push to
-  `main` (and via a manual button): it SSHes to the server, fast-forwards to the
-  tested commit, runs the redeploy command and checks `/health` through the web
-  proxy. Superseded commits are skipped. After the
-  one-time bootstrap here, every merge to `main` ships itself.
+- **CD** now updates k3s as described above. Running `make prod-up` only updates
+  the legacy Compose stack and does not publish to the current site.
 
 To enable CD, add these repo **Secrets** (Settings → Secrets and variables →
 Actions):

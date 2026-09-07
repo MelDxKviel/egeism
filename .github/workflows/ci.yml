@@ -12,6 +12,18 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  helm:
+    name: Helm chart / deployment script
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.19.0
+      - run: helm lint deploy/helm/egeism -f deploy/helm/egeism/values-production.yaml --set acme.email=ci@example.com
+      - run: helm template egeism deploy/helm/egeism -n egeism --is-upgrade -f deploy/helm/egeism/values-production.yaml --set acme.email=ci@example.com > /tmp/egeism-rendered.yaml
+      - run: bash -n deploy/k3s-deploy.sh
+
   go:
     name: Go build / vet / test
     runs-on: ubuntu-latest
