@@ -118,7 +118,8 @@ func (s *Server) handlePracticeOverview(w http.ResponseWriter, r *http.Request) 
 }
 
 type recommendedResp struct {
-	Tasks []taskView `json:"tasks"`
+	MaxNumber int        `json:"max_number"`
+	Tasks     []taskView `json:"tasks"`
 	// Breakdown of the plan, for the UI's context line: how many tasks came
 	// from the mistake queue and which weak номера contributed drills.
 	Mistakes    int   `json:"mistakes"`
@@ -136,38 +137,45 @@ func (s *Server) handleRecommendedTasks(w http.ResponseWriter, r *http.Request) 
 	}
 	limit := practiceLimit(r, 12, 30)
 
-	mistakes, err := s.store.MistakeTasks(r.Context(), user.ID, subjectID, (limit+2)/3)
+	stats, err := s.store.RecentNumberPerformance(r.Context(), user.ID, subjectID)
 	if err != nil {
 		writeStoreErr(w, err)
 		return
 	}
-	spots, err := s.store.WeakSpots(r.Context(), user.ID, subjectID, 3, 3)
+	lastNumber := 99
+	if r.URL.Query().Get("subject") == string(domain.SubjectMath) {
+		lastNumber = 19
+	}
+	ceiling := domain.TrainingCeiling(stats, lastNumber)
+	// The 12/13 boundary is a stage boundary: math part 2 is reached only
+	// after all twelve short-answer numbers meet the prerequisites.
+	mistakes, err := s.store.MistakeTasks(r.Context(), user.ID, subjectID, (limit+2)/3, ceiling)
 	if err != nil {
 		writeStoreErr(w, err)
 		return
 	}
-	var weak []domain.Task
+	performance := map[int]domain.RecentNumber{}
+	for _, row := range stats {
+		performance[row.Number] = row
+	}
 	weakNumbers := []int{}
-	for _, sp := range spots {
-		if sp.Accuracy >= weakSpotCutoff {
-			continue
-		}
-		n := sp.Number
-		drills, err := s.store.PracticeTasks(r.Context(), user.ID, subjectID, &n, masteredThreshold, 2)
+	var weak, fresh []domain.Task
+	for n := 1; n <= ceiling; n++ {
+		drills, err := s.store.PracticeTasks(r.Context(), user.ID, subjectID, &n, masteredThreshold, limit)
 		if err != nil {
 			writeStoreErr(w, err)
 			return
 		}
-		if len(drills) > 0 {
-			weakNumbers = append(weakNumbers, sp.Number)
+		sp := performance[n]
+		if sp.Total >= 3 && float64(sp.Correct)/float64(sp.Total) < weakSpotCutoff && len(drills) > 0 {
+			weakNumbers = append(weakNumbers, n)
+			count := min(2, len(drills))
+			weak = append(weak, drills[:count]...)
 		}
-		weak = append(weak, drills...)
+		fresh = append(fresh, drills...)
 	}
-	fresh, err := s.store.PracticeTasks(r.Context(), user.ID, subjectID, nil, masteredThreshold, limit+8)
-	if err != nil {
-		writeStoreErr(w, err)
-		return
-	}
+	// Interleave numbers so a full first-number pool cannot monopolize a session.
+	fresh = interleaveNumbers(fresh, ceiling)
 
 	plan := recommendPlan(mistakes, weak, fresh, limit)
 	fromMistakes := map[uuid.UUID]bool{}
@@ -181,7 +189,7 @@ func (s *Server) handleRecommendedTasks(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 	writeJSON(w, http.StatusOK, recommendedResp{
-		Tasks: toTaskViews(plan), Mistakes: mistakeCount, WeakNumbers: weakNumbers,
+		Tasks: toTaskViews(plan), Mistakes: mistakeCount, WeakNumbers: weakNumbers, MaxNumber: ceiling,
 	})
 }
 
@@ -208,6 +216,87 @@ func recommendPlan(mistakes, weak, fresh []domain.Task, limit int) []domain.Task
 		}
 	}
 	return out
+}
+
+func interleaveNumbers(tasks []domain.Task, ceiling int) []domain.Task {
+	pools := map[int][]domain.Task{}
+	for _, t := range tasks {
+		pools[t.Number] = append(pools[t.Number], t)
+	}
+	order := []int{}
+	for n := max(1, ceiling-2); n <= ceiling; n++ {
+		order = append(order, n)
+	}
+	for n := 1; n < max(1, ceiling-2); n++ {
+		order = append(order, n)
+	}
+	out := make([]domain.Task, 0, len(tasks))
+	for depth := 0; ; depth++ {
+		added := false
+		for _, n := range order {
+			if depth < len(pools[n]) {
+				out = append(out, pools[n][depth])
+				added = true
+			}
+		}
+		if !added {
+			return out
+		}
+	}
+}
+
+// Student bank access shares the existing trusted fetcher/ingest, with a
+// database-backed per-subject cooldown across users and API instances.
+func (s *Server) handleStudentFetchBank(w http.ResponseWriter, r *http.Request) {
+	u, _ := userFrom(r.Context())
+	if u.Role != domain.RoleStudent {
+		writeErr(w, 403, "Только для учеников")
+		return
+	}
+	var req struct {
+		Subject domain.SubjectCode `json:"subject"`
+		Number  int                `json:"number"`
+	}
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	if req.Number < 0 || req.Number > 99 {
+		writeErr(w, 400, "Некорректный номер задания")
+		return
+	}
+	sub, err := s.store.GetSubjectByCode(r.Context(), req.Subject)
+	if err != nil {
+		writeStoreErr(w, err)
+		return
+	}
+	if s.fetcherURL == "" {
+		writeErr(w, 503, "Источник заданий не настроен")
+		return
+	}
+	claimed, err := s.store.ClaimPracticeFetch(r.Context(), sub.ID)
+	if err != nil {
+		writeStoreErr(w, err)
+		return
+	}
+	if !claimed {
+		w.Header().Set("Retry-After", "120")
+		writeErr(w, 429, "Банк недавно обновлялся. Попробуй через две минуты")
+		return
+	}
+	limit := 60
+	if req.Number > 0 {
+		limit = 15
+	}
+	res, mode, err := s.fetchAndIngest(r.Context(), req.Subject, limit, req.Number, domain.TaskActive)
+	if err != nil {
+		writeErr(w, 502, "Не удалось загрузить задания из источника. Попробуй позже")
+		return
+	}
+	if res.Inserted+res.Promoted == 0 && res.Skipped == 0 {
+		writeErr(w, 422, "Источник пока не вернул подходящих заданий")
+		return
+	}
+	writeJSON(w, 200, fetchResp{Fetched: res.Fetched, Inserted: res.Inserted, Skipped: res.Skipped, Promoted: res.Promoted, Invalid: res.Invalid, Source: mode})
 }
 
 type selfVariantResp struct {

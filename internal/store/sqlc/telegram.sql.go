@@ -57,7 +57,7 @@ func (q *Queries) GetValidTelegramLinkCode(ctx context.Context, code string) (Te
 
 const linkTelegramToUser = `-- name: LinkTelegramToUser :one
 UPDATE users SET telegram_id = $2 WHERE id = $1
-RETURNING id, role, telegram_id, name, created_at, username, password_hash, is_active, subject
+RETURNING id, role, telegram_id, name, created_at, username, password_hash, is_active, subject, avatar
 `
 
 type LinkTelegramToUserParams struct {
@@ -78,6 +78,7 @@ func (q *Queries) LinkTelegramToUser(ctx context.Context, arg LinkTelegramToUser
 		&i.PasswordHash,
 		&i.IsActive,
 		&i.Subject,
+		&i.Avatar,
 	)
 	return i, err
 }

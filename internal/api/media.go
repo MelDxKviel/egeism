@@ -3,6 +3,7 @@ package api
 import (
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -16,6 +17,10 @@ func (s *Server) handleGetMedia(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	key := chi.URLParam(r, "*")
+	if strings.HasPrefix(strings.TrimLeft(key, "/"), "solutions/") {
+		writeErr(w, http.StatusNotFound, "media not found")
+		return
+	}
 	if key == "" {
 		writeErr(w, http.StatusBadRequest, "missing media key")
 		return

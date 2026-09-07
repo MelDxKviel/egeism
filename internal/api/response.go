@@ -33,7 +33,10 @@ func writeErr(w http.ResponseWriter, status int, msg string) {
 
 // writeStoreErr translates a store error into an HTTP response.
 func writeStoreErr(w http.ResponseWriter, err error) {
+	var validation store.ValidationError
 	switch {
+	case errors.As(err, &validation):
+		writeErr(w, http.StatusUnprocessableEntity, validation.Error())
 	case errors.Is(err, store.ErrNotFound):
 		writeErr(w, http.StatusNotFound, "not found")
 	case errors.Is(err, store.ErrInUse):

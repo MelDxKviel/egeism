@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid } from "recharts";
 import {
   api, SubjectCode, TestKind, VariantSlot, Task, TaskStatus, AnswerSchema, AttemptSummary, AttemptReviewItem,
-  StudentSummary, User, uploadTasks, downloadTestPDF,
+  StudentSummary, User, AvatarConfig, uploadTasks, downloadTestPDF,
   useForecast, useHeatmap, useWeakSpots, useMastery, useMasterySeries, useAttempts, useAssignments,
   useAdminTasks, useTests, useTestDetail, useTaskSummary, useInvalidate, useClasses, useClassDetail, useClassOverview, useStudents,
 } from "./api";
@@ -13,6 +13,7 @@ import { StreakBadge, ASSIGNMENT_STATUS_RU } from "./student";
 import { deadlineInfo } from "./deadline";
 import { Icon } from "./icons";
 import { ResetLinkModal } from "./reset";
+import { Avatar } from "./avatar";
 
 const SUBJECTS: SubjectCode[] = ["rus", "math", "inf", "soc"];
 // Which live source feeds a subject (per CLAUDE.md: openfipi serves информатика,
@@ -52,8 +53,8 @@ export const requestBuilder = (r: NonNullable<typeof builderRequest>) => { build
 // Detail-page handoffs (same pattern as requestTestView below): set before go().
 let viewClassId = "";
 export const requestClassView = (id: string) => { viewClassId = id; };
-let viewStudent: { id: string; name: string } | null = null;
-export const requestStudentView = (id: string, name: string) => { viewStudent = { id, name }; };
+let viewStudent: { id: string; name: string; avatar?: AvatarConfig } | null = null;
+export const requestStudentView = (id: string, name: string, avatar?: AvatarConfig) => { viewStudent = { id, name, avatar }; };
 // Assign prefill: «Назначить тест» from a student/class page lands pre-targeted.
 let assignRequest: { studentId?: string; classId?: string } | null = null;
 export const requestAssign = (r: NonNullable<typeof assignRequest>) => { assignRequest = r; };
@@ -214,13 +215,16 @@ function StudentRow({ s, onOpen, right }: { s: StudentSummary | User; onOpen: ()
       padding: "10px 12px", background: "var(--surface-2)", borderRadius: 12,
       opacity: s.is_active === false ? 0.55 : 1,
     }}>
-      <div style={{ minWidth: 0 }}>
-        <div style={{ fontWeight: 600, display: "flex", alignItems: "center", gap: 8 }}>
-          {s.name}
-          {s.is_active === false && <Pill tone="bad">отключён</Pill>}
-        </div>
-        <div className="mono" style={{ color: "var(--text-3)", fontSize: 12 }}>
-          {s.username || "—"}{classes.length > 0 ? " · " + classes.map((c) => c.name).join(", ") : ""}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+        <Avatar user={s} size={36} />
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontWeight: 600, display: "flex", alignItems: "center", gap: 8 }}>
+            {s.name}
+            {s.is_active === false && <Pill tone="bad">отключён</Pill>}
+          </div>
+          <div className="mono" style={{ color: "var(--text-3)", fontSize: 12 }}>
+            {s.username || "—"}{classes.length > 0 ? " · " + classes.map((c) => c.name).join(", ") : ""}
+          </div>
         </div>
       </div>
       {right ?? <Icon name="arrowRight" size={16} />}
@@ -260,7 +264,7 @@ export function TeacherDashboard() {
     finally { setBusy(false); }
   };
 
-  const openStudent = (s: { id: string; name: string }) => { requestStudentView(s.id, s.name); go("t-student"); };
+  const openStudent = (s: { id: string; name: string; avatar?: AvatarConfig }) => { requestStudentView(s.id, s.name, s.avatar); go("t-student"); };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
@@ -445,7 +449,7 @@ export function ClassPage() {
     } catch (e) { showToast(String((e as Error).message)); }
   };
 
-  const openStudent = (s: { id: string; name: string }) => { requestStudentView(s.id, s.name); go("t-student"); };
+  const openStudent = (s: { id: string; name: string; avatar?: AvatarConfig }) => { requestStudentView(s.id, s.name, s.avatar); go("t-student"); };
 
   if (!viewClassId) {
     return <Empty title="Класс не выбран" action={<Button onClick={() => go("t-dashboard")}>К ученикам</Button>} />;
@@ -514,7 +518,7 @@ export function ClassPage() {
 // итоговая строка агрегирует класс по номеру (что проседает «в общем»).
 function ClassGrid({ rows, onOpen }: {
   rows: import("./api").ClassStudentStats[];
-  onOpen: (s: { id: string; name: string }) => void;
+  onOpen: (s: { id: string; name: string; avatar?: AvatarConfig }) => void;
 }) {
   const isMobile = useIsMobile();
   const numbers = useMemo(() => {
@@ -550,10 +554,11 @@ function ClassGrid({ rows, onOpen }: {
             return (
               <tr key={r.student_id}>
                 <th>
-                  <button onClick={() => onOpen({ id: r.student_id, name: r.name })} style={{
+                  <button onClick={() => onOpen({ id: r.student_id, name: r.name, avatar: r.avatar })} style={{
                     background: "none", border: "none", padding: 0, cursor: "pointer",
                     color: "var(--text)", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 7,
                   }}>
+                    <Avatar user={{ id: r.student_id, avatar: r.avatar }} size={22} />
                     <span style={{ width: 9, height: 9, borderRadius: 999, background: r.total ? accColor(pct) : "var(--border-2)", flex: "none" }} />
                     {/* Truncate only on phones (the sticky column must stay
                         narrow there); desktop shows the full name as before. */}
@@ -636,7 +641,7 @@ export function StudentStatsPage() {
   const attempts = useAttempts(sid);
   const assignments = useAssignments(sid);
   const [open, setOpen] = useState<number | null>(null);
-  const [review, setReview] = useState<{ title: string; items: AttemptReviewItem[] } | null>(null);
+  const [review, setReview] = useState<{ id: string; finished: boolean; title: string; items: AttemptReviewItem[] } | null>(null);
   const [resetOpen, setResetOpen] = useState(false);
 
   if (!student) {
@@ -647,8 +652,8 @@ export function StudentStatsPage() {
   // reviewable variant: each task's condition + correct answer, plus the
   // student's answer and verdict.
   const openAttempt = async (a: AttemptSummary) => {
-    try { const items = await api.attemptReview(a.id); setReview({ title: testTitle(a.title), items }); }
-    catch { setReview({ title: testTitle(a.title), items: [] }); }
+    try { const items = await api.attemptReview(a.id); setReview({ id: a.id, finished: !!a.finished_at, title: testTitle(a.title), items }); }
+    catch { setReview({ id: a.id, finished: !!a.finished_at, title: testTitle(a.title), items: [] }); }
   };
   const toDrill = (number?: number) => { requestBuilder({ kind: "drill", number, count: 10 }); go("t-builder"); };
 
@@ -669,7 +674,10 @@ export function StudentStatsPage() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
         <button onClick={() => go("t-dashboard")} className="btn btn-ghost">
           <Icon name="arrowLeft" size={16} /> Ко всем ученикам</button>
-        <div style={{ fontWeight: 700, fontSize: 18, letterSpacing: "-0.01em" }}>{student.name}</div>
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 9, fontWeight: 700, fontSize: 18, letterSpacing: "-0.01em" }}>
+          <Avatar user={{ id: student.id, avatar: student.avatar }} size={30} />
+          {student.name}
+        </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <Button variant="ghost" onClick={() => setResetOpen(true)}>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
@@ -741,7 +749,7 @@ export function StudentStatsPage() {
                       {solved && a.finished_at ? ` · решён ${new Date(a.finished_at).toLocaleString("ru")}` : dl.kind === "none" ? ` · ${ASSIGNMENT_STATUS_RU[a.status] || a.status}` : ` · ${dl.text}`}
                     </div>
                   </div>
-                  {solved && <span className="mono" style={{ color: accColor(pct), fontWeight: 700 }}>{a.correct}/{a.total}</span>}
+                  {solved && <span className="mono" style={{ color: accColor(pct), fontWeight: 700 }}>{a.points}/{a.max_points} балл.{a.pending_review > 0 ? ` · на проверке: ${a.pending_review}` : ""}</span>}
                 </div>
               );
             })}
@@ -772,7 +780,7 @@ export function StudentStatsPage() {
               <div key={a.id} onClick={() => openAttempt(a)} title="Открыть решённый вариант" className="card-tap"
                 style={{ display: "flex", justifyContent: "space-between", padding: "10px 12px", background: "var(--surface-2)", borderRadius: 12 }}>
                 <div><div style={{ fontWeight: 600 }}>{testTitle(a.title)}</div><div className="mono" style={{ color: "var(--text-3)", fontSize: 12 }}>{new Date(a.started_at).toLocaleString("ru")}</div></div>
-                <span className="mono" style={{ color: accColor(a.total ? (Number(a.correct) / Number(a.total)) * 100 : 0), fontWeight: 700 }}>{a.correct}/{a.total}</span>
+                <span className="mono" style={{ color: accColor(a.total ? (Number(a.correct) / Number(a.total)) * 100 : 0), fontWeight: 700 }}>{a.points}/{a.max_points} балл.{a.pending_review > 0 ? ` · на проверке: ${a.pending_review}` : ""}</span>
               </div>
             ))}
           </div>
@@ -787,7 +795,7 @@ export function StudentStatsPage() {
 
       {review && (
         <Modal onClose={() => setReview(null)} title={`Разбор · ${review.title}`} maxWidth="min(1200px, 96vw)">
-          <AttemptReviewGrid items={review.items} />
+          <AttemptReviewGrid key={review.id} items={review.items} attemptId={review.finished ? review.id : undefined} />
         </Modal>
       )}
 
@@ -1187,6 +1195,7 @@ export function Assign() {
   const [when, setWhen] = useState("");
   const [due, setDue] = useState("");
   const [notify, setNotify] = useState(true);
+  const [requireSolution, setRequireSolution] = useState(false);
   // Каждому свой вариант (анти-списывание): по умолчанию ВКЛ для класса —
   // одинаковый тест классу почти гарантирует обмен ответами.
   const [individual, setIndividual] = useState(true);
@@ -1210,7 +1219,7 @@ export function Assign() {
     setBusy(true);
     try {
       const indiv = mode === "class" && individual;
-      const r = await api.createAssignment(testId, target, new Date(when).toISOString(), { notify, individual: indiv, due_at: dueISO });
+      const r = await api.createAssignment(testId, target, new Date(when).toISOString(), { notify, individual: indiv, due_at: dueISO, require_solution: subject === "math" && requireSolution });
       const who = mode === "class" ? `классу (${r.created} уч.${indiv ? ", у каждого свой вариант" : ""})` : "ученику";
       showToast(notify ? `Назначено ${who} · уведомления в Telegram запланированы` : `Назначено ${who} · без уведомлений`);
       invalidate("assignments"); // the student pages' «Назначенные тесты» feed
@@ -1288,6 +1297,10 @@ export function Assign() {
               Без срока ученик решает в любое время. Со сроком — просроченные задания подсвечиваются у ученика и в твоём списке.
             </div>
           </div>
+          {subject === "math" && <label style={{ display: "flex", alignItems: "flex-start", gap: 10, fontSize: 14 }}>
+            <input type="checkbox" checked={requireSolution} onChange={(e) => setRequireSolution(e.target.checked)} style={{ width: "auto", marginTop: 3 }} />
+            <span>Обязательно прикреплять фотографии решений второй части<small style={{ display: "block", color: "var(--text-3)" }}>Для каждого задания №13–19. Без галочки фотографии необязательны; баллы выставляет учитель.</small></span>
+          </label>}
           {mode === "class" && (
             <label style={{ display: "flex", alignItems: "flex-start", gap: 10, fontSize: 14 }}>
               <input type="checkbox" checked={individual} onChange={(e) => setIndividual(e.target.checked)} style={{ width: "auto", marginTop: 3 }} />

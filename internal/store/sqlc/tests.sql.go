@@ -181,7 +181,7 @@ func (q *Queries) GetTest(ctx context.Context, id uuid.UUID) (Test, error) {
 }
 
 const listTestItems = `-- name: ListTestItems :many
-SELECT ti.id, ti.test_id, ti.task_id, ti.position, t.subject_id, t.number, t.statement, t.media, t.answer_schema, t.status
+SELECT ti.id, ti.test_id, ti.task_id, ti.position, t.subject_id, t.number, t.statement, t.media, t.answer_schema, t.status, t.part, t.grading_mode, t.max_points
 FROM test_items ti
 JOIN tasks t ON t.id = ti.task_id
 WHERE ti.test_id = $1
@@ -199,6 +199,9 @@ type ListTestItemsRow struct {
 	Media        []byte    `json:"media"`
 	AnswerSchema []byte    `json:"answer_schema"`
 	Status       string    `json:"status"`
+	Part         int32     `json:"part"`
+	GradingMode  string    `json:"grading_mode"`
+	MaxPoints    int32     `json:"max_points"`
 }
 
 func (q *Queries) ListTestItems(ctx context.Context, testID uuid.UUID) ([]ListTestItemsRow, error) {
@@ -221,6 +224,9 @@ func (q *Queries) ListTestItems(ctx context.Context, testID uuid.UUID) ([]ListTe
 			&i.Media,
 			&i.AnswerSchema,
 			&i.Status,
+			&i.Part,
+			&i.GradingMode,
+			&i.MaxPoints,
 		); err != nil {
 			return nil, err
 		}
@@ -281,7 +287,8 @@ SELECT te.id, te.subject_id, te.kind, te.title, te.created_at,
        COALESCE(att.id, '00000000-0000-0000-0000-000000000000'::uuid) AS attempt_id,
        att.finished_at,
        COALESCE(ans.total, 0)::bigint   AS total,
-       COALESCE(ans.correct, 0)::bigint AS correct
+       COALESCE(ans.correct, 0)::bigint AS correct,
+       COALESCE(ans.points, 0)::bigint AS points, COALESCE(ans.max_points, 0)::bigint AS max_points, COALESCE(ans.pending_review, 0)::bigint AS pending_review
 FROM tests te
 LEFT JOIN LATERAL (
     SELECT a.id, a.finished_at FROM attempts a
@@ -290,7 +297,8 @@ LEFT JOIN LATERAL (
     LIMIT 1
 ) att ON TRUE
 LEFT JOIN LATERAL (
-    SELECT count(*) AS total, count(*) FILTER (WHERE an.is_correct) AS correct
+    SELECT count(*) FILTER (WHERE an.review_status <> 'pending') AS total, count(*) FILTER (WHERE an.is_correct) AS correct,
+           sum(an.points) AS points, sum(an.max_points) AS max_points, count(*) FILTER (WHERE an.review_status = 'pending') AS pending_review
     FROM answers an WHERE an.attempt_id = att.id
 ) ans ON TRUE
 WHERE te.created_by = $1
@@ -309,16 +317,19 @@ type SelfVariantsForStudentParams struct {
 }
 
 type SelfVariantsForStudentRow struct {
-	ID         uuid.UUID  `json:"id"`
-	SubjectID  uuid.UUID  `json:"subject_id"`
-	Kind       string     `json:"kind"`
-	Title      string     `json:"title"`
-	CreatedAt  time.Time  `json:"created_at"`
-	TaskCount  int64      `json:"task_count"`
-	AttemptID  uuid.UUID  `json:"attempt_id"`
-	FinishedAt *time.Time `json:"finished_at"`
-	Total      int64      `json:"total"`
-	Correct    int64      `json:"correct"`
+	ID            uuid.UUID  `json:"id"`
+	SubjectID     uuid.UUID  `json:"subject_id"`
+	Kind          string     `json:"kind"`
+	Title         string     `json:"title"`
+	CreatedAt     time.Time  `json:"created_at"`
+	TaskCount     int64      `json:"task_count"`
+	AttemptID     uuid.UUID  `json:"attempt_id"`
+	FinishedAt    *time.Time `json:"finished_at"`
+	Total         int64      `json:"total"`
+	Correct       int64      `json:"correct"`
+	Points        int64      `json:"points"`
+	MaxPoints     int64      `json:"max_points"`
+	PendingReview int64      `json:"pending_review"`
 }
 
 // The student's own generated пробники for a subject, newest first, each with
@@ -343,6 +354,9 @@ func (q *Queries) SelfVariantsForStudent(ctx context.Context, arg SelfVariantsFo
 			&i.FinishedAt,
 			&i.Total,
 			&i.Correct,
+			&i.Points,
+			&i.MaxPoints,
+			&i.PendingReview,
 		); err != nil {
 			return nil, err
 		}

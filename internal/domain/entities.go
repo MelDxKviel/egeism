@@ -1,6 +1,8 @@
 package domain
 
 import (
+	"errors"
+	"regexp"
 	"time"
 
 	"github.com/google/uuid"
@@ -58,6 +60,67 @@ const (
 	AssignmentMissed    AssignmentStatus = "missed"
 )
 
+// AvatarKind discriminates where a user's profile picture comes from.
+type AvatarKind string
+
+const (
+	// AvatarBuilder is a parametric SVG avatar: the clients assemble it from
+	// the part/color fields on Avatar. The only kind accepted today.
+	AvatarBuilder AvatarKind = "builder"
+	// AvatarPhoto is reserved for a future uploaded photo (PhotoKey = media
+	// storage key). Setting it is rejected until the upload pipeline ships.
+	AvatarPhoto AvatarKind = "photo"
+)
+
+// Avatar is a user's profile picture config. The builder fields are pure
+// presentation — the API only bounds-checks them and stores the config;
+// rendering (the actual SVG parts) lives in the clients, so adding a hairstyle
+// is a web-only change.
+type Avatar struct {
+	Kind AvatarKind `json:"kind"`
+	// Builder palette colors, "#RRGGBB".
+	Bg        string `json:"bg,omitempty"`
+	Skin      string `json:"skin,omitempty"`
+	HairColor string `json:"hair_color,omitempty"`
+	// Builder part variant indices (what exists at each index is up to the
+	// clients; the API only caps the range so junk can't be stored).
+	Hair      int `json:"hair"`
+	Eyes      int `json:"eyes"`
+	Mouth     int `json:"mouth"`
+	Accessory int `json:"accessory"`
+	// PhotoKey is the media storage key for the future photo kind.
+	PhotoKey string `json:"photo_key,omitempty"`
+}
+
+// avatarMaxVariant bounds part indices loosely: clients may grow their part
+// sets without an API change, but arbitrary numbers don't get persisted.
+const avatarMaxVariant = 31
+
+var hexColorRe = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
+
+// Validate rejects configs the clients couldn't render: unknown kinds, the
+// not-yet-shipped photo kind, malformed colors, out-of-range part indices.
+func (a Avatar) Validate() error {
+	switch a.Kind {
+	case AvatarBuilder:
+	case AvatarPhoto:
+		return errors.New("фото-аватары ещё не поддерживаются")
+	default:
+		return errors.New("unknown avatar kind")
+	}
+	for _, c := range []string{a.Bg, a.Skin, a.HairColor} {
+		if c != "" && !hexColorRe.MatchString(c) {
+			return errors.New("avatar color must be #RRGGBB")
+		}
+	}
+	for _, v := range []int{a.Hair, a.Eyes, a.Mouth, a.Accessory} {
+		if v < 0 || v > avatarMaxVariant {
+			return errors.New("avatar part index out of range")
+		}
+	}
+	return nil
+}
+
 // User is a person in the system. Web users log in with username+password; the
 // bot authenticates by telegram_id. The password hash is never part of this
 // type, so it can't leak through the API.
@@ -74,6 +137,9 @@ type User struct {
 	// its history but can't log in (web, bot) until an admin re-enables it.
 	IsActive  bool      `json:"is_active"`
 	CreatedAt time.Time `json:"created_at"`
+	// Avatar is the profile picture config; nil = never customized, clients
+	// render a deterministic default from the user id.
+	Avatar *Avatar `json:"avatar,omitempty"`
 }
 
 // Class is a teacher's group of students. Students may also stay classless
@@ -123,6 +189,9 @@ type Source struct {
 
 // Task is a single part-1 exercise.
 type Task struct {
+	Part         int          `json:"part"`
+	GradingMode  string       `json:"grading_mode"`
+	MaxPoints    int          `json:"max_points"`
 	ID           uuid.UUID    `json:"id"`
 	SubjectID    uuid.UUID    `json:"subject_id"`
 	Number       int          `json:"number"` // номер задания в ЕГЭ
@@ -137,7 +206,7 @@ type Task struct {
 // BotSolvable reports whether the task can be solved inside a chat: short
 // answers with no attached media (§8). Everything else is web-only.
 func (t Task) BotSolvable() bool {
-	if len(t.Media) > 0 {
+	if t.GradingMode == "manual" || len(t.Media) > 0 {
 		return false
 	}
 	switch t.AnswerSchema.Type {
@@ -186,35 +255,42 @@ type NumberAvailability struct {
 // passing it flips a still-unsolved assignment to "missed", but the student
 // can still solve it late (finish then flips missed → done).
 type Assignment struct {
-	ID          uuid.UUID        `json:"id"`
-	TestID      uuid.UUID        `json:"test_id"`
-	StudentID   uuid.UUID        `json:"student_id"`
-	AssignedBy  uuid.UUID        `json:"assigned_by"`
-	ScheduledAt time.Time        `json:"scheduled_at"`
-	NotifiedAt  *time.Time       `json:"notified_at,omitempty"`
-	Status      AssignmentStatus `json:"status"`
-	DueAt       *time.Time       `json:"due_at,omitempty"`
+	RequireSolution bool             `json:"require_solution"`
+	ID              uuid.UUID        `json:"id"`
+	TestID          uuid.UUID        `json:"test_id"`
+	StudentID       uuid.UUID        `json:"student_id"`
+	AssignedBy      uuid.UUID        `json:"assigned_by"`
+	ScheduledAt     time.Time        `json:"scheduled_at"`
+	NotifiedAt      *time.Time       `json:"notified_at,omitempty"`
+	Status          AssignmentStatus `json:"status"`
+	DueAt           *time.Time       `json:"due_at,omitempty"`
 }
 
 // Attempt is a student working through a test. AssignmentID is nullable so a
 // student can practice on their own with no assignment.
 type Attempt struct {
-	ID           uuid.UUID  `json:"id"`
-	AssignmentID *uuid.UUID `json:"assignment_id,omitempty"`
-	TestID       uuid.UUID  `json:"test_id"`
-	StudentID    uuid.UUID  `json:"student_id"`
-	StartedAt    time.Time  `json:"started_at"`
-	FinishedAt   *time.Time `json:"finished_at,omitempty"`
+	RequireSolution bool       `json:"require_solution"`
+	ID              uuid.UUID  `json:"id"`
+	AssignmentID    *uuid.UUID `json:"assignment_id,omitempty"`
+	TestID          uuid.UUID  `json:"test_id"`
+	StudentID       uuid.UUID  `json:"student_id"`
+	StartedAt       time.Time  `json:"started_at"`
+	FinishedAt      *time.Time `json:"finished_at,omitempty"`
 }
 
 // Answer is one submitted response, already checked. is_correct plus
 // time_spent_ms feeds heatmap, weak-spots and per-task timing.
 type Answer struct {
-	ID          uuid.UUID `json:"id"`
-	AttemptID   uuid.UUID `json:"attempt_id"`
-	TaskID      uuid.UUID `json:"task_id"`
-	RawAnswer   string    `json:"raw_answer"`
-	IsCorrect   bool      `json:"is_correct"`
-	TimeSpentMS int64     `json:"time_spent_ms"`
-	AnsweredAt  time.Time `json:"answered_at"`
+	ReviewStatus   string     `json:"review_status"`
+	Points         *int32     `json:"points"`
+	MaxPoints      int        `json:"max_points"`
+	TeacherComment string     `json:"teacher_comment"`
+	ReviewedAt     *time.Time `json:"reviewed_at,omitempty"`
+	ID             uuid.UUID  `json:"id"`
+	AttemptID      uuid.UUID  `json:"attempt_id"`
+	TaskID         uuid.UUID  `json:"task_id"`
+	RawAnswer      string     `json:"raw_answer"`
+	IsCorrect      bool       `json:"is_correct"`
+	TimeSpentMS    int64      `json:"time_spent_ms"`
+	AnsweredAt     time.Time  `json:"answered_at"`
 }

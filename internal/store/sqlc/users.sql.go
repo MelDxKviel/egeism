@@ -45,7 +45,7 @@ func (q *Queries) CreateEnrollment(ctx context.Context, arg CreateEnrollmentPara
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (role, telegram_id, name)
 VALUES ($1, $2, $3)
-RETURNING id, role, telegram_id, name, created_at, username, password_hash, is_active, subject
+RETURNING id, role, telegram_id, name, created_at, username, password_hash, is_active, subject, avatar
 `
 
 type CreateUserParams struct {
@@ -67,6 +67,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.PasswordHash,
 		&i.IsActive,
 		&i.Subject,
+		&i.Avatar,
 	)
 	return i, err
 }
@@ -74,7 +75,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 const createUserWithCredentials = `-- name: CreateUserWithCredentials :one
 INSERT INTO users (role, name, username, password_hash, subject)
 VALUES ($1, $2, $3, $4, $5)
-RETURNING id, role, telegram_id, name, created_at, username, password_hash, is_active, subject
+RETURNING id, role, telegram_id, name, created_at, username, password_hash, is_active, subject, avatar
 `
 
 type CreateUserWithCredentialsParams struct {
@@ -104,6 +105,7 @@ func (q *Queries) CreateUserWithCredentials(ctx context.Context, arg CreateUserW
 		&i.PasswordHash,
 		&i.IsActive,
 		&i.Subject,
+		&i.Avatar,
 	)
 	return i, err
 }
@@ -140,7 +142,7 @@ func (q *Queries) DeleteUser(ctx context.Context, id uuid.UUID) (int64, error) {
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, role, telegram_id, name, created_at, username, password_hash, is_active, subject FROM users WHERE id = $1
+SELECT id, role, telegram_id, name, created_at, username, password_hash, is_active, subject, avatar FROM users WHERE id = $1
 `
 
 func (q *Queries) GetUser(ctx context.Context, id uuid.UUID) (User, error) {
@@ -156,12 +158,13 @@ func (q *Queries) GetUser(ctx context.Context, id uuid.UUID) (User, error) {
 		&i.PasswordHash,
 		&i.IsActive,
 		&i.Subject,
+		&i.Avatar,
 	)
 	return i, err
 }
 
 const getUserByTelegram = `-- name: GetUserByTelegram :one
-SELECT id, role, telegram_id, name, created_at, username, password_hash, is_active, subject FROM users WHERE telegram_id = $1
+SELECT id, role, telegram_id, name, created_at, username, password_hash, is_active, subject, avatar FROM users WHERE telegram_id = $1
 `
 
 func (q *Queries) GetUserByTelegram(ctx context.Context, telegramID *int64) (User, error) {
@@ -177,12 +180,13 @@ func (q *Queries) GetUserByTelegram(ctx context.Context, telegramID *int64) (Use
 		&i.PasswordHash,
 		&i.IsActive,
 		&i.Subject,
+		&i.Avatar,
 	)
 	return i, err
 }
 
 const getUserByUsername = `-- name: GetUserByUsername :one
-SELECT id, role, telegram_id, name, created_at, username, password_hash, is_active, subject FROM users WHERE username = $1
+SELECT id, role, telegram_id, name, created_at, username, password_hash, is_active, subject, avatar FROM users WHERE username = $1
 `
 
 func (q *Queries) GetUserByUsername(ctx context.Context, username *string) (User, error) {
@@ -198,6 +202,7 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username *string) (User
 		&i.PasswordHash,
 		&i.IsActive,
 		&i.Subject,
+		&i.Avatar,
 	)
 	return i, err
 }
@@ -283,7 +288,7 @@ func (q *Queries) ListActiveAdminIDs(ctx context.Context) ([]uuid.UUID, error) {
 }
 
 const listStudents = `-- name: ListStudents :many
-SELECT id, role, telegram_id, name, created_at, username, password_hash, is_active, subject FROM users WHERE role = 'student' ORDER BY name
+SELECT id, role, telegram_id, name, created_at, username, password_hash, is_active, subject, avatar FROM users WHERE role = 'student' ORDER BY name
 `
 
 func (q *Queries) ListStudents(ctx context.Context) ([]User, error) {
@@ -305,6 +310,7 @@ func (q *Queries) ListStudents(ctx context.Context) ([]User, error) {
 			&i.PasswordHash,
 			&i.IsActive,
 			&i.Subject,
+			&i.Avatar,
 		); err != nil {
 			return nil, err
 		}
@@ -317,7 +323,7 @@ func (q *Queries) ListStudents(ctx context.Context) ([]User, error) {
 }
 
 const listStudentsForTeacher = `-- name: ListStudentsForTeacher :many
-SELECT u.id, u.role, u.telegram_id, u.name, u.created_at, u.username, u.password_hash, u.is_active, u.subject FROM users u
+SELECT u.id, u.role, u.telegram_id, u.name, u.created_at, u.username, u.password_hash, u.is_active, u.subject, u.avatar FROM users u
 JOIN enrollments e ON e.student_id = u.id
 WHERE e.teacher_id = $1
 ORDER BY u.name
@@ -342,6 +348,7 @@ func (q *Queries) ListStudentsForTeacher(ctx context.Context, teacherID uuid.UUI
 			&i.PasswordHash,
 			&i.IsActive,
 			&i.Subject,
+			&i.Avatar,
 		); err != nil {
 			return nil, err
 		}
@@ -380,7 +387,7 @@ func (q *Queries) ListTeacherIDsForStudent(ctx context.Context, studentID uuid.U
 }
 
 const listTeachersForStudent = `-- name: ListTeachersForStudent :many
-SELECT u.id, u.role, u.telegram_id, u.name, u.created_at, u.username, u.password_hash, u.is_active, u.subject FROM users u
+SELECT u.id, u.role, u.telegram_id, u.name, u.created_at, u.username, u.password_hash, u.is_active, u.subject, u.avatar FROM users u
 JOIN enrollments e ON e.teacher_id = u.id
 WHERE e.student_id = $1
 ORDER BY u.name
@@ -407,6 +414,7 @@ func (q *Queries) ListTeachersForStudent(ctx context.Context, studentID uuid.UUI
 			&i.PasswordHash,
 			&i.IsActive,
 			&i.Subject,
+			&i.Avatar,
 		); err != nil {
 			return nil, err
 		}
@@ -419,7 +427,7 @@ func (q *Queries) ListTeachersForStudent(ctx context.Context, studentID uuid.UUI
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, role, telegram_id, name, created_at, username, password_hash, is_active, subject FROM users
+SELECT id, role, telegram_id, name, created_at, username, password_hash, is_active, subject, avatar FROM users
 ORDER BY CASE role WHEN 'admin' THEN 0 WHEN 'teacher' THEN 1 ELSE 2 END, name
 `
 
@@ -443,6 +451,7 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 			&i.PasswordHash,
 			&i.IsActive,
 			&i.Subject,
+			&i.Avatar,
 		); err != nil {
 			return nil, err
 		}
@@ -455,7 +464,7 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 }
 
 const setUserActive = `-- name: SetUserActive :one
-UPDATE users SET is_active = $2 WHERE id = $1 RETURNING id, role, telegram_id, name, created_at, username, password_hash, is_active, subject
+UPDATE users SET is_active = $2 WHERE id = $1 RETURNING id, role, telegram_id, name, created_at, username, password_hash, is_active, subject, avatar
 `
 
 type SetUserActiveParams struct {
@@ -476,12 +485,42 @@ func (q *Queries) SetUserActive(ctx context.Context, arg SetUserActiveParams) (U
 		&i.PasswordHash,
 		&i.IsActive,
 		&i.Subject,
+		&i.Avatar,
+	)
+	return i, err
+}
+
+const setUserAvatar = `-- name: SetUserAvatar :one
+UPDATE users SET avatar = $2 WHERE id = $1 RETURNING id, role, telegram_id, name, created_at, username, password_hash, is_active, subject, avatar
+`
+
+type SetUserAvatarParams struct {
+	ID     uuid.UUID `json:"id"`
+	Avatar []byte    `json:"avatar"`
+}
+
+// Replace the acting user's profile-picture config (NULL = back to the
+// deterministic client-side default).
+func (q *Queries) SetUserAvatar(ctx context.Context, arg SetUserAvatarParams) (User, error) {
+	row := q.db.QueryRow(ctx, setUserAvatar, arg.ID, arg.Avatar)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Role,
+		&i.TelegramID,
+		&i.Name,
+		&i.CreatedAt,
+		&i.Username,
+		&i.PasswordHash,
+		&i.IsActive,
+		&i.Subject,
+		&i.Avatar,
 	)
 	return i, err
 }
 
 const setUserName = `-- name: SetUserName :one
-UPDATE users SET name = $2 WHERE id = $1 RETURNING id, role, telegram_id, name, created_at, username, password_hash, is_active, subject
+UPDATE users SET name = $2 WHERE id = $1 RETURNING id, role, telegram_id, name, created_at, username, password_hash, is_active, subject, avatar
 `
 
 type SetUserNameParams struct {
@@ -502,6 +541,7 @@ func (q *Queries) SetUserName(ctx context.Context, arg SetUserNameParams) (User,
 		&i.PasswordHash,
 		&i.IsActive,
 		&i.Subject,
+		&i.Avatar,
 	)
 	return i, err
 }
@@ -524,7 +564,7 @@ func (q *Queries) SetUserPassword(ctx context.Context, arg SetUserPasswordParams
 }
 
 const setUserRoleSubject = `-- name: SetUserRoleSubject :one
-UPDATE users SET role = $2, subject = $3 WHERE id = $1 RETURNING id, role, telegram_id, name, created_at, username, password_hash, is_active, subject
+UPDATE users SET role = $2, subject = $3 WHERE id = $1 RETURNING id, role, telegram_id, name, created_at, username, password_hash, is_active, subject, avatar
 `
 
 type SetUserRoleSubjectParams struct {
@@ -546,12 +586,13 @@ func (q *Queries) SetUserRoleSubject(ctx context.Context, arg SetUserRoleSubject
 		&i.PasswordHash,
 		&i.IsActive,
 		&i.Subject,
+		&i.Avatar,
 	)
 	return i, err
 }
 
 const setUserSubject = `-- name: SetUserSubject :one
-UPDATE users SET subject = $2 WHERE id = $1 RETURNING id, role, telegram_id, name, created_at, username, password_hash, is_active, subject
+UPDATE users SET subject = $2 WHERE id = $1 RETURNING id, role, telegram_id, name, created_at, username, password_hash, is_active, subject, avatar
 `
 
 type SetUserSubjectParams struct {
@@ -572,6 +613,7 @@ func (q *Queries) SetUserSubject(ctx context.Context, arg SetUserSubjectParams) 
 		&i.PasswordHash,
 		&i.IsActive,
 		&i.Subject,
+		&i.Avatar,
 	)
 	return i, err
 }

@@ -51,7 +51,7 @@ func (q *Queries) GetAttempt(ctx context.Context, id uuid.UUID) (Attempt, error)
 }
 
 const listAnswersForAttempt = `-- name: ListAnswersForAttempt :many
-SELECT id, attempt_id, task_id, raw_answer, is_correct, time_spent_ms, answered_at FROM answers WHERE attempt_id = $1 ORDER BY answered_at
+SELECT id, attempt_id, task_id, raw_answer, is_correct, time_spent_ms, answered_at, review_status, points, max_points, teacher_comment, reviewed_by, reviewed_at FROM answers WHERE attempt_id = $1 ORDER BY answered_at
 `
 
 func (q *Queries) ListAnswersForAttempt(ctx context.Context, attemptID uuid.UUID) ([]Answer, error) {
@@ -71,6 +71,12 @@ func (q *Queries) ListAnswersForAttempt(ctx context.Context, attemptID uuid.UUID
 			&i.IsCorrect,
 			&i.TimeSpentMs,
 			&i.AnsweredAt,
+			&i.ReviewStatus,
+			&i.Points,
+			&i.MaxPoints,
+			&i.TeacherComment,
+			&i.ReviewedBy,
+			&i.ReviewedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -85,7 +91,10 @@ func (q *Queries) ListAnswersForAttempt(ctx context.Context, attemptID uuid.UUID
 const listAttemptsForStudent = `-- name: ListAttemptsForStudent :many
 SELECT att.id, att.test_id, att.started_at, att.finished_at,
        t.title, t.kind, t.subject_id,
-       count(ans.id)                              AS total,
+       count(ans.id) FILTER (WHERE ans.review_status <> 'pending') AS total,
+       count(ans.id) FILTER (WHERE ans.review_status = 'pending') AS pending_review,
+       coalesce(sum(ans.points),0)::bigint AS points,
+       coalesce(sum(ans.max_points),0)::bigint AS max_points,
        count(ans.id) FILTER (WHERE ans.is_correct) AS correct,
        coalesce(sum(ans.time_spent_ms), 0)::bigint AS time_ms
 FROM attempts att
@@ -103,16 +112,19 @@ type ListAttemptsForStudentParams struct {
 }
 
 type ListAttemptsForStudentRow struct {
-	ID         uuid.UUID  `json:"id"`
-	TestID     uuid.UUID  `json:"test_id"`
-	StartedAt  time.Time  `json:"started_at"`
-	FinishedAt *time.Time `json:"finished_at"`
-	Title      string     `json:"title"`
-	Kind       string     `json:"kind"`
-	SubjectID  uuid.UUID  `json:"subject_id"`
-	Total      int64      `json:"total"`
-	Correct    int64      `json:"correct"`
-	TimeMs     int64      `json:"time_ms"`
+	ID            uuid.UUID  `json:"id"`
+	TestID        uuid.UUID  `json:"test_id"`
+	StartedAt     time.Time  `json:"started_at"`
+	FinishedAt    *time.Time `json:"finished_at"`
+	Title         string     `json:"title"`
+	Kind          string     `json:"kind"`
+	SubjectID     uuid.UUID  `json:"subject_id"`
+	Total         int64      `json:"total"`
+	PendingReview int64      `json:"pending_review"`
+	Points        int64      `json:"points"`
+	MaxPoints     int64      `json:"max_points"`
+	Correct       int64      `json:"correct"`
+	TimeMs        int64      `json:"time_ms"`
 }
 
 // Attempts feed ("Недавние решения" / "Свежие попытки") with per-attempt score.
@@ -134,6 +146,9 @@ func (q *Queries) ListAttemptsForStudent(ctx context.Context, arg ListAttemptsFo
 			&i.Kind,
 			&i.SubjectID,
 			&i.Total,
+			&i.PendingReview,
+			&i.Points,
+			&i.MaxPoints,
 			&i.Correct,
 			&i.TimeMs,
 		); err != nil {
@@ -148,9 +163,9 @@ func (q *Queries) ListAttemptsForStudent(ctx context.Context, arg ListAttemptsFo
 }
 
 const recordAnswer = `-- name: RecordAnswer :one
-INSERT INTO answers (attempt_id, task_id, raw_answer, is_correct, time_spent_ms)
-VALUES ($1, $2, $3, $4, $5)
-RETURNING id, attempt_id, task_id, raw_answer, is_correct, time_spent_ms, answered_at
+INSERT INTO answers (attempt_id, task_id, raw_answer, is_correct, time_spent_ms, points)
+VALUES ($1, $2, $3, $4, $5, CASE WHEN $4::boolean THEN 1 ELSE 0 END)
+RETURNING id, attempt_id, task_id, raw_answer, is_correct, time_spent_ms, answered_at, review_status, points, max_points, teacher_comment, reviewed_by, reviewed_at
 `
 
 type RecordAnswerParams struct {
@@ -178,6 +193,12 @@ func (q *Queries) RecordAnswer(ctx context.Context, arg RecordAnswerParams) (Ans
 		&i.IsCorrect,
 		&i.TimeSpentMs,
 		&i.AnsweredAt,
+		&i.ReviewStatus,
+		&i.Points,
+		&i.MaxPoints,
+		&i.TeacherComment,
+		&i.ReviewedBy,
+		&i.ReviewedAt,
 	)
 	return i, err
 }

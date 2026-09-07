@@ -415,6 +415,15 @@ func (b *Bot) startAssigned(ctx context.Context, sess *session, chatID int64, as
 	if err != nil || len(tasks) == 0 {
 		return b.text(chatID, "В этом тесте пока нет заданий.")
 	}
+	for _, task := range tasks {
+		if task.GradingMode == "manual" {
+			var buttons [][]Button
+			if b.webURL != "" && !hostIsLocal(b.webURL) {
+				buttons = [][]Button{{{Text: "🌐 Решать на сайте", URL: b.webURL}}}
+			}
+			return b.html(chatID, "В этом тесте есть задания второй части. Решай его на сайте: там можно прикрепить фотографии решения и увидеть баллы учителя.", buttons)
+		}
+	}
 	attemptID, err := b.api.StartAttempt(ctx, sess.token, card.TestID, card.ID)
 	if err != nil {
 		return b.text(chatID, "Не удалось начать тест. Попробуй позже.")
@@ -444,7 +453,7 @@ func (b *Bot) serveTask(ctx context.Context, sess *session, chatID int64) Reply 
 		if err != nil {
 			return b.text(chatID, "Не удалось получить задания.")
 		}
-		sess.queue = tasks
+		sess.queue = autoGradedTasks(tasks)
 	}
 	if len(sess.queue) == 0 {
 		return b.html(chatID, "🎉 По этому предмету всё решено (или банк пуст). Выбери другой:", subjectRows())
@@ -938,4 +947,15 @@ func commandsFor(role string) []botCommand {
 	default:
 		return studentCommands
 	}
+}
+
+// Written tasks use the web upload/review flow. Keep free chat practice automatic.
+func autoGradedTasks(tasks []TaskView) []TaskView {
+	out := make([]TaskView, 0, len(tasks))
+	for _, task := range tasks {
+		if task.GradingMode != "manual" {
+			out = append(out, task)
+		}
+	}
+	return out
 }

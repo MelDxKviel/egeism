@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Role, SubjectCode, User, api, setToken, clearToken, hasToken } from "./api";
 
 export type View =
-  | "dashboard" | "train" | "subject" | "solve" | "results" | "history"
+  | "student-bank" | "dashboard" | "train" | "subject" | "solve" | "results" | "history"
   | "t-dashboard" | "t-class" | "t-student" | "t-builder" | "t-assign" | "t-bank" | "t-test"
   | "a-stats" | "a-users"
   | "profile";
@@ -22,6 +22,9 @@ interface AppState {
   showToast: (m: string) => void;
   login: (username: string, password: string) => Promise<void>;
   logout: () => void;
+  // Refresh the in-context user after a self-edit (e.g. avatar save) without
+  // re-logging in.
+  updateUser: (u: User) => void;
 }
 
 const Ctx = createContext<AppState | null>(null);
@@ -37,7 +40,7 @@ const homeView = (r: Role): View =>
 // Nav tabs that are safe to restore after a reload (solve/results and the
 // detail pages are excluded — their handoff state doesn't survive a refresh).
 const RESTORABLE: Record<Role, View[]> = {
-  student: ["dashboard", "train", "subject", "history", "profile"],
+  student: ["dashboard", "student-bank", "train", "subject", "history", "profile"],
   teacher: ["t-dashboard", "t-builder", "t-assign", "t-bank", "profile"],
   admin: ["a-stats", "a-users", "profile"],
 };
@@ -112,11 +115,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
   const login = async (username: string, password: string) => { applyAuth(await api.login(username, password)); };
   const logout = () => { clearToken(); setUser(undefined); queryClient.clear(); };
+  const updateUser = (u: User) => setUser(u);
 
   return (
     <Ctx.Provider value={{
       theme, subject, view, user, role: user?.role, ready, toast,
-      setTheme, setSubject, go, showToast, login, logout,
+      setTheme, setSubject, go, showToast, login, logout, updateUser,
     }}>
       {children}
     </Ctx.Provider>

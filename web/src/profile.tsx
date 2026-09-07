@@ -1,7 +1,9 @@
+import { useState } from "react";
 import { useProfile } from "./api";
 import { useApp } from "./state";
-import { Card, Label, Pill, Async, SUBJECT_TITLES } from "./ui";
+import { Card, Label, Pill, Async, Button, SUBJECT_TITLES } from "./ui";
 import { Icon } from "./icons";
+import { Avatar, AvatarBuilderModal } from "./avatar";
 import { requestClassView } from "./teacher";
 
 const ROLE_RU: Record<string, string> = { student: "Ученик", teacher: "Учитель", admin: "Администратор" };
@@ -13,26 +15,34 @@ const ROLE_RU: Record<string, string> = { student: "Ученик", teacher: "У�
 export function ProfilePage() {
   const { user, go, role } = useApp();
   const q = useProfile();
+  const [editingAvatar, setEditingAvatar] = useState(false);
 
   if (!user) return null;
   return (
     <div style={{ maxWidth: 640, display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
       <Card>
         <div style={{ display: "flex", alignItems: "center", gap: "clamp(12px, 3vw, 16px)" }}>
-          <div style={{
-            width: "clamp(44px, 12vw, 56px)", height: "clamp(44px, 12vw, 56px)", flex: "none",
-            borderRadius: 16, background: "var(--accent-soft)",
-            display: "flex", alignItems: "center", justifyContent: "center", color: "var(--accent-2)",
-          }}><Icon name="user" size={28} /></div>
+          {/* Клик по аватару = тот же конструктор, что и кнопка ниже. */}
+          <button onClick={() => setEditingAvatar(true)} title="Изменить аватар" style={{
+            background: "none", border: "none", padding: 0, cursor: "pointer", flex: "none", lineHeight: 0,
+          }}>
+            <Avatar user={user} size={64} />
+          </button>
           <div style={{ minWidth: 0 }}>
             <div style={{ fontWeight: 700, fontSize: 20, letterSpacing: "-0.01em", overflowWrap: "anywhere" }}>{user.name}</div>
-            <div style={{ display: "flex", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: 8, marginTop: 6, flexWrap: "wrap", alignItems: "center" }}>
               <Pill tone="accent">{ROLE_RU[user.role]}</Pill>
               {user.role === "teacher" && (
                 <Pill tone={user.subject ? "neutral" : "warn"}>
                   {user.subject ? SUBJECT_TITLES[user.subject] : "сверхучитель · все предметы"}
                 </Pill>
               )}
+              <Button variant="ghost" style={{ padding: "5px 11px", fontSize: 12.5 }}
+                onClick={() => setEditingAvatar(true)}>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                  <Icon name="pencil" size={13} /> Аватар
+                </span>
+              </Button>
             </div>
           </div>
         </div>
@@ -75,7 +85,10 @@ export function ProfilePage() {
                       gap: 8, flexWrap: "wrap",
                       padding: "10px 12px", background: "var(--surface-2)", borderRadius: 12,
                     }}>
-                      <span style={{ fontWeight: 600, minWidth: 0 }}>{t.name}</span>
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 9, fontWeight: 600, minWidth: 0 }}>
+                        <Avatar user={t} size={28} />
+                        {t.name}
+                      </span>
                       <span className="mono" style={{ color: "var(--text-3)", fontSize: 12 }}>
                         {t.subject ? SUBJECT_TITLES[t.subject] : "все предметы"}
                       </span>
@@ -122,6 +135,8 @@ export function ProfilePage() {
           )}
         </>
       )}</Async>
+
+      {editingAvatar && <AvatarBuilderModal onClose={() => setEditingAvatar(false)} />}
     </div>
   );
 }

@@ -139,6 +139,8 @@ services:
         condition: service_healthy
       fetcher:
         condition: service_started
+      minio-init:
+        condition: service_completed_successfully
     ports: ["8080:8080"]
 
   worker:

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"net/http"
 
 	"egeism/internal/domain"
@@ -18,6 +19,33 @@ type profileResp struct {
 	Teachers []domain.User `json:"teachers,omitempty"`
 	// StudentsCount is the teacher's roster size (enrolled students).
 	StudentsCount int `json:"students_count,omitempty"`
+}
+
+// handleSetAvatar — PUT /api/profile/avatar: replace the acting user's avatar
+// config (any role — ученики, учителя и даже админы). `{"avatar": null}`
+// clears it back to the deterministic client-side default. The config is
+// presentation-only, so beyond Validate() the API doesn't interpret it.
+func (s *Server) handleSetAvatar(w http.ResponseWriter, r *http.Request) {
+	user, _ := userFrom(r.Context())
+	var body struct {
+		Avatar *domain.Avatar `json:"avatar"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+	if body.Avatar != nil {
+		if err := body.Avatar.Validate(); err != nil {
+			writeErr(w, http.StatusUnprocessableEntity, err.Error())
+			return
+		}
+	}
+	updated, err := s.store.SetUserAvatar(r.Context(), user.ID, body.Avatar)
+	if err != nil {
+		writeStoreErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, updated)
 }
 
 func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {

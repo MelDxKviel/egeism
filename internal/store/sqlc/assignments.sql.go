@@ -13,17 +13,18 @@ import (
 )
 
 const createAssignment = `-- name: CreateAssignment :one
-INSERT INTO assignments (test_id, student_id, assigned_by, scheduled_at, due_at)
-VALUES ($1, $2, $3, $4, $5)
-RETURNING id, test_id, student_id, assigned_by, scheduled_at, notified_at, status, due_at
+INSERT INTO assignments (test_id, student_id, assigned_by, scheduled_at, due_at, require_solution)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING id, test_id, student_id, assigned_by, scheduled_at, notified_at, status, due_at, require_solution
 `
 
 type CreateAssignmentParams struct {
-	TestID      uuid.UUID  `json:"test_id"`
-	StudentID   uuid.UUID  `json:"student_id"`
-	AssignedBy  uuid.UUID  `json:"assigned_by"`
-	ScheduledAt time.Time  `json:"scheduled_at"`
-	DueAt       *time.Time `json:"due_at"`
+	TestID          uuid.UUID  `json:"test_id"`
+	StudentID       uuid.UUID  `json:"student_id"`
+	AssignedBy      uuid.UUID  `json:"assigned_by"`
+	ScheduledAt     time.Time  `json:"scheduled_at"`
+	DueAt           *time.Time `json:"due_at"`
+	RequireSolution bool       `json:"require_solution"`
 }
 
 func (q *Queries) CreateAssignment(ctx context.Context, arg CreateAssignmentParams) (Assignment, error) {
@@ -33,6 +34,7 @@ func (q *Queries) CreateAssignment(ctx context.Context, arg CreateAssignmentPara
 		arg.AssignedBy,
 		arg.ScheduledAt,
 		arg.DueAt,
+		arg.RequireSolution,
 	)
 	var i Assignment
 	err := row.Scan(
@@ -44,12 +46,13 @@ func (q *Queries) CreateAssignment(ctx context.Context, arg CreateAssignmentPara
 		&i.NotifiedAt,
 		&i.Status,
 		&i.DueAt,
+		&i.RequireSolution,
 	)
 	return i, err
 }
 
 const getAssignment = `-- name: GetAssignment :one
-SELECT id, test_id, student_id, assigned_by, scheduled_at, notified_at, status, due_at FROM assignments WHERE id = $1
+SELECT id, test_id, student_id, assigned_by, scheduled_at, notified_at, status, due_at, require_solution FROM assignments WHERE id = $1
 `
 
 func (q *Queries) GetAssignment(ctx context.Context, id uuid.UUID) (Assignment, error) {
@@ -64,12 +67,13 @@ func (q *Queries) GetAssignment(ctx context.Context, id uuid.UUID) (Assignment, 
 		&i.NotifiedAt,
 		&i.Status,
 		&i.DueAt,
+		&i.RequireSolution,
 	)
 	return i, err
 }
 
 const listAssignmentsForStudent = `-- name: ListAssignmentsForStudent :many
-SELECT id, test_id, student_id, assigned_by, scheduled_at, notified_at, status, due_at FROM assignments
+SELECT id, test_id, student_id, assigned_by, scheduled_at, notified_at, status, due_at, require_solution FROM assignments
 WHERE student_id = $1
 ORDER BY scheduled_at DESC
 `
@@ -92,6 +96,7 @@ func (q *Queries) ListAssignmentsForStudent(ctx context.Context, studentID uuid.
 			&i.NotifiedAt,
 			&i.Status,
 			&i.DueAt,
+			&i.RequireSolution,
 		); err != nil {
 			return nil, err
 		}
@@ -104,13 +109,16 @@ func (q *Queries) ListAssignmentsForStudent(ctx context.Context, studentID uuid.
 }
 
 const listAssignmentsWithTestForStudent = `-- name: ListAssignmentsWithTestForStudent :many
-SELECT a.id, a.test_id, a.scheduled_at, a.notified_at, a.status, a.due_at,
+SELECT a.id, a.test_id, a.scheduled_at, a.notified_at, a.status, a.due_at, a.require_solution,
        t.title, t.kind, t.subject_id,
        (SELECT count(*) FROM test_items ti WHERE ti.test_id = t.id) AS task_count,
        COALESCE(res.attempt_id, '00000000-0000-0000-0000-000000000000'::uuid) AS attempt_id,
        res.attempt_finished_at,
        COALESCE(res.total, 0)   AS total,
-       COALESCE(res.correct, 0) AS correct
+       COALESCE(res.correct, 0) AS correct,
+       COALESCE(res.points, 0)::bigint AS points,
+       COALESCE(res.max_points, 0)::bigint AS max_points,
+       COALESCE(res.pending_review, 0)::bigint AS pending_review
 FROM assignments a
 JOIN tests t ON t.id = a.test_id
 LEFT JOIN (
@@ -118,7 +126,10 @@ LEFT JOIN (
            att.assignment_id,
            att.id          AS attempt_id,
            att.finished_at AS attempt_finished_at,
-           (SELECT count(*) FROM answers ans WHERE ans.attempt_id = att.id)                    AS total,
+           (SELECT count(*) FROM answers ans WHERE ans.attempt_id = att.id AND ans.review_status <> 'pending') AS total,
+           (SELECT count(*) FROM answers ans WHERE ans.attempt_id = att.id AND ans.review_status = 'pending') AS pending_review,
+           (SELECT sum(ans.points) FROM answers ans WHERE ans.attempt_id = att.id) AS points,
+           (SELECT sum(ans.max_points) FROM answers ans WHERE ans.attempt_id = att.id) AS max_points,
            (SELECT count(*) FROM answers ans WHERE ans.attempt_id = att.id AND ans.is_correct) AS correct
     FROM attempts att
     WHERE att.assignment_id IS NOT NULL AND att.finished_at IS NOT NULL
@@ -135,6 +146,7 @@ type ListAssignmentsWithTestForStudentRow struct {
 	NotifiedAt        *time.Time `json:"notified_at"`
 	Status            string     `json:"status"`
 	DueAt             *time.Time `json:"due_at"`
+	RequireSolution   bool       `json:"require_solution"`
 	Title             string     `json:"title"`
 	Kind              string     `json:"kind"`
 	SubjectID         uuid.UUID  `json:"subject_id"`
@@ -143,6 +155,9 @@ type ListAssignmentsWithTestForStudentRow struct {
 	AttemptFinishedAt *time.Time `json:"attempt_finished_at"`
 	Total             int64      `json:"total"`
 	Correct           int64      `json:"correct"`
+	Points            int64      `json:"points"`
+	MaxPoints         int64      `json:"max_points"`
+	PendingReview     int64      `json:"pending_review"`
 }
 
 // Dashboard "Назначено тебе" + the assigned-tests history: assignment joined with
@@ -170,6 +185,7 @@ func (q *Queries) ListAssignmentsWithTestForStudent(ctx context.Context, student
 			&i.NotifiedAt,
 			&i.Status,
 			&i.DueAt,
+			&i.RequireSolution,
 			&i.Title,
 			&i.Kind,
 			&i.SubjectID,
@@ -178,6 +194,9 @@ func (q *Queries) ListAssignmentsWithTestForStudent(ctx context.Context, student
 			&i.AttemptFinishedAt,
 			&i.Total,
 			&i.Correct,
+			&i.Points,
+			&i.MaxPoints,
+			&i.PendingReview,
 		); err != nil {
 			return nil, err
 		}
@@ -190,7 +209,7 @@ func (q *Queries) ListAssignmentsWithTestForStudent(ctx context.Context, student
 }
 
 const listDueAssignments = `-- name: ListDueAssignments :many
-SELECT id, test_id, student_id, assigned_by, scheduled_at, notified_at, status, due_at FROM assignments
+SELECT id, test_id, student_id, assigned_by, scheduled_at, notified_at, status, due_at, require_solution FROM assignments
 WHERE notified_at IS NULL AND scheduled_at <= $1
 ORDER BY scheduled_at
 `
@@ -214,6 +233,7 @@ func (q *Queries) ListDueAssignments(ctx context.Context, scheduledAt time.Time)
 			&i.NotifiedAt,
 			&i.Status,
 			&i.DueAt,
+			&i.RequireSolution,
 		); err != nil {
 			return nil, err
 		}
@@ -226,7 +246,7 @@ func (q *Queries) ListDueAssignments(ctx context.Context, scheduledAt time.Time)
 }
 
 const markAssignmentNotified = `-- name: MarkAssignmentNotified :one
-UPDATE assignments SET notified_at = now() WHERE id = $1 RETURNING id, test_id, student_id, assigned_by, scheduled_at, notified_at, status, due_at
+UPDATE assignments SET notified_at = now() WHERE id = $1 RETURNING id, test_id, student_id, assigned_by, scheduled_at, notified_at, status, due_at, require_solution
 `
 
 func (q *Queries) MarkAssignmentNotified(ctx context.Context, id uuid.UUID) (Assignment, error) {
@@ -241,6 +261,7 @@ func (q *Queries) MarkAssignmentNotified(ctx context.Context, id uuid.UUID) (Ass
 		&i.NotifiedAt,
 		&i.Status,
 		&i.DueAt,
+		&i.RequireSolution,
 	)
 	return i, err
 }
@@ -264,7 +285,7 @@ func (q *Queries) MarkOverdueAssignments(ctx context.Context, dueAt *time.Time) 
 }
 
 const setAssignmentStatus = `-- name: SetAssignmentStatus :one
-UPDATE assignments SET status = $2 WHERE id = $1 RETURNING id, test_id, student_id, assigned_by, scheduled_at, notified_at, status, due_at
+UPDATE assignments SET status = $2 WHERE id = $1 RETURNING id, test_id, student_id, assigned_by, scheduled_at, notified_at, status, due_at, require_solution
 `
 
 type SetAssignmentStatusParams struct {
@@ -284,6 +305,7 @@ func (q *Queries) SetAssignmentStatus(ctx context.Context, arg SetAssignmentStat
 		&i.NotifiedAt,
 		&i.Status,
 		&i.DueAt,
+		&i.RequireSolution,
 	)
 	return i, err
 }

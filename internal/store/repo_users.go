@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/google/uuid"
 
@@ -45,6 +46,24 @@ func (s *Store) SetUserRoleSubject(ctx context.Context, id uuid.UUID, role domai
 	u, err := s.q.SetUserRoleSubject(ctx, sqlc.SetUserRoleSubjectParams{
 		ID: id, Role: string(role), Subject: subjectPtr(subject),
 	})
+	if err != nil {
+		return domain.User{}, mapErr(err)
+	}
+	return toDomainUser(u), nil
+}
+
+// SetUserAvatar replaces an account's profile-picture config. nil clears the
+// column — the clients fall back to the deterministic default avatar.
+func (s *Store) SetUserAvatar(ctx context.Context, id uuid.UUID, avatar *domain.Avatar) (domain.User, error) {
+	var blob []byte
+	if avatar != nil {
+		b, err := json.Marshal(avatar)
+		if err != nil {
+			return domain.User{}, err
+		}
+		blob = b
+	}
+	u, err := s.q.SetUserAvatar(ctx, sqlc.SetUserAvatarParams{ID: id, Avatar: blob})
 	if err != nil {
 		return domain.User{}, mapErr(err)
 	}

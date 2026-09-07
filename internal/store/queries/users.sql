@@ -32,6 +32,11 @@ UPDATE users SET role = $2, subject = $3 WHERE id = $1 RETURNING *;
 -- name: SetUserSubject :one
 UPDATE users SET subject = $2 WHERE id = $1 RETURNING *;
 
+-- name: SetUserAvatar :one
+-- Replace the acting user's profile-picture config (NULL = back to the
+-- deterministic client-side default).
+UPDATE users SET avatar = $2 WHERE id = $1 RETURNING *;
+
 -- name: SetUserPassword :execrows
 UPDATE users SET password_hash = $2 WHERE id = $1;
 

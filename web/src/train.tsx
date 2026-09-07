@@ -1,6 +1,7 @@
+import { StudentBankFetch } from "./student-bank";
 import { useState } from "react";
 import {
-  api, SelfVariant, usePracticeOverview, useSelfVariants, useWeakSpots, useInvalidate,
+  api, SelfVariant, usePracticeOverview, useSelfVariants, useInvalidate,
 } from "./api";
 import { useApp } from "./state";
 import { Card, Label, Button, Async, Empty, accColor, SubjectSwitch } from "./ui";
@@ -21,7 +22,6 @@ export function TrainingHub() {
   const uid = user?.id ?? "";
   const overview = usePracticeOverview(uid, subject);
   const variants = useSelfVariants(uid, subject);
-  const weak = useWeakSpots(uid, subject);
   const invalidate = useInvalidate();
   const [generating, setGenerating] = useState(false);
   const { open: openReview, modal: reviewModal } = useAttemptReview();
@@ -46,12 +46,11 @@ export function TrainingHub() {
     }
   };
 
-  // The weak-номер hint for the smart-session card («…слабые номера (№7, №12)…»).
-  const weakNums = (weak.data || []).filter((w) => w.accuracy < 0.7).slice(0, 3).map((w) => `№${w.number}`);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
       <SubjectSwitch />
+      <StudentBankFetch key={subject} subject={subject} autoWhenEmpty={overview.isSuccess && overview.data.numbers.every((n) => n.bank_active === 0)} />
 
       {/* The three cards flex-column with the CTA pinned to the bottom edge
           (marginTop:auto), so the buttons sit on one line across the row no
@@ -83,7 +82,7 @@ export function TrainingHub() {
           <Label>Умная тренировка</Label>
           <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 10, flex: 1 }}>
             <div style={{ color: "var(--text-2)", fontSize: 13, lineHeight: 1.45 }}>
-              Короткая сессия под тебя: сначала ошибки, потом слабые номера{weakNums.length > 0 ? ` (${weakNums.join(", ")})` : ""}, потом новое.
+              Начинаем с №1–3 и постепенно открываем следующие номера. Для перехода нужно не меньше 5 ответов и 80% верных среди последних 10 по каждому предыдущему номеру. Вторая часть появится, когда освоишь первую.
             </div>
             <Button style={{ marginTop: "auto" }} onClick={startRecommended}>Начать</Button>
           </div>
@@ -104,7 +103,7 @@ export function TrainingHub() {
         <span style={{ color: "var(--text-3)", fontSize: 12 }}>реши задание верно дважды — номер зачтётся</span>
       }>
         <Async q={overview}>{(o) => o.numbers.length === 0
-          ? <Empty art="telescope" title="Банк пока пуст" hint="Попроси учителя подтянуть задания — карта номеров появится здесь." />
+          ? <Empty art="telescope" title="Банк пока пуст" hint="Задания загружаются из источника. Можно обновить банк кнопкой выше." />
           : (
             <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fill, minmax(min(150px, 100%), 1fr))" }}>
               {o.numbers.map((n) => {
@@ -168,7 +167,7 @@ function SelfVariantRow({ v, onStart, onReview }: {
       </div>
       {solved ? (
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span className="mono" title={`${pct}% верно`} style={{ color: accColor(pct), fontWeight: 700 }}>{v.correct}/{v.total}</span>
+          <span className="mono" title={`${pct}% верно`} style={{ color: accColor(pct), fontWeight: 700 }}>{v.points}/{v.max_points} балл.{v.pending_review > 0 ? ` · на проверке: ${v.pending_review}` : ""}</span>
           {v.attempt_id && <Button variant="ghost" style={{ padding: "6px 12px", fontSize: 13 }} onClick={() => onReview({ attempt_id: v.attempt_id, title: v.title })}>Разбор</Button>}
           <Button variant="soft" style={{ padding: "6px 12px", fontSize: 13 }} onClick={() => onStart({ id: v.id, title: v.title })}>Ещё раз</Button>
         </div>

@@ -124,6 +124,7 @@ func (s *Store) ListTestTasks(ctx context.Context, testID uuid.UUID) ([]domain.T
 			}
 		}
 		out = append(out, domain.Task{
+			Part: int(r.Part), GradingMode: r.GradingMode, MaxPoints: int(r.MaxPoints),
 			ID:           r.TaskID,
 			SubjectID:    r.SubjectID,
 			Number:       int(r.Number),
@@ -304,6 +305,7 @@ func (s *Store) SelfVariants(ctx context.Context, studentID, subjectID uuid.UUID
 	out := make([]domain.SelfVariant, 0, len(rows))
 	for _, r := range rows {
 		v := domain.SelfVariant{
+			Points: r.Points, MaxPoints: r.MaxPoints, PendingReview: r.PendingReview,
 			ID:         r.ID,
 			SubjectID:  r.SubjectID,
 			Kind:       domain.TestKind(r.Kind),

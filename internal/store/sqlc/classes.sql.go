@@ -34,7 +34,7 @@ SELECT att.student_id, t.number,
 FROM answers a
 JOIN attempts att ON att.id = a.attempt_id
 JOIN tasks t      ON t.id = a.task_id
-WHERE t.subject_id = $2
+WHERE a.review_status <> 'pending' AND t.subject_id = $2
   AND att.student_id IN (SELECT student_id FROM class_members WHERE class_id = $1)
 GROUP BY att.student_id, t.number
 ORDER BY att.student_id, t.number
@@ -174,7 +174,7 @@ func (q *Queries) ListAllClasses(ctx context.Context) ([]ListAllClassesRow, erro
 }
 
 const listClassMembers = `-- name: ListClassMembers :many
-SELECT u.id, u.role, u.telegram_id, u.name, u.created_at, u.username, u.password_hash, u.is_active, u.subject FROM users u
+SELECT u.id, u.role, u.telegram_id, u.name, u.created_at, u.username, u.password_hash, u.is_active, u.subject, u.avatar FROM users u
 JOIN class_members cm ON cm.student_id = u.id
 WHERE cm.class_id = $1
 ORDER BY u.name
@@ -199,6 +199,7 @@ func (q *Queries) ListClassMembers(ctx context.Context, classID uuid.UUID) ([]Us
 			&i.PasswordHash,
 			&i.IsActive,
 			&i.Subject,
+			&i.Avatar,
 		); err != nil {
 			return nil, err
 		}

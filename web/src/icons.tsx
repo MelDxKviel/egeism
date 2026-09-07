@@ -14,9 +14,22 @@ export type IconName =
   | "bell"   // notifications
   | "download"  // PDF export
   | "eye" | "eyeOff" | "key"  // password visibility + reset
-  | "sprout" | "telescope" | "medal";  // empty-state illustrations
+  | "sprout" | "telescope" | "medal"  // empty-state illustrations
+  | "dice";  // avatar randomizer
 
 const PATHS: Record<IconName, ReactNode> = {
+  dice: (
+    <>
+      <rect x="3.5" y="3.5" width="17" height="17" rx="3.4" />
+      {/* Точки кубика заполняются currentColor: у пятёрки stroke-точки
+          читались бы как колечки. */}
+      <circle cx="8.3" cy="8.3" r="1.15" fill="currentColor" stroke="none" />
+      <circle cx="15.7" cy="8.3" r="1.15" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="1.15" fill="currentColor" stroke="none" />
+      <circle cx="8.3" cy="15.7" r="1.15" fill="currentColor" stroke="none" />
+      <circle cx="15.7" cy="15.7" r="1.15" fill="currentColor" stroke="none" />
+    </>
+  ),
   dashboard: (
     <>
       <rect x="3" y="3" width="7.5" height="7.5" rx="1.6" />

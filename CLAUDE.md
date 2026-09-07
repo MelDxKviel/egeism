@@ -434,7 +434,16 @@ unsolved ones to `missed`, but they stay solvable; red/orange/green pills in
 the lists + «сдать до …» in the bell and Telegram message), and the student
 self-study hub (the «Тренировка» screen: работа над ошибками, server-side
 дриллы по номерам with the progress map, умная тренировка, self-generated
-пробники — see the web section).
+пробники — see the web section), and profile avatars (all roles: `users.avatar`
+JSONB, kind="builder" — a parametric SVG rendered ONLY by the client
+(`web/src/avatar.tsx`: palettes + hair/eyes/mouth/accessory parts; adding a
+variant is web-only, the API just bounds-checks 0..31 and #RRGGBB via
+`domain.Avatar.Validate`), set via `PUT /api/profile/avatar` (null = reset;
+kind="photo"+photo_key reserved for future uploads, rejected for now); no
+avatar → deterministic default from the user id (`defaultAvatar`), so everyone
+has a face with no backfill; the builder modal (random dice + per-part swatch
+rows) opens from the profile page, and the avatar rides on `domain.User` into
+every list — sidebar, roster, class grid, admin users).
 TODO: run/validate the Python fetcher against live РЕШУ/FIPI (it's a template),
 Telegram deep-link handoff, LLM-assisted answers + progressive hints
 (part-2), real ФИПИ primary→test score tables.

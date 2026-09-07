@@ -239,12 +239,15 @@ def to_raw_task(subject_code: str, pid: str, url: str,
     statement + inline media and keeps the task's existing (curated) answer.
     """
     schema, conf = classify_answer(answer, subject_code)
-    if schema is None and require_answer:
-        return None
     try:
         number = int(topic or 0)
     except ValueError:
         return None  # part-2 «тип» like "C4"/"Д14" isn't a plain задание number
+    if subject_code == "math" and 13 <= number <= 19:
+        schema = {"type": "written", "correct": [answer.strip()] if answer.strip() else []}
+        conf = 1.0  # a teacher grades the written solution
+    elif schema is None and require_answer:
+        return None
     rt = {
         "subject": subject_code,
         "number": number,

@@ -40,7 +40,7 @@ JOIN LATERAL (
     SELECT a.is_correct
     FROM answers a
     JOIN attempts att ON att.id = a.attempt_id
-    WHERE att.student_id = $1 AND a.task_id = t.id
+    WHERE a.review_status <> 'pending' AND att.student_id = $1 AND a.task_id = t.id
     ORDER BY a.answered_at DESC
     LIMIT 1
 ) last ON NOT last.is_correct
@@ -72,9 +72,9 @@ func (q *Queries) CountTasksBySubject(ctx context.Context, subjectID uuid.UUID) 
 }
 
 const createTask = `-- name: CreateTask :one
-INSERT INTO tasks (subject_id, number, statement, media, answer_schema, source, status)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, subject_id, number, statement, media, answer_schema, source, status, created_at
+INSERT INTO tasks (subject_id, number, statement, media, answer_schema, source, status, part, grading_mode, max_points)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+RETURNING id, subject_id, number, statement, media, answer_schema, source, status, created_at, part, grading_mode, max_points
 `
 
 type CreateTaskParams struct {
@@ -85,6 +85,9 @@ type CreateTaskParams struct {
 	AnswerSchema []byte    `json:"answer_schema"`
 	Source       []byte    `json:"source"`
 	Status       string    `json:"status"`
+	Part         int32     `json:"part"`
+	GradingMode  string    `json:"grading_mode"`
+	MaxPoints    int32     `json:"max_points"`
 }
 
 func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (Task, error) {
@@ -96,6 +99,9 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (Task, e
 		arg.AnswerSchema,
 		arg.Source,
 		arg.Status,
+		arg.Part,
+		arg.GradingMode,
+		arg.MaxPoints,
 	)
 	var i Task
 	err := row.Scan(
@@ -108,6 +114,9 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (Task, e
 		&i.Source,
 		&i.Status,
 		&i.CreatedAt,
+		&i.Part,
+		&i.GradingMode,
+		&i.MaxPoints,
 	)
 	return i, err
 }
@@ -118,6 +127,7 @@ WHERE task_id IN (
     SELECT id FROM tasks
     WHERE subject_id = $1
       AND NOT EXISTS (SELECT 1 FROM answers a WHERE a.task_id = tasks.id)
+      AND NOT EXISTS (SELECT 1 FROM solution_photos p WHERE p.task_id = tasks.id)
 )
 `
 
@@ -133,6 +143,7 @@ const deleteUnansweredTasksBySubject = `-- name: DeleteUnansweredTasksBySubject 
 DELETE FROM tasks
 WHERE subject_id = $1
   AND NOT EXISTS (SELECT 1 FROM answers a WHERE a.task_id = tasks.id)
+  AND NOT EXISTS (SELECT 1 FROM solution_photos p WHERE p.task_id = tasks.id)
 `
 
 // Clear the bank for a subject, preserving any task that carries student
@@ -146,7 +157,7 @@ func (q *Queries) DeleteUnansweredTasksBySubject(ctx context.Context, subjectID 
 }
 
 const getTask = `-- name: GetTask :one
-SELECT id, subject_id, number, statement, media, answer_schema, source, status, created_at FROM tasks WHERE id = $1
+SELECT id, subject_id, number, statement, media, answer_schema, source, status, created_at, part, grading_mode, max_points FROM tasks WHERE id = $1
 `
 
 func (q *Queries) GetTask(ctx context.Context, id uuid.UUID) (Task, error) {
@@ -162,12 +173,15 @@ func (q *Queries) GetTask(ctx context.Context, id uuid.UUID) (Task, error) {
 		&i.Source,
 		&i.Status,
 		&i.CreatedAt,
+		&i.Part,
+		&i.GradingMode,
+		&i.MaxPoints,
 	)
 	return i, err
 }
 
 const listTasks = `-- name: ListTasks :many
-SELECT id, subject_id, number, statement, media, answer_schema, source, status, created_at FROM tasks
+SELECT id, subject_id, number, statement, media, answer_schema, source, status, created_at, part, grading_mode, max_points FROM tasks
 WHERE ($3::uuid IS NULL OR subject_id = $3)
   AND ($4::int      IS NULL OR number = $4)
   AND ($5::text     IS NULL OR status = $5)
@@ -208,6 +222,9 @@ func (q *Queries) ListTasks(ctx context.Context, arg ListTasksParams) ([]Task, e
 			&i.Source,
 			&i.Status,
 			&i.CreatedAt,
+			&i.Part,
+			&i.GradingMode,
+			&i.MaxPoints,
 		); err != nil {
 			return nil, err
 		}
@@ -220,23 +237,25 @@ func (q *Queries) ListTasks(ctx context.Context, arg ListTasksParams) ([]Task, e
 }
 
 const mistakeTasks = `-- name: MistakeTasks :many
-SELECT t.id, t.subject_id, t.number, t.statement, t.media, t.answer_schema, t.source, t.status, t.created_at FROM tasks t
+SELECT t.id, t.subject_id, t.number, t.statement, t.media, t.answer_schema, t.source, t.status, t.created_at, t.part, t.grading_mode, t.max_points FROM tasks t
 JOIN LATERAL (
     SELECT a.is_correct, a.answered_at
     FROM answers a
     JOIN attempts att ON att.id = a.attempt_id
-    WHERE att.student_id = $1 AND a.task_id = t.id
+    WHERE a.review_status <> 'pending' AND att.student_id = $1 AND a.task_id = t.id
     ORDER BY a.answered_at DESC
     LIMIT 1
 ) last ON NOT last.is_correct
 WHERE t.subject_id = $2 AND t.status = 'active'
+  AND ($3::int IS NULL OR t.number <= $3)
 ORDER BY last.answered_at
-LIMIT $3
+LIMIT $4
 `
 
 type MistakeTasksParams struct {
 	StudentID uuid.UUID `json:"student_id"`
 	SubjectID uuid.UUID `json:"subject_id"`
+	MaxNumber *int32    `json:"max_number"`
 	Lim       int32     `json:"lim"`
 }
 
@@ -244,7 +263,12 @@ type MistakeTasksParams struct {
 // wrong — answering one correctly (anywhere) drops it out of the queue.
 // Oldest mistakes first, so nothing rots at the bottom.
 func (q *Queries) MistakeTasks(ctx context.Context, arg MistakeTasksParams) ([]Task, error) {
-	rows, err := q.db.Query(ctx, mistakeTasks, arg.StudentID, arg.SubjectID, arg.Lim)
+	rows, err := q.db.Query(ctx, mistakeTasks,
+		arg.StudentID,
+		arg.SubjectID,
+		arg.MaxNumber,
+		arg.Lim,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -262,6 +286,9 @@ func (q *Queries) MistakeTasks(ctx context.Context, arg MistakeTasksParams) ([]T
 			&i.Source,
 			&i.Status,
 			&i.CreatedAt,
+			&i.Part,
+			&i.GradingMode,
+			&i.MaxPoints,
 		); err != nil {
 			return nil, err
 		}
@@ -284,7 +311,7 @@ LEFT JOIN LATERAL (
     SELECT count(*) AS total_cnt, count(*) FILTER (WHERE a.is_correct) AS correct_cnt
     FROM answers a
     JOIN attempts att ON att.id = a.attempt_id
-    WHERE a.task_id = t.id AND att.student_id = $2
+    WHERE a.review_status <> 'pending' AND a.task_id = t.id AND att.student_id = $2
 ) st ON TRUE
 WHERE t.subject_id = $3
 GROUP BY t.number
@@ -337,13 +364,13 @@ func (q *Queries) PracticeNumbers(ctx context.Context, arg PracticeNumbersParams
 }
 
 const practiceTasks = `-- name: PracticeTasks :many
-SELECT t.id, t.subject_id, t.number, t.statement, t.media, t.answer_schema, t.source, t.status, t.created_at FROM tasks t
+SELECT t.id, t.subject_id, t.number, t.statement, t.media, t.answer_schema, t.source, t.status, t.created_at, t.part, t.grading_mode, t.max_points FROM tasks t
 WHERE t.subject_id = $1 AND t.status = 'active'
   AND ($2::int IS NULL OR t.number = $2)
   AND (
     SELECT count(*) FROM answers a
     JOIN attempts att ON att.id = a.attempt_id
-    WHERE att.student_id = $3 AND a.task_id = t.id AND a.is_correct
+    WHERE a.review_status <> 'pending' AND att.student_id = $3 AND a.task_id = t.id AND a.is_correct
   ) < $4::bigint
 ORDER BY random()
 LIMIT $5
@@ -385,6 +412,9 @@ func (q *Queries) PracticeTasks(ctx context.Context, arg PracticeTasksParams) ([
 			&i.Source,
 			&i.Status,
 			&i.CreatedAt,
+			&i.Part,
+			&i.GradingMode,
+			&i.MaxPoints,
 		); err != nil {
 			return nil, err
 		}
@@ -464,7 +494,7 @@ func (q *Queries) RandomTasksOnePerNumber(ctx context.Context, subjectID uuid.UU
 }
 
 const setTaskStatus = `-- name: SetTaskStatus :one
-UPDATE tasks SET status = $2 WHERE id = $1 RETURNING id, subject_id, number, statement, media, answer_schema, source, status, created_at
+UPDATE tasks SET status = $2 WHERE id = $1 RETURNING id, subject_id, number, statement, media, answer_schema, source, status, created_at, part, grading_mode, max_points
 `
 
 type SetTaskStatusParams struct {
@@ -485,6 +515,9 @@ func (q *Queries) SetTaskStatus(ctx context.Context, arg SetTaskStatusParams) (T
 		&i.Source,
 		&i.Status,
 		&i.CreatedAt,
+		&i.Part,
+		&i.GradingMode,
+		&i.MaxPoints,
 	)
 	return i, err
 }
@@ -549,7 +582,7 @@ func (q *Queries) TaskExistsBySource(ctx context.Context, arg TaskExistsBySource
 }
 
 const updateTaskAnswer = `-- name: UpdateTaskAnswer :one
-UPDATE tasks SET answer_schema = $2 WHERE id = $1 RETURNING id, subject_id, number, statement, media, answer_schema, source, status, created_at
+UPDATE tasks SET answer_schema = $2 WHERE id = $1 RETURNING id, subject_id, number, statement, media, answer_schema, source, status, created_at, part, grading_mode, max_points
 `
 
 type UpdateTaskAnswerParams struct {
@@ -570,12 +603,15 @@ func (q *Queries) UpdateTaskAnswer(ctx context.Context, arg UpdateTaskAnswerPara
 		&i.Source,
 		&i.Status,
 		&i.CreatedAt,
+		&i.Part,
+		&i.GradingMode,
+		&i.MaxPoints,
 	)
 	return i, err
 }
 
 const updateTaskContent = `-- name: UpdateTaskContent :one
-UPDATE tasks SET statement = $2, media = $3 WHERE id = $1 RETURNING id, subject_id, number, statement, media, answer_schema, source, status, created_at
+UPDATE tasks SET statement = $2, media = $3 WHERE id = $1 RETURNING id, subject_id, number, statement, media, answer_schema, source, status, created_at, part, grading_mode, max_points
 `
 
 type UpdateTaskContentParams struct {
@@ -599,6 +635,9 @@ func (q *Queries) UpdateTaskContent(ctx context.Context, arg UpdateTaskContentPa
 		&i.Source,
 		&i.Status,
 		&i.CreatedAt,
+		&i.Part,
+		&i.GradingMode,
+		&i.MaxPoints,
 	)
 	return i, err
 }

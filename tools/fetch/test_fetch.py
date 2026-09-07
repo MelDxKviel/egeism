@@ -175,3 +175,12 @@ def test_openfipi_matrix_collapses_to_compact_corner_grid():
 
     # Trailing empty column trimmed: a clean 9-wide rectangle (corner + 8).
     assert all(len(r) == 9 for r in rows)
+
+
+def test_math_written_solution_without_short_answer():
+    from fetch import to_raw_task
+    task = to_raw_task("math", "123", "https://example.test/123", "14", "Докажите утверждение", [], "")
+    assert task["answer_schema"] == {"type": "written", "correct": []}
+    assert task["_confidence"] == 1.0
+    assert to_raw_task("math", "124", "https://example.test/124", "1", "Короткий ответ", [], "") is None
+    assert to_raw_task("rus", "125", "https://example.test/125", "14", "Короткий ответ", [], "") is None

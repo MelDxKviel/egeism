@@ -9,6 +9,7 @@ import (
 type AnswerType string
 
 const (
+	AnswerWritten AnswerType = "written"
 	// AnswerNumber is a single numeric value compared with a tolerance.
 	AnswerNumber AnswerType = "number"
 	// AnswerString is a word/phrase compared with optional case- and yo-folding.
@@ -22,7 +23,7 @@ const (
 // Valid reports whether t is one of the known answer types.
 func (t AnswerType) Valid() bool {
 	switch t {
-	case AnswerNumber, AnswerString, AnswerSet, AnswerSequence:
+	case AnswerWritten, AnswerNumber, AnswerString, AnswerSet, AnswerSequence:
 		return true
 	default:
 		return false
@@ -66,7 +67,7 @@ func (s AnswerSchema) Validate() error {
 	if !s.Type.Valid() {
 		return fmt.Errorf("answer schema: unknown type %q", s.Type)
 	}
-	if len(s.Correct) == 0 {
+	if len(s.Correct) == 0 && s.Type != AnswerWritten {
 		return fmt.Errorf("answer schema: correct must be non-empty")
 	}
 	switch s.Type {

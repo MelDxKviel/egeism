@@ -5,7 +5,7 @@ SELECT date_trunc('day', a.answered_at)::date AS day,
        count(*) FILTER (WHERE a.is_correct) AS correct
 FROM answers a
 JOIN attempts att ON att.id = a.attempt_id
-WHERE att.student_id = $1
+WHERE a.review_status <> 'pending' AND att.student_id = $1
   AND a.answered_at >= $2
 GROUP BY day
 ORDER BY day;
@@ -19,7 +19,7 @@ SELECT t.number,
 FROM answers a
 JOIN attempts att ON att.id = a.attempt_id
 JOIN tasks t      ON t.id = a.task_id
-WHERE att.student_id = $1 AND t.subject_id = $2
+WHERE a.review_status <> 'pending' AND att.student_id = $1 AND t.subject_id = $2
 GROUP BY t.number
 ORDER BY t.number;
 
@@ -32,7 +32,7 @@ SELECT t.number,
 FROM answers a
 JOIN attempts att ON att.id = a.attempt_id
 JOIN tasks t      ON t.id = a.task_id
-WHERE att.student_id = $1 AND t.subject_id = $2
+WHERE a.review_status <> 'pending' AND att.student_id = $1 AND t.subject_id = $2
 GROUP BY t.number, week
 ORDER BY t.number, week;
 
@@ -45,7 +45,7 @@ SELECT t.number,
 FROM answers a
 JOIN attempts att ON att.id = a.attempt_id
 JOIN tasks t      ON t.id = a.task_id
-WHERE att.student_id = $1 AND t.subject_id = $2
+WHERE a.review_status <> 'pending' AND att.student_id = $1 AND t.subject_id = $2
 GROUP BY t.number
 HAVING count(*) >= sqlc.arg('min_attempts')
 ORDER BY (count(*) FILTER (WHERE a.is_correct))::float / count(*) ASC
@@ -58,7 +58,7 @@ SELECT a.id, a.task_id, a.raw_answer, a.is_correct, a.time_spent_ms, a.answered_
 FROM answers a
 JOIN attempts att ON att.id = a.attempt_id
 JOIN tasks t      ON t.id = a.task_id
-WHERE att.student_id = $1
+WHERE a.review_status <> 'pending' AND att.student_id = $1
   AND a.answered_at >= sqlc.arg('day_start')
   AND a.answered_at <  sqlc.arg('day_end')
 ORDER BY a.answered_at;
@@ -70,7 +70,7 @@ SELECT count(*)                          AS total,
 FROM answers a
 JOIN attempts att ON att.id = a.attempt_id
 JOIN tasks t      ON t.id = a.task_id
-WHERE att.student_id = $1 AND t.subject_id = $2;
+WHERE a.review_status <> 'pending' AND att.student_id = $1 AND t.subject_id = $2;
 
 -- name: PlatformStats :one
 -- Platform-wide counters for the admin dashboard.

@@ -5,6 +5,7 @@ import type { AssignmentCard } from "./api";
 // Base card; each case overrides the deadline-relevant fields. task_count etc.
 // are irrelevant to deadlineInfo — only due_at / finished_at / status matter.
 const base = (over: Partial<AssignmentCard>): AssignmentCard => ({
+  require_solution: false, points: 0, max_points: 0, pending_review: 0,
   id: "x", test_id: "t", title: "T", kind: "classic", subject_id: "s",
   scheduled_at: "2026-07-07T12:00:00.000Z", status: "scheduled", task_count: 1,
   correct: 0, total: 0, ...over,

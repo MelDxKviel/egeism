@@ -32,11 +32,12 @@ components:
     AnswerSchema:
       type: object
       description: How to compare an answer (§7). Discriminated by `type`.
-      required: [type, correct]
+      required: [type]
       properties:
-        type: { type: string, enum: [number, string, set, sequence] }
+        type: { type: string, enum: [number, string, set, sequence, written] }
         correct:
           type: array
+          description: Required and nonempty for auto-graded types; optional for written solutions.
           items: { type: string }
         tolerance: { type: number, description: "number: absolute tolerance" }
         ci: { type: boolean, description: "string: case-insensitive" }
@@ -58,7 +59,10 @@ components:
         statement: { type: string }
         media: { type: array, items: { $ref: '#/components/schemas/Media' } }
         status: { type: string, enum: [draft, active, rejected] }
-        answer_kind: { type: string, enum: [number, string, set, sequence] }
+        answer_kind: { type: string, enum: [number, string, set, sequence, written] }
+        part: { type: integer, enum: [1, 2] }
+        grading_mode: { type: string, enum: [auto, manual] }
+        max_points: { type: integer, minimum: 1 }
         bot_solvable: { type: boolean }
     Attempt:
       type: object
@@ -69,6 +73,7 @@ components:
         student_id: { type: string, format: uuid }
         started_at: { type: string, format: date-time }
         finished_at: { type: string, format: date-time, nullable: true }
+        require_solution: { type: boolean, description: Require photos for each manual task in this assignment. }
     SubmitAnswerRequest:
       type: object
       required: [task_id, raw_answer]
@@ -81,10 +86,37 @@ components:
       properties:
         is_correct: { type: boolean }
         answer_id: { type: string, format: uuid }
+        review_status: { type: string, enum: [auto, pending, reviewed] }
         solution:
           type: array
           items: { type: string }
-          description: Revealed only when the answer is wrong (§3.4).
+          description: Revealed only for an incorrect auto-graded answer. Pending written solutions never expose the key.
+    SolutionPhoto:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        attempt_id: { type: string, format: uuid }
+        task_id: { type: string, format: uuid }
+        content_type: { type: string, enum: [image/jpeg, image/png] }
+        size_bytes: { type: integer, format: int64 }
+    AttemptReviewItem:
+      type: object
+      properties:
+        answer_id: { type: string, format: uuid }
+        task_id: { type: string, format: uuid }
+        number: { type: integer }
+        statement: { type: string }
+        media: { type: array, items: { $ref: '#/components/schemas/Media' } }
+        answer_kind: { type: string }
+        raw_answer: { type: string }
+        is_correct: { type: boolean }
+        correct: { type: array, items: { type: string }, description: Hidden from students until manual review. }
+        review_status: { type: string, enum: [auto, pending, reviewed] }
+        points: { type: integer, nullable: true }
+        max_points: { type: integer }
+        teacher_comment: { type: string }
+        reviewed_at: { type: string, format: date-time, nullable: true }
+        photos: { type: array, items: { $ref: '#/components/schemas/SolutionPhoto' } }
     HeatmapCell:
       type: object
       properties:
@@ -124,8 +156,9 @@ components:
         teacher who assigned.
       properties:
         id: { type: string, format: uuid }
-        kind: { type: string, enum: [assignment_created, assignment_done] }
-        assignment_id: { type: string, format: uuid }
+        kind: { type: string, enum: [assignment_created, assignment_done, password_reset_requested, attempt_reviewed] }
+        assignment_id: { type: string, format: uuid, nullable: true }
+        attempt_id: { type: string, format: uuid, nullable: true, description: Exact attempt to open for submission/review notifications. }
         test_id: { type: string, format: uuid }
         test_title: { type: string }
         subject_id: { type: string, format: uuid }
@@ -311,6 +344,38 @@ paths:
         teacher: own classes with member counts + students_count).
       responses:
         '200': { description: "{ user, classes, teachers?, students_count? }" }
+
+  /api/profile/avatar:
+    put:
+      summary: >
+        Set the acting user's avatar (any role). Body {avatar} is a config with
+        kind "builder" (parametric SVG assembled client-side: bg/skin/hair_color
+        hex colors + hair/eyes/mouth/accessory variant indices) or null to reset
+        to the deterministic default. kind "photo" (photo_key) is reserved for
+        future uploaded photos and rejected for now. The avatar rides on every
+        user payload as user.avatar.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                avatar:
+                  type: object
+                  nullable: true
+                  properties:
+                    kind: { type: string, enum: [builder] }
+                    bg: { type: string, example: "#C7D2FE" }
+                    skin: { type: string, example: "#F8C09A" }
+                    hair_color: { type: string, example: "#4A3728" }
+                    hair: { type: integer }
+                    eyes: { type: integer }
+                    mouth: { type: integer }
+                    accessory: { type: integer }
+      responses:
+        '200': { description: the updated user }
+        '422': { description: unrenderable config (bad color / index / kind) }
 
   /api/classes:
     get:
@@ -543,7 +608,126 @@ paths:
       parameters:
         - { name: attemptID, in: path, required: true, schema: { type: string, format: uuid } }
       responses:
-        '200': { description: reviewed answers (number, statement, media, answer_kind, raw_answer, is_correct, correct) }
+        '200':
+          description: Answers with photos, grades and comments; accessible to the student and their subject teacher.
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/AttemptReviewItem' } }
+    put:
+      summary: Grade all manual answers of a finished attempt (enrolled subject teacher)
+      description: Atomic save; editing points or comments creates a student notification. Identical retries do not notify twice.
+      parameters:
+        - { name: attemptID, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [grades]
+              properties:
+                grades:
+                  type: array
+                  items:
+                    type: object
+                    required: [answer_id, points]
+                    properties:
+                      answer_id: { type: string, format: uuid }
+                      points: { type: integer, minimum: 0, description: Must not exceed this answer's max_points. }
+                      comment: { type: string, maxLength: 5000 }
+      responses:
+        '200':
+          description: Updated review
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/AttemptReviewItem' } }
+        '403': { description: Not this student's subject teacher }
+        '422': { description: Unfinished attempt, missing grades or invalid points }
+
+  /api/attempts/{attemptID}/tasks/{taskID}/photos:
+    post:
+      summary: Attach a photo to an unsubmitted manual answer (attempt owner)
+      description: JPEG or PNG, up to 10 MiB and 40 megapixels; at most 5 photos per task.
+      parameters:
+        - { name: attemptID, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: taskID, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        '201':
+          description: Photo metadata (no public URL)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SolutionPhoto' }
+        '400': { description: Invalid image or size }
+        '422': { description: Submitted answer, finished attempt or photo limit }
+        '503': { description: Media storage unavailable }
+
+  /api/solution-photos/{photoID}:
+    parameters:
+      - { name: photoID, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      summary: Read private solution photo (owner, enrolled subject teacher or admin)
+      responses:
+        '200':
+          description: Private image; Cache-Control private, no-store
+          content:
+            image/jpeg:
+              schema: { type: string, format: binary }
+            image/png:
+              schema: { type: string, format: binary }
+        '403': { description: No access to this attempt }
+    delete:
+      summary: Remove a photo before answer submission (attempt owner)
+      responses:
+        '204': { description: Deleted }
+        '422': { description: Answer already submitted or attempt finished }
+
+  /api/practice/bank/fetch:
+    post:
+      summary: Refill the active task bank from the configured source (student only)
+      description: Fetches up to 60 tasks, or 15 for a specified number. Shared subject cooldown is 120 seconds.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [subject]
+              properties:
+                subject: { type: string, enum: [math, rus, inf, soc] }
+                number: { type: integer, minimum: 1 }
+      responses:
+        '200': { description: Ingest summary (fetched, inserted, skipped, promoted, invalid, source) }
+        '429': { description: Subject was refreshed recently }
+        '503': { description: Fetcher unavailable }
+
+  /api/practice/recommended:
+    get:
+      summary: Adaptive practice starting with numbers 1–3
+      description: Unlocks three more numbers after at least 5 graded answers and 80% accuracy on each prerequisite number, considering its last 10 answers. Pending answers are excluded. Harder stages close after regression.
+      parameters:
+        - { name: subject, in: query, required: true, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, default: 12, maximum: 30 } }
+      responses:
+        '200':
+          description: Tasks restricted to the current stage, including eligible mistakes and weak numbers.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  max_number: { type: integer }
+                  tasks: { type: array, items: { $ref: '#/components/schemas/TaskView' } }
+                  mistakes: { type: integer }
+                  weak_numbers: { type: array, items: { type: integer } }
 
   /api/attempts/{attemptID}/finish:
     post:
@@ -883,5 +1067,6 @@ paths:
   /api/admin/assignments:
     post:
       summary: Assign a test to a student at a time (enqueues TG notification)
+      description: require_solution (boolean, default false) requires a photo for every manual task. Currently enabled for math. Assignment and result feeds include require_solution, points, max_points and pending_review.
       responses:
         '201': { description: created }

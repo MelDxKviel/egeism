@@ -34,7 +34,8 @@ SELECT te.id, te.subject_id, te.kind, te.title, te.created_at,
        COALESCE(att.id, '00000000-0000-0000-0000-000000000000'::uuid) AS attempt_id,
        att.finished_at,
        COALESCE(ans.total, 0)::bigint   AS total,
-       COALESCE(ans.correct, 0)::bigint AS correct
+       COALESCE(ans.correct, 0)::bigint AS correct,
+       COALESCE(ans.points, 0)::bigint AS points, COALESCE(ans.max_points, 0)::bigint AS max_points, COALESCE(ans.pending_review, 0)::bigint AS pending_review
 FROM tests te
 LEFT JOIN LATERAL (
     SELECT a.id, a.finished_at FROM attempts a
@@ -43,7 +44,8 @@ LEFT JOIN LATERAL (
     LIMIT 1
 ) att ON TRUE
 LEFT JOIN LATERAL (
-    SELECT count(*) AS total, count(*) FILTER (WHERE an.is_correct) AS correct
+    SELECT count(*) FILTER (WHERE an.review_status <> 'pending') AS total, count(*) FILTER (WHERE an.is_correct) AS correct,
+           sum(an.points) AS points, sum(an.max_points) AS max_points, count(*) FILTER (WHERE an.review_status = 'pending') AS pending_review
     FROM answers an WHERE an.attempt_id = att.id
 ) ans ON TRUE
 WHERE te.created_by = sqlc.arg('student_id')
@@ -95,7 +97,7 @@ VALUES ($1, $2, $3)
 RETURNING *;
 
 -- name: ListTestItems :many
-SELECT ti.*, t.subject_id, t.number, t.statement, t.media, t.answer_schema, t.status
+SELECT ti.*, t.subject_id, t.number, t.statement, t.media, t.answer_schema, t.status, t.part, t.grading_mode, t.max_points
 FROM test_items ti
 JOIN tasks t ON t.id = ti.task_id
 WHERE ti.test_id = $1

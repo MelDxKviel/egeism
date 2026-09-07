@@ -29,6 +29,7 @@ func toDomainTask(t sqlc.Task) (domain.Task, error) {
 		src = &s
 	}
 	return domain.Task{
+		Part: int(t.Part), GradingMode: t.GradingMode, MaxPoints: int(t.MaxPoints),
 		ID:           t.ID,
 		SubjectID:    t.SubjectID,
 		Number:       int(t.Number),
@@ -68,7 +69,22 @@ func toDomainUser(u sqlc.User) domain.User {
 		Subject:    subject,
 		IsActive:   u.IsActive,
 		CreatedAt:  u.CreatedAt,
+		Avatar:     avatarFromJSON(u.Avatar),
 	}
+}
+
+// avatarFromJSON decodes the users.avatar JSONB column. A NULL column or an
+// undecodable blob both come back nil — the clients then fall back to the
+// deterministic default avatar, so bad data can never break a user list.
+func avatarFromJSON(b []byte) *domain.Avatar {
+	if len(b) == 0 {
+		return nil
+	}
+	var a domain.Avatar
+	if err := json.Unmarshal(b, &a); err != nil || a.Kind == "" {
+		return nil
+	}
+	return &a
 }
 
 func toDomainUsers(rows []sqlc.User) []domain.User {
@@ -96,6 +112,7 @@ func toDomainAttempt(a sqlc.Attempt) domain.Attempt {
 
 func toDomainAnswer(a sqlc.Answer) domain.Answer {
 	return domain.Answer{
+		ReviewStatus: a.ReviewStatus, Points: a.Points, MaxPoints: int(a.MaxPoints), TeacherComment: a.TeacherComment, ReviewedAt: a.ReviewedAt,
 		ID:          a.ID,
 		AttemptID:   a.AttemptID,
 		TaskID:      a.TaskID,

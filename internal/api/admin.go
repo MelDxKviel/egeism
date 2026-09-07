@@ -416,7 +416,8 @@ func (s *Server) handleAddTestItem(w http.ResponseWriter, r *http.Request) {
 }
 
 type createAssignmentReq struct {
-	TestID uuid.UUID `json:"test_id"`
+	RequireSolution bool      `json:"require_solution"`
+	TestID          uuid.UUID `json:"test_id"`
 	// Exactly one target: a single student (must be the teacher's) or one of
 	// the teacher's classes — the class fans out to every member.
 	StudentID   *uuid.UUID `json:"student_id,omitempty"`
@@ -521,7 +522,7 @@ func (s *Server) handleCreateAssignment(w http.ResponseWriter, r *http.Request) 
 				testID = gv.Test.ID
 			}
 		}
-		assignment, err := s.createAssignmentFor(r.Context(), testID, student.ID, teacher.ID, req.ScheduledAt, req.DueAt, req.Notify)
+		assignment, err := s.createAssignmentFor(r.Context(), testID, student.ID, teacher.ID, req.ScheduledAt, req.DueAt, req.Notify, req.RequireSolution)
 		if err != nil {
 			// Partial fan-out: log and keep going; report what was created.
 			slog.Warn("create assignment failed mid-fanout", "student", student.ID, "err", err)
@@ -539,8 +540,8 @@ func (s *Server) handleCreateAssignment(w http.ResponseWriter, r *http.Request) 
 
 // createAssignmentFor creates one assignment plus its in-app notification and
 // Telegram scheduling — the single-student unit the class fan-out loops over.
-func (s *Server) createAssignmentFor(ctx context.Context, testID, studentID, teacherID uuid.UUID, at time.Time, dueAt *time.Time, notify *bool) (domain.Assignment, error) {
-	assignment, err := s.store.CreateAssignment(ctx, testID, studentID, teacherID, at, dueAt)
+func (s *Server) createAssignmentFor(ctx context.Context, testID, studentID, teacherID uuid.UUID, at time.Time, dueAt *time.Time, notify *bool, requireSolution ...bool) (domain.Assignment, error) {
+	assignment, err := s.store.CreateAssignment(ctx, testID, studentID, teacherID, at, dueAt, requireSolution...)
 	if err != nil {
 		return domain.Assignment{}, err
 	}

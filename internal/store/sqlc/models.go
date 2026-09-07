@@ -11,24 +11,31 @@ import (
 )
 
 type Answer struct {
-	ID          uuid.UUID `json:"id"`
-	AttemptID   uuid.UUID `json:"attempt_id"`
-	TaskID      uuid.UUID `json:"task_id"`
-	RawAnswer   string    `json:"raw_answer"`
-	IsCorrect   bool      `json:"is_correct"`
-	TimeSpentMs int64     `json:"time_spent_ms"`
-	AnsweredAt  time.Time `json:"answered_at"`
+	ID             uuid.UUID  `json:"id"`
+	AttemptID      uuid.UUID  `json:"attempt_id"`
+	TaskID         uuid.UUID  `json:"task_id"`
+	RawAnswer      string     `json:"raw_answer"`
+	IsCorrect      bool       `json:"is_correct"`
+	TimeSpentMs    int64      `json:"time_spent_ms"`
+	AnsweredAt     time.Time  `json:"answered_at"`
+	ReviewStatus   string     `json:"review_status"`
+	Points         *int32     `json:"points"`
+	MaxPoints      int32      `json:"max_points"`
+	TeacherComment string     `json:"teacher_comment"`
+	ReviewedBy     *uuid.UUID `json:"reviewed_by"`
+	ReviewedAt     *time.Time `json:"reviewed_at"`
 }
 
 type Assignment struct {
-	ID          uuid.UUID  `json:"id"`
-	TestID      uuid.UUID  `json:"test_id"`
-	StudentID   uuid.UUID  `json:"student_id"`
-	AssignedBy  uuid.UUID  `json:"assigned_by"`
-	ScheduledAt time.Time  `json:"scheduled_at"`
-	NotifiedAt  *time.Time `json:"notified_at"`
-	Status      string     `json:"status"`
-	DueAt       *time.Time `json:"due_at"`
+	ID              uuid.UUID  `json:"id"`
+	TestID          uuid.UUID  `json:"test_id"`
+	StudentID       uuid.UUID  `json:"student_id"`
+	AssignedBy      uuid.UUID  `json:"assigned_by"`
+	ScheduledAt     time.Time  `json:"scheduled_at"`
+	NotifiedAt      *time.Time `json:"notified_at"`
+	Status          string     `json:"status"`
+	DueAt           *time.Time `json:"due_at"`
+	RequireSolution bool       `json:"require_solution"`
 }
 
 type Attempt struct {
@@ -68,6 +75,7 @@ type Notification struct {
 	ReadAt        *time.Time `json:"read_at"`
 	CreatedAt     time.Time  `json:"created_at"`
 	SubjectUserID *uuid.UUID `json:"subject_user_id"`
+	AttemptID     *uuid.UUID `json:"attempt_id"`
 }
 
 type PasswordResetToken struct {
@@ -77,6 +85,21 @@ type PasswordResetToken struct {
 	ExpiresAt time.Time  `json:"expires_at"`
 	UsedAt    *time.Time `json:"used_at"`
 	CreatedAt time.Time  `json:"created_at"`
+}
+
+type PracticeFetchLimit struct {
+	SubjectID   uuid.UUID `json:"subject_id"`
+	RequestedAt time.Time `json:"requested_at"`
+}
+
+type SolutionPhoto struct {
+	ID          uuid.UUID `json:"id"`
+	AttemptID   uuid.UUID `json:"attempt_id"`
+	TaskID      uuid.UUID `json:"task_id"`
+	ObjectKey   string    `json:"object_key"`
+	ContentType string    `json:"content_type"`
+	SizeBytes   int64     `json:"size_bytes"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 type Subject struct {
@@ -95,6 +118,9 @@ type Task struct {
 	Source       []byte    `json:"source"`
 	Status       string    `json:"status"`
 	CreatedAt    time.Time `json:"created_at"`
+	Part         int32     `json:"part"`
+	GradingMode  string    `json:"grading_mode"`
+	MaxPoints    int32     `json:"max_points"`
 }
 
 type TelegramLinkCode struct {
@@ -132,4 +158,5 @@ type User struct {
 	PasswordHash *string   `json:"password_hash"`
 	IsActive     bool      `json:"is_active"`
 	Subject      *string   `json:"subject"`
+	Avatar       []byte    `json:"avatar"`
 }
