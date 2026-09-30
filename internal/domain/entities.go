@@ -185,22 +185,30 @@ type Source struct {
 	Provider string `json:"provider"`  // e.g. "fipi", "sdamgia", "dataset"
 	ExternID string `json:"extern_id"` // stable id at the provider
 	URL      string `json:"url,omitempty"`
+	// PublishedAt is the dated original source (publication or actual exam),
+	// never the import time. A repeated appearance must retain the oldest date.
+	PublishedAt     *time.Time `json:"published_at,omitempty"`
+	VerifiedAt      *time.Time `json:"verified_at,omitempty"`
+	DateEvidenceURL string     `json:"date_evidence_url,omitempty"`
+	DateEvidence    string     `json:"date_evidence,omitempty"`
 }
 
 // Task is a single part-1 exercise.
 type Task struct {
-	Part         int          `json:"part"`
-	GradingMode  string       `json:"grading_mode"`
-	MaxPoints    int          `json:"max_points"`
-	ID           uuid.UUID    `json:"id"`
-	SubjectID    uuid.UUID    `json:"subject_id"`
-	Number       int          `json:"number"` // номер задания в ЕГЭ
-	Statement    string       `json:"statement"`
-	Media        []Media      `json:"media,omitempty"`
-	AnswerSchema AnswerSchema `json:"answer_schema"`
-	Source       *Source      `json:"source,omitempty"`
-	Status       TaskStatus   `json:"status"`
-	CreatedAt    time.Time    `json:"created_at"`
+	Part            int          `json:"part"`
+	GradingMode     string       `json:"grading_mode"`
+	MaxPoints       int          `json:"max_points"`
+	ID              uuid.UUID    `json:"id"`
+	SubjectID       uuid.UUID    `json:"subject_id"`
+	Number          int          `json:"number"` // номер задания в ЕГЭ
+	Statement       string       `json:"statement"`
+	Media           []Media      `json:"media,omitempty"`
+	AnswerSchema    AnswerSchema `json:"answer_schema"`
+	Source          *Source      `json:"source,omitempty"`
+	Status          TaskStatus   `json:"status"`
+	CreatedAt       time.Time    `json:"created_at"`
+	Freshness       string       `json:"freshness"`
+	FreshnessReason string       `json:"freshness_reason"`
 }
 
 // BotSolvable reports whether the task can be solved inside a chat: short

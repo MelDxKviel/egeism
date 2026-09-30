@@ -11,11 +11,13 @@ import (
 	"crypto/sha1"
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
 	"path"
 	"strings"
+	"time"
 
 	"egeism/internal/domain"
 	"egeism/internal/media"
@@ -55,6 +57,7 @@ type Result struct {
 	Skipped  int `json:"skipped"`  // duplicates
 	Invalid  int `json:"invalid"`  // failed validation
 	Promoted int `json:"promoted"` // duplicates promoted draft → active (Status=active runs)
+	Held     int `json:"held"`     // current-source proof missing: kept as drafts
 }
 
 // Runner writes candidates into the store with dedup and validation.
@@ -88,6 +91,7 @@ func (r *Runner) Run(ctx context.Context, src Source) (Result, error) {
 func (r *Runner) Ingest(ctx context.Context, sourceName string, raws []RawTask) (Result, error) {
 	res := Result{Fetched: len(raws)}
 	for _, raw := range raws {
+		held := r.Status == domain.TaskActive && !raw.Source.Current(time.Now())
 		if err := r.ingestOne(ctx, sourceName, raw); err != nil {
 			switch {
 			case err == errPromoted:
@@ -95,6 +99,9 @@ func (r *Runner) Ingest(ctx context.Context, sourceName string, raws []RawTask) 
 				res.Promoted++
 			case err == errDuplicate:
 				res.Skipped++
+				if held {
+					res.Held++
+				}
 			case err == errInvalid:
 				res.Invalid++
 			default:
@@ -103,6 +110,9 @@ func (r *Runner) Ingest(ctx context.Context, sourceName string, raws []RawTask) 
 			continue
 		}
 		res.Inserted++
+		if held {
+			res.Held++
+		}
 	}
 	slog.Info("ingest complete", "source", sourceName,
 		"fetched", res.Fetched, "inserted", res.Inserted, "skipped", res.Skipped,
@@ -117,6 +127,14 @@ var (
 )
 
 func (r *Runner) ingestOne(ctx context.Context, sourceName string, raw RawTask) error {
+	if raw.Number < 1 || strings.TrimSpace(raw.Statement) == "" {
+		return errInvalid
+	}
+	switch raw.Subject {
+	case domain.SubjectMath, domain.SubjectRus, domain.SubjectInf, domain.SubjectSoc:
+	default:
+		return errInvalid
+	}
 	if err := raw.AnswerSchema.Validate(); err != nil {
 		slog.Warn("ingest: invalid answer schema", "source", sourceName, "err", err)
 		return errInvalid
@@ -128,29 +146,43 @@ func (r *Runner) ingestOne(ctx context.Context, sourceName string, raw RawTask) 
 	if src.ExternID == "" {
 		src.ExternID = externID(raw)
 	}
-	exists, err := r.store.TaskExistsBySource(ctx, src.Provider, src.ExternID)
+	sub, err := r.store.GetSubjectByCode(ctx, raw.Subject)
+	if err != nil {
+		return fmt.Errorf("unknown subject %q: %w", raw.Subject, err)
+	}
+	exists, err := r.store.TaskExistsBySource(ctx, sub.ID, src.Provider, src.ExternID)
 	if err != nil {
 		return err
 	}
 	if exists {
+		if err := r.store.RefreshTaskSource(ctx, sub.ID, src, raw.Number); err != nil {
+			var validation store.ValidationError
+			if errors.As(err, &validation) {
+				return errInvalid
+			}
+			return err
+		}
 		// An active-status run (the variant builder / «сразу активными») needs
 		// the task USABLE, not just present: a dedup hit that sits in the bank
 		// as a draft is promoted to active (never a rejected one), so repeat
 		// fetches actually grow the drill/variant pool.
-		if r.Status == domain.TaskActive {
-			if ok, err := r.store.ActivateDraftTaskBySource(ctx, src.Provider, src.ExternID); err == nil && ok {
+		if r.Status == domain.TaskActive && src.Current(time.Now()) {
+			ok, err := r.store.ActivateDraftTaskBySource(ctx, sub.ID, src.Provider, src.ExternID)
+			if err != nil {
+				return err
+			}
+			if ok {
 				return errPromoted
 			}
 		}
 		return errDuplicate
 	}
-	sub, err := r.store.GetSubjectByCode(ctx, raw.Subject)
-	if err != nil {
-		return fmt.Errorf("unknown subject %q: %w", raw.Subject, err)
-	}
 	status := r.Status
 	if status == "" {
 		status = domain.TaskDraft // default: curated to active in the admin
+	}
+	if status == domain.TaskActive && !src.Current(time.Now()) {
+		status = domain.TaskDraft
 	}
 	_, err = r.store.CreateTask(ctx, domain.Task{
 		SubjectID:    sub.ID,
@@ -161,6 +193,10 @@ func (r *Runner) ingestOne(ctx context.Context, sourceName string, raw RawTask) 
 		Source:       &src,
 		Status:       status,
 	})
+	var validation store.ValidationError
+	if errors.As(err, &validation) {
+		return errInvalid
+	}
 	return err
 }
 

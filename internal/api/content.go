@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -58,7 +59,8 @@ func (s *Server) handleListSubjects(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleListTasks(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	f := store.TaskFilter{Limit: 50}
+	active := domain.TaskActive
+	f := store.TaskFilter{Limit: 50, Status: &active, CurrentOnly: true}
 
 	if code := q.Get("subject"); code != "" {
 		sub, err := s.store.GetSubjectByCode(r.Context(), domain.SubjectCode(code))
@@ -77,8 +79,10 @@ func (s *Server) handleListTasks(w http.ResponseWriter, r *http.Request) {
 		f.Number = &num
 	}
 	if st := q.Get("status"); st != "" {
-		ts := domain.TaskStatus(st)
-		f.Status = &ts
+		if st != string(domain.TaskActive) {
+			writeJSON(w, http.StatusOK, []taskView{})
+			return
+		}
 	}
 	if l := q.Get("limit"); l != "" {
 		if v, err := strconv.Atoi(l); err == nil {
@@ -112,6 +116,10 @@ func (s *Server) handleGetTask(w http.ResponseWriter, r *http.Request) {
 	t, err := s.store.GetTask(r.Context(), id)
 	if err != nil {
 		writeStoreErr(w, err)
+		return
+	}
+	if t.Status != domain.TaskActive || !t.Source.Current(time.Now()) {
+		writeErr(w, http.StatusNotFound, "Задание недоступно для новой тренировки")
 		return
 	}
 	writeJSON(w, http.StatusOK, toTaskView(t))

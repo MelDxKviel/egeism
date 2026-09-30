@@ -11,6 +11,7 @@ SELECT * FROM tasks
 WHERE (sqlc.narg('subject_id')::uuid IS NULL OR subject_id = sqlc.narg('subject_id'))
   AND (sqlc.narg('number')::int      IS NULL OR number = sqlc.narg('number'))
   AND (sqlc.narg('status')::text     IS NULL OR status = sqlc.narg('status'))
+  AND (NOT sqlc.arg('current_only')::boolean OR (status = 'active' AND task_source_current(source, now())))
 ORDER BY number, created_at DESC
 LIMIT $1 OFFSET $2;
 
@@ -18,13 +19,13 @@ LIMIT $1 OFFSET $2;
 -- One random active task per number for a subject: a classic random variant.
 SELECT DISTINCT ON (number) id, number
 FROM tasks
-WHERE subject_id = $1 AND status = 'active'
+WHERE subject_id = $1 AND status = 'active' AND task_source_current(source, now())
 ORDER BY number, random();
 
 -- name: RandomTasksForNumber :many
 -- N random active tasks of one number: a drill variant.
 SELECT id FROM tasks
-WHERE subject_id = $1 AND number = $2 AND status = 'active'
+WHERE subject_id = $1 AND number = $2 AND status = 'active' AND task_source_current(source, now())
 ORDER BY random()
 LIMIT $3;
 
@@ -34,6 +35,7 @@ LIMIT $3;
 -- An optional number narrows the pool to one задание (the server-side drill).
 SELECT t.* FROM tasks t
 WHERE t.subject_id = sqlc.arg('subject_id') AND t.status = 'active'
+  AND task_source_current(t.source, now())
   AND (sqlc.narg('number')::int IS NULL OR t.number = sqlc.narg('number'))
   AND (
     SELECT count(*) FROM answers a
@@ -57,6 +59,7 @@ JOIN LATERAL (
     LIMIT 1
 ) last ON NOT last.is_correct
 WHERE t.subject_id = sqlc.arg('subject_id') AND t.status = 'active'
+  AND task_source_current(t.source, now())
   AND (sqlc.narg('max_number')::int IS NULL OR t.number <= sqlc.narg('max_number'))
 ORDER BY last.answered_at
 LIMIT sqlc.arg('lim');
@@ -72,7 +75,7 @@ JOIN LATERAL (
     ORDER BY a.answered_at DESC
     LIMIT 1
 ) last ON NOT last.is_correct
-WHERE t.subject_id = sqlc.arg('subject_id') AND t.status = 'active';
+WHERE t.subject_id = sqlc.arg('subject_id') AND t.status = 'active' AND task_source_current(t.source, now());
 
 -- name: PracticeNumbers :many
 -- The student's training map: per задание-номер, how many active tasks the bank
@@ -81,8 +84,8 @@ WHERE t.subject_id = sqlc.arg('subject_id') AND t.status = 'active';
 -- whose tasks are all inactive still show as long as the rows exist, so history
 -- never disappears from the map.
 SELECT t.number,
-       COUNT(*) FILTER (WHERE t.status = 'active')::bigint AS bank_active,
-       COUNT(*) FILTER (WHERE t.status = 'active' AND st.correct_cnt >= sqlc.arg('mastered')::bigint)::bigint AS mastered,
+       COUNT(*) FILTER (WHERE t.status = 'active' AND task_source_current(t.source, now()))::bigint AS bank_active,
+       COUNT(*) FILTER (WHERE t.status = 'active' AND task_source_current(t.source, now()) AND st.correct_cnt >= sqlc.arg('mastered')::bigint)::bigint AS mastered,
        COALESCE(SUM(st.total_cnt), 0)::bigint   AS answers_total,
        COALESCE(SUM(st.correct_cnt), 0)::bigint AS answers_correct
 FROM tasks t
@@ -105,12 +108,23 @@ UPDATE tasks SET answer_schema = $2 WHERE id = $1 RETURNING *;
 UPDATE tasks SET statement = $2, media = $3 WHERE id = $1 RETURNING *;
 
 -- name: SetTaskStatus :one
-UPDATE tasks SET status = $2 WHERE id = $1 RETURNING *;
+UPDATE tasks SET status = $2 WHERE id = $1
+  AND ($2 <> 'active' OR task_source_current(source, now())) RETURNING *;
+
+-- name: GetTaskBySource :one
+SELECT * FROM tasks
+WHERE subject_id = sqlc.arg('subject_id')
+  AND source ->> 'provider' = sqlc.arg('provider')::text
+  AND source ->> 'extern_id' = sqlc.arg('extern_id')::text LIMIT 1;
+
+-- name: UpdateTaskSource :exec
+UPDATE tasks SET source = $2 WHERE id = $1;
 
 -- name: TaskExistsBySource :one
 SELECT EXISTS (
     SELECT 1 FROM tasks
-    WHERE source ->> 'provider'  = sqlc.arg('provider')::text
+    WHERE subject_id = sqlc.arg('subject_id')
+      AND source ->> 'provider'  = sqlc.arg('provider')::text
       AND source ->> 'extern_id' = sqlc.arg('extern_id')::text
 );
 
@@ -119,9 +133,10 @@ SELECT EXISTS (
 -- re-fetched task it needs must become usable). Drafts only — a task the
 -- teacher rejected stays rejected.
 UPDATE tasks SET status = 'active'
-WHERE source ->> 'provider'  = sqlc.arg('provider')::text
+WHERE subject_id = sqlc.arg('subject_id')
+  AND source ->> 'provider'  = sqlc.arg('provider')::text
   AND source ->> 'extern_id' = sqlc.arg('extern_id')::text
-  AND status = 'draft';
+  AND status = 'draft' AND task_source_current(source, now());
 
 -- name: CountTasksBySubject :one
 SELECT COUNT(*) FROM tasks WHERE subject_id = $1;
@@ -131,7 +146,7 @@ SELECT COUNT(*) FROM tasks WHERE subject_id = $1;
 -- are ACTIVE (usable in a generated variant). Powers the composed-variant
 -- builder's availability hints.
 SELECT number,
-       COUNT(*) FILTER (WHERE status = 'active')::bigint AS active,
+       COUNT(*) FILTER (WHERE status = 'active' AND task_source_current(source, now()))::bigint AS active,
        COUNT(*)::bigint AS total
 FROM tasks
 WHERE subject_id = $1

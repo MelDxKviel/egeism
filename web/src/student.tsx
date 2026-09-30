@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  api, SubjectCode, TaskView, DayAnswer, AssignmentCard, AttemptReviewItem, Forecast, useForecast, useHeatmap,
+  api, TaskView, DayAnswer, AssignmentCard, AttemptReviewItem, Forecast, useForecast, useHeatmap,
   useWeakSpots, useMastery, useMasterySeries, useAssignments, useAttempts, useInvalidate, usePracticeOverview,
   useSubjects,
 } from "./api";
 import { useApp } from "./state";
-import { Card, Label, Pill, Button, Async, Empty, Loading, Modal, accColor, SUBJECT_TITLES, SubjectSwitch, testTitle, MediaBlock, StatementView, AttemptReviewGrid, useIsMobile } from "./ui";
+import { Card, Label, Pill, Button, Async, Empty, Loading, Modal, accColor, SUBJECT_TITLES, SubjectSwitch, testTitle, MediaBlock, StatementView, AttemptReviewGrid } from "./ui";
 import { ScoreGauge, Ring, Heatmap, computeStreak, WeakSpotsList, Section, MasteryChart, Sparkline } from "./charts";
 import { AnswerInput } from "./answer";
 import { Icon, IconName } from "./icons";
@@ -15,6 +15,9 @@ import { deadlineInfo } from "./deadline";
 import { confettiBurst } from "./confetti";
 import { dayKey, todayTotal, dailyGoal, streakAtRisk, effectiveStreak, streakCelebration, streakColor } from "./engage";
 import { pluralRu } from "./plural";
+import { Answered, SolveRequest, SavedSolveSession, readSolveSessions, saveSolveSession, removeSolveSession, nextUnansweredIndex } from "./solve-session";
+import { preparePracticeBank } from "./student-bank";
+export type { SolveRequest } from "./solve-session";
 
 // Russian plural for «день» (1 день · 2 дня · 5 дней).
 function pluralDays(n: number): string {
@@ -51,17 +54,26 @@ export function StreakBadge({ days, ember }: { days: number; ember?: boolean }) 
 // mode:"recommended" (the smart mix: ошибки → слабые номера → новое), and a
 // test (testId — tasks are exactly the variant's items; assignmentId, when it
 // came from a teacher, marks the assignment done on finish).
-export interface SolveRequest {
-  subject: SubjectCode;
-  number?: number;
-  taskId?: string;
-  mode?: "mistakes" | "recommended";
-  testId?: string;
-  assignmentId?: string;
-  title?: string;
-}
 let solveRequest: SolveRequest | null = null;
 export function requestSolve(r: SolveRequest) { solveRequest = r; }
+
+export function ResumeSessions() {
+  const { user, go } = useApp();
+  const sessions = readSolveSessions(user?.id ?? "");
+  if (!sessions.length) return null;
+  return <Card>
+    <Label>Продолжить позже</Label>
+    <div style={{ display: "grid", gap: 12, marginTop: 12 }}>
+      {sessions.map((s) => <div key={s.attemptId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+        <div>
+          <div style={{ fontWeight: 600 }}>{s.request.title || "Самостоятельная тренировка"}</div>
+          <div style={{ fontSize: 12, color: "var(--text-3)", marginTop: 3 }}>{SUBJECT_TITLES[s.request.subject]} · отвечено {s.done.length} из {s.tasks.length} · отложено {s.skipped.length}</div>
+        </div>
+        <Button variant="soft" onClick={() => { requestSolve({ ...s.request, resumeAttemptId: s.attemptId }); go("solve"); }}>Продолжить</Button>
+      </div>)}
+    </div>
+  </Card>;
+}
 
 // Assignment statuses come from the API in English; the UI speaks Russian.
 export const ASSIGNMENT_STATUS_RU: Record<string, string> = {
@@ -201,6 +213,7 @@ export function Dashboard() {
       {/* Switch the working subject right on the dashboard — the forecast, weak
           spots and training cards below all follow it. */}
       <SubjectSwitch />
+      <ResumeSessions />
       <div style={grid12}>
         <Card>
           <Label>Прогноз балла · {SUBJECT_TITLES[subject]}</Label>
@@ -321,7 +334,7 @@ export function SubjectScreen() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
       <SubjectSwitch />
-
+      <ResumeSessions />
       <Async q={mastery}>{(rows) => rows.length === 0
         ? <Empty art="sprout" title="Нет данных по номерам" hint="Начни решать — здесь появится прогресс по каждому заданию." action={<Button onClick={() => { requestSolve({ subject }); go("solve"); }}>Решать</Button>} />
         : (
@@ -355,7 +368,6 @@ export function SubjectScreen() {
 }
 
 // ---------- Solve session ----------
-interface Answered { taskId: string; number: number; correct: boolean; pending?: boolean; solution?: string[]; }
 
 // SessionTimer shows elapsed time since the session started (design §3.3: the
 // exam is timed). Per-task time is measured separately for time_spent_ms.
@@ -380,15 +392,14 @@ interface SolveStop { title: string; hint: string; art?: IconName; }
 
 export function Solve() {
   const { go, showToast, user } = useApp();
-  const isMobile = useIsMobile();
   const invalidate = useInvalidate();
   const req = useRef(solveRequest).current;
   const sid = user?.id ?? "";
   const [attemptId, setAttemptId] = useState("");
   const [tasks, setTasks] = useState<TaskView[]>([]);
   const [idx, setIdx] = useState(0);
-  const [draft, setDraft] = useState("");
-  const [submitted, setSubmitted] = useState<{ ok: boolean; pending?: boolean; solution?: string[] } | null>(null);
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [skipped, setSkipped] = useState<string[]>([]);
   const [done, setDone] = useState<Answered[]>([]);
   // Consecutive-correct run, shown as «серия ×N» once it reaches 2. Resets on a
   // wrong answer; drives the in-session momentum without any server state.
@@ -403,6 +414,15 @@ export function Solve() {
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [level, setLevel] = useState<number>();
+  const [confirmFinish, setConfirmFinish] = useState(false);
+  const [preparing, setPreparing] = useState(false);
+  const [savedLocally, setSavedLocally] = useState(true);
+  const mounted = useRef(false);
+  const initialLoad = useRef<Promise<void>>();
+  const task = tasks[idx];
+  const draft = task ? drafts[task.id] ?? "" : "";
+  const submitted = task ? done.find((a) => a.taskId === task.id) : undefined;
+  const setDraft = (value: string) => setDrafts((all) => ({ ...all, [task.id]: value }));
 
   // Snapshot the forecast as it was BEFORE this session, so the Results screen
   // can show the honest «Прогноз 58 → 60» delta after the refetch.
@@ -413,47 +433,107 @@ export function Solve() {
   }, [forecast.data]);
 
   useEffect(() => {
-    if (!req) { setErr({ title: "Не получилось", hint: "Не задан предмет" }); setLoading(false); return; }
-    (async () => {
+    mounted.current = true;
+    if (!req) { setErr({ title: "Выбери тренировку", hint: "Незавершённые задания доступны на главной и в тренировке." }); setLoading(false); return; }
+    // Share the initialization promise across StrictMode's effect replay so
+    // opening one screen cannot create two attempts.
+    initialLoad.current ??= (async () => {
       try {
-        if (req.testId) {
-          // Assigned/composed variant: solve exactly the test's tasks; the
-          // attempt carries assignment_id so finishing marks it done.
-          const list = await api.testTasks(req.testId);
-          if (list.length === 0) { setErr({ title: "Пока пусто", hint: "В этом тесте нет заданий.", art: "telescope" }); setLoading(false); return; }
-          const att = await api.startAttempt(req.testId, req.assignmentId);
-          setAttemptId(att.id); setTasks(list); setRequireSolution(att.require_solution);
-        } else {
-          const { attempt_id } = await api.startPractice(req.subject);
-          // The pools are assembled server-side and all exclude what's already
-          // mastered (solved correctly ≥2×): the mistake queue, the smart mix,
-          // the per-номер drill, or free practice across the subject.
-          let list: TaskView[];
-          if (req.taskId) list = [await api.task(req.taskId)];
-          else if (req.mode === "mistakes") list = await api.mistakeTasks(req.subject, 15);
-          else if (req.mode === "recommended") { const plan = await api.recommended(req.subject, 12); list = plan.tasks; setLevel(plan.max_number); }
-          else list = await api.practiceTasks(req.subject, req.number ? 15 : 20, req.number);
-          if (list.length === 0 && req.mode !== "mistakes") {
-            await api.fetchStudentBank(req.subject, req.number);
-            if (req.mode === "recommended") { const plan = await api.recommended(req.subject, 12); list = plan.tasks; setLevel(plan.max_number); }
-            else list = await api.practiceTasks(req.subject, req.number ? 15 : 20, req.number);
-          }
-          if (list.length === 0) {
-            setErr(req.mode === "mistakes"
-              ? { title: "Так держать!", hint: "Ошибок на разбор нет — очередь пуста.", art: "medal" }
-              : req.number
-                ? { title: "Номер освоен", hint: "Ты уже решил все задания этого номера — молодец!", art: "medal" }
-                : { title: "Пока нет новых заданий", hint: "Для твоего уровня пока нет новых заданий. Обнови банк в разделе «Банк заданий» и попробуй снова.", art: "telescope" });
+        const saved = readSolveSessions(sid).find((s) => req.resumeAttemptId
+          ? s.attemptId === req.resumeAttemptId
+          : !!req.testId && s.request.testId === req.testId && s.request.assignmentId === req.assignmentId);
+        if (saved) {
+          const [review, recent] = await Promise.all([api.attemptReview(saved.attemptId), api.attempts(sid, 100)]);
+          if (!mounted.current) return;
+          if (recent.some((a) => a.id === saved.attemptId && a.finished_at)) {
+            removeSolveSession(sid, saved.attemptId);
+            setErr({ title: "Тренировка уже завершена", hint: "Результат и разбор доступны в истории.", art: "medal" });
             setLoading(false); return;
           }
+          // The server may have accepted the last answer before a reload or
+          // another tab submitted it. Restore that verdict instead of inviting
+          // a duplicate submission; untouched text drafts stay local.
+          const restored = review.filter((a) => saved.tasks.some((t) => t.id === a.task_id));
+          const done = restored.map((a) => ({ taskId: a.task_id, number: a.number, correct: a.is_correct, pending: a.review_status === "pending", solution: a.is_correct ? undefined : a.correct }));
+          setAttemptId(saved.attemptId); setTasks(saved.tasks); setIdx(saved.index);
+          setDrafts({ ...saved.drafts, ...Object.fromEntries(restored.map((a) => [a.task_id, a.raw_answer])) });
+          setDone(done); setSkipped(saved.skipped.filter((id) => !done.some((a) => a.taskId === id)));
+          setPhotos({ ...saved.photos, ...Object.fromEntries(restored.map((a) => [a.task_id, a.photos ?? []])) });
+          setRequireSolution(saved.requireSolution); setCombo(saved.combo); setLevel(saved.level);
+          sessionStart.current = saved.startedAt; forecastBefore.current = saved.forecastBefore ?? null;
+          setLoading(false); return;
+        }
+        if (req.resumeAttemptId) throw new Error("Сохранённая тренировка не найдена. Начни новую тренировку.");
+        let list: TaskView[];
+        if (req.testId) {
+          list = await api.testTasks(req.testId);
+          if (!mounted.current) return;
+          if (!list.length) { setErr({ title: "Пока пусто", hint: "В этом тесте нет заданий.", art: "telescope" }); setLoading(false); return; }
+          const att = await api.startAttempt(req.testId, req.assignmentId);
+          if (!mounted.current) return;
+          setAttemptId(att.id); setTasks(list); setRequireSolution(att.require_solution);
+        } else {
+          const loadPool = async () => {
+            if (req.taskId) return [await api.task(req.taskId)];
+            if (req.mode === "mistakes") return api.mistakeTasks(req.subject, 15);
+            if (req.mode === "recommended") {
+              const plan = await api.recommended(req.subject, 12);
+              if (mounted.current) setLevel(plan.max_number);
+              return plan.tasks;
+            }
+            return api.practiceTasks(req.subject, 15, req.number);
+          };
+          list = await loadPool();
+          if (!mounted.current) return;
+          if (!list.length && req.mode !== "mistakes" && !req.taskId) {
+            setPreparing(true);
+            let preparationError: unknown;
+            try {
+              await preparePracticeBank(req.subject, req.number, () => mounted.current, async () => {
+                list = await loadPool();
+                return list.length > 0;
+              });
+            } catch (e) { preparationError = e; }
+            if (!mounted.current) return;
+            if (!list.length) list = await loadPool();
+            // A source can fail after saving part of its response. Use those
+            // verified tasks; surface the source error only if nothing is ready.
+            if (!list.length && preparationError) throw preparationError;
+          }
+          if (!mounted.current) return;
+          if (!list.length) {
+            setErr(req.mode === "mistakes"
+              ? { title: "Так держать!", hint: "Ошибок на разбор нет — очередь пуста.", art: "medal" }
+              : { title: "Пока нет новых заданий", hint: "Новые задания появятся автоматически после проверки источника. Можно пока выбрать другой номер или разобрать ошибки.", art: "telescope" });
+            setLoading(false); return;
+          }
+          const { attempt_id } = await api.startPractice(req.subject);
+          if (!mounted.current) return;
           setAttemptId(attempt_id); setTasks(list.slice(0, 15));
         }
+        taskStart.current = Date.now(); sessionStart.current = Date.now();
         setLoading(false);
-        taskStart.current = Date.now();
-        sessionStart.current = Date.now();
-      } catch (e) { setErr({ title: "Не получилось", hint: String((e as Error).message) }); setLoading(false); }
+      } catch (e) {
+        if (mounted.current) { setErr({ title: "Не получилось", hint: (e as Error).message }); setLoading(false); }
+      }
     })();
-  }, [req]);
+    return () => { mounted.current = false; };
+  }, [req, sid]);
+
+  useEffect(() => {
+    if (loading || finished || !req || !attemptId || !tasks.length) return;
+    const session: SavedSolveSession = {
+      version: 1, request: req, attemptId, tasks, index: idx, drafts, done, skipped, photos,
+      requireSolution, startedAt: sessionStart.current, updatedAt: Date.now(), combo, level,
+      forecastBefore: forecastBefore.current,
+    };
+    setSavedLocally(saveSolveSession(sid, session));
+  }, [sid, req, attemptId, tasks, idx, drafts, done, skipped, photos, requireSolution, combo, level, loading, finished]);
+
+  const visit = (index: number) => {
+    if (busy || uploading || index < 0 || index >= tasks.length) return;
+    setIdx(index); taskStart.current = Date.now();
+  };
 
   // Set at finish; the delta pill renders only from a forecast fetched AFTER
   // this moment. Without the gate, Results' first paint compares the cached
@@ -464,11 +544,12 @@ export function Solve() {
     if (busy || uploading) return;
     if (requireSolution) {
       const missing = tasks.findIndex((t) => t.grading_mode === "manual" && !(photos[t.id]?.length));
-      if (missing >= 0) { setIdx(missing); setDraft(""); setSubmitted(null); showToast(`Прикрепи решение задания №${tasks[missing].number}`); return; }
+      if (missing >= 0) { visit(missing); setConfirmFinish(false); showToast(`Прикрепи решение задания №${tasks[missing].number}`); return; }
     }
     setBusy(true);
     try {
       await api.finish(attemptId);
+      removeSolveSession(sid, attemptId);
       finishedAt.current = Date.now();
       ["assignments", "attempts", "practice-overview", "self-variants", "mastery", "forecast", "heatmap"].forEach(invalidate);
       setFinished(true);
@@ -476,14 +557,17 @@ export function Solve() {
     finally { setBusy(false); }
   };
 
-  if (loading) return <Loading label="Готовим задания…" />;
+  if (loading) return <div style={{ display: "grid", justifyItems: "center", gap: 16 }}>
+    <Loading label={preparing ? "Подготавливаем новые задания…" : "Готовим задания…"} />
+    {preparing && <p style={{ color: "var(--text-2)", textAlign: "center" }}>Первую подборку ещё проверяем. Подготовка продолжится, пока ты занимаешься другим.</p>}
+    <Button variant="ghost" onClick={() => go("train")}>К тренировкам</Button>
+  </div>;
   if (err) return <Empty title={err.title} hint={err.hint} art={err.art} action={<Button onClick={() => go("dashboard")}>На главную</Button>} />;
   if (finished) {
     const fresh = forecast.dataUpdatedAt > finishedAt.current ? forecast.data : undefined;
     return <Results tasks={tasks} done={done} forecast={fresh} forecastBefore={forecastBefore.current} onExit={() => go("dashboard")} />;
   }
 
-  const task = tasks[idx];
   const submit = async () => {
     if (busy || uploading) return;
     const manual = task.grading_mode === "manual";
@@ -493,7 +577,7 @@ export function Solve() {
     const dt = Date.now() - taskStart.current;
     try {
       const r = await api.submit(attemptId, task.id, draft, dt);
-      setSubmitted({ ok: r.is_correct, solution: r.solution, pending: r.review_status === "pending" });
+      setSkipped((ids) => ids.filter((id) => id !== task.id));
       setCombo((c) => (r.is_correct ? c + 1 : 0));
       setDone((d) => [...d.filter((x) => x.taskId !== task.id), { taskId: task.id, number: task.number, correct: r.is_correct, pending: r.review_status === "pending", solution: r.solution }]);
       if (r.is_correct) {
@@ -505,10 +589,17 @@ export function Solve() {
     finally { setBusy(false); }
   };
   const next = () => {
-    if (idx >= tasks.length - 1) { finishSession(); return; }
-    const answered = done.find((a) => a.taskId === tasks[idx + 1].id);
-    setIdx(idx + 1); setDraft(""); setSubmitted(answered ? { ok: answered.correct, pending: answered.pending, solution: answered.solution } : null); taskStart.current = Date.now();
+    const index = nextUnansweredIndex(tasks, idx, done, skipped);
+    if (index < 0) { void finishSession(); return; }
+    visit(index);
   };
+  const skip = () => {
+    const ids = [...new Set([...skipped, task.id])];
+    setSkipped(ids);
+    visit(nextUnansweredIndex(tasks, idx, done, ids));
+  };
+  const remaining = tasks.length - done.length;
+  const askFinish = () => remaining > 0 ? setConfirmFinish(true) : void finishSession();
 
   return (
     <div style={{ maxWidth: 720, margin: "0 auto", display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
@@ -517,35 +608,40 @@ export function Solve() {
       {requireSolution && <Pill tone="warn">Для каждого задания второй части нужна фотография решения</Pill>}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <span className="mono" style={{ color: "var(--text-2)", display: "inline-flex", alignItems: "center", gap: 12 }}>
-          {idx + 1} / {tasks.length}
+          Отвечено {done.length} / {tasks.length}
           <SessionTimer since={sessionStart.current} />
         </span>
-        {/* Per-task dots (they wrap instead of squashing the row); on a PHONE a
-            big composed variant gets a slim progress bar instead — 100 dots
-            crushed the counter and «Завершить» off the screen. Desktop keeps
-            the per-task green/red dots at any size. */}
-        {tasks.length <= 30 || !isMobile ? (
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "center", minWidth: 0, flex: "1 1 120px" }}>
-            {tasks.map((t, i) => {
-              const a = done.find((x) => x.taskId === t.id);
-              return <div key={t.id} style={{
-                width: 9, height: 9, borderRadius: 999,
-                background: a ? (a.pending ? "var(--warn)" : a.correct ? "var(--ok)" : "var(--bad)") : i === idx ? "var(--text-3)" : "var(--border-2)",
-              }} />;
-            })}
-          </div>
-        ) : (
-          <div style={{ flex: "1 1 120px", height: 6, borderRadius: 999, background: "color-mix(in srgb, var(--text) 8%, transparent)", overflow: "hidden" }}>
-            <div style={{ width: `${Math.round((done.length / tasks.length) * 100)}%`, height: "100%", background: "var(--accent)" }} />
-          </div>
-        )}
-        <Button variant="ghost" style={{ padding: "6px 12px", fontSize: 13 }} disabled={busy || uploading} onClick={finishSession}>{busy ? "Сохраняем…" : "Завершить"}</Button>
+        <div style={{ flex: "1 1 100px", height: 6, borderRadius: 999, background: "color-mix(in srgb, var(--text) 8%, transparent)", overflow: "hidden" }}>
+          <div style={{ width: `${Math.round((done.length / tasks.length) * 100)}%`, height: "100%", background: "var(--accent)" }} />
+        </div>
+        <Button variant="ghost" style={{ padding: "6px 12px", fontSize: 13 }} disabled={busy || uploading} onClick={askFinish}>{busy ? "Сохраняем…" : "Завершить"}</Button>
       </div>
+
+      <details>
+        <summary style={{ cursor: "pointer", color: "var(--text-2)", fontSize: 13 }}>Задание {idx + 1} из {tasks.length} · навигация{skipped.length > 0 ? ` · отложено ${skipped.length}` : ""}</summary>
+        <div aria-label="Навигация по заданиям" style={{ display: "flex", gap: 7, flexWrap: "wrap", marginTop: 12 }}>
+          {tasks.map((t, i) => {
+            const answer = done.find((a) => a.taskId === t.id);
+            const postponed = skipped.includes(t.id);
+            const state = answer ? answer.pending ? "на проверке" : answer.correct ? "верно" : "неверно" : postponed ? "отложено" : "без ответа";
+            const color = answer ? answer.pending ? "var(--warn)" : answer.correct ? "var(--ok)" : "var(--bad)" : postponed ? "var(--warn)" : "var(--text-2)";
+            return <button key={t.id} className="btn btn-ghost mono" disabled={busy || uploading} onClick={() => visit(i)}
+              aria-current={i === idx ? "step" : undefined} aria-label={`Задание ${i + 1}, №${t.number}: ${state}`} title={`№${t.number} · ${state}`}
+              style={{ minWidth: 44, minHeight: 44, padding: 8, color, outline: i === idx ? "2px solid var(--accent)" : undefined }}>
+              {i + 1}{postponed || answer?.pending ? " ·" : answer ? answer.correct ? " ✓" : " ×" : ""}
+            </button>;
+          })}
+        </div>
+      </details>
+      {skipped.length > 0 && <Button variant="soft" disabled={busy || uploading} onClick={() => visit(tasks.findIndex((t) => skipped.includes(t.id)))}>
+        Вернуться к пропущенным · {skipped.length}
+      </Button>}
 
       <Card>
         <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
           <Pill tone="neutral">№{task.number}</Pill>
           <Pill>{task.grading_mode === "manual" ? `Часть 2 · ${task.max_points} балл. · проверяет учитель` : task.answer_kind}</Pill>
+          {skipped.includes(task.id) && <Pill tone="warn">Отложено</Pill>}
         </div>
         <StatementView text={task.statement} media={task.media} style={{ fontSize: 17, lineHeight: 1.5, marginBottom: 18 }} />
         <MediaBlock media={task.media} />
@@ -555,37 +651,51 @@ export function Solve() {
         </> : <AnswerInput kind={task.answer_kind} value={draft} onChange={setDraft} disabled={busy} />)}
         {submitted && (photos[task.id] ?? []).map((p) => <SolutionPhotoPreview key={p.id} photo={p} />)}
         {submitted && (
-          <div className={submitted.ok ? "celebrate" : undefined} style={{
+          <div className={submitted.correct ? "celebrate" : undefined} style={{
             padding: 16, borderRadius: 12, marginTop: 4,
-            background: submitted.pending ? "var(--warn-soft)" : submitted.ok ? "var(--ok-soft)" : "var(--bad-soft)",
-            color: submitted.pending ? "var(--warn)" : submitted.ok ? "var(--ok)" : "var(--bad)",
+            background: submitted.pending ? "var(--warn-soft)" : submitted.correct ? "var(--ok-soft)" : "var(--bad-soft)",
+            color: submitted.pending ? "var(--warn)" : submitted.correct ? "var(--ok)" : "var(--bad)",
           }}>
             <div style={{ display: "flex", alignItems: "center", gap: 7, fontWeight: 700, marginBottom: submitted.solution?.length ? 8 : 0 }}>
-              {submitted.ok && <Icon name="check" size={18} className="checkpop" />}
-              {submitted.pending ? "Решение сохранено. После сдачи теста его проверит учитель" : submitted.ok ? "Верно!" : "Пока неверно"}
-              {submitted.ok && combo >= 2 && (
+              {submitted.correct && <Icon name="check" size={18} className="checkpop" />}
+              {submitted.pending ? "Решение сохранено. После сдачи теста его проверит учитель" : submitted.correct ? "Верно!" : "Пока неверно"}
+              {submitted.correct && combo >= 2 && (
                 <span className="mono" style={{
                   marginLeft: "auto", background: "var(--warn-soft)", color: "var(--warn)",
                   borderRadius: 999, padding: "2px 10px", fontSize: 12, fontWeight: 700,
                 }}>серия ×{combo}</span>
               )}
             </div>
-            {!submitted.ok && submitted.solution && submitted.solution.length > 0 && (
+            {!submitted.correct && submitted.solution && submitted.solution.length > 0 && (
               <div className="mono" style={{ fontSize: 14, overflowWrap: "anywhere" }}>Правильный ответ: {submitted.solution.join(" / ")}</div>
             )}
           </div>
         )}
       </Card>
 
-      <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, flexWrap: "wrap" }}>
+        {!submitted && <Button variant="ghost" disabled={busy || uploading} onClick={skip}>Пропустить</Button>}
         {!submitted
           ? <Button disabled={busy || uploading} onClick={submit}>{busy ? "Сохраняем…" : task.grading_mode === "manual" ? "Отправить решение" : "Ответить"}</Button>
           : <Button disabled={busy || uploading} onClick={next}>
-              {idx >= tasks.length - 1 ? "Итоги" : (
+              {remaining === 0 ? "Итоги" : (
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>Дальше <Icon name="arrowRight" size={16} /></span>
               )}
             </Button>}
       </div>
+      <div style={{ display: "grid", justifyItems: "center", gap: 8 }}>
+        <Button variant="ghost" disabled={busy || uploading || !savedLocally} onClick={() => go("train")}>Продолжить позже</Button>
+        <small style={{ color: savedLocally ? "var(--text-3)" : "var(--warn)", textAlign: "center" }}>
+          {savedLocally ? "Прогресс и черновики сохранены в этом браузере." : "Браузер не сохранил черновики. Оставь эту страницу открытой, чтобы продолжить позже."}
+        </small>
+      </div>
+      {confirmFinish && <Modal onClose={() => !busy && setConfirmFinish(false)} title="Остались задания без ответа">
+        <p>Без ответа: {remaining}. Текстовые черновики не отправятся. Загруженные фотографии будут переданы учителю.</p>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <Button disabled={busy} onClick={() => { setConfirmFinish(false); visit(nextUnansweredIndex(tasks, idx, done, skipped)); }}>Вернуться к заданиям</Button>
+          <Button variant="ghost" disabled={busy} onClick={finishSession}>Завершить с пропусками</Button>
+        </div>
+      </Modal>}
     </div>
   );
 }
@@ -687,6 +797,7 @@ export function History() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
+      <ResumeSessions />
       <Section title="Назначенные тесты">
         <Async q={assignments}>{(list) => list.length === 0
           ? <div style={{ color: "var(--text-2)" }}>Учитель ещё ничего не назначал.</div>

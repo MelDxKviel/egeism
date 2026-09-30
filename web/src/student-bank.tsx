@@ -1,60 +1,45 @@
-import { useEffect, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { api, SubjectCode, useInvalidate } from "./api";
-import { useApp } from "./state";
-import { Async, Button, Card, Empty, Pill, StatementView, MediaBlock, SubjectSwitch } from "./ui";
-import { requestSolve } from "./student";
+import { useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { api, SubjectCode } from "./api";
 
-export function StudentBankFetch({ subject, autoWhenEmpty = false }: { subject: SubjectCode; autoWhenEmpty?: boolean }) {
-  const invalidate = useInvalidate();
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("");
-  const attempted = useRef("");
-  const fetchBank = async () => {
-    if (busy) return;
-    setBusy(true); setMessage("");
-    try {
-      const result = await api.fetchStudentBank(subject);
-      const added = result.inserted + (result.promoted ?? 0);
-      setMessage(added > 0 ? `Добавлено заданий: ${added}` : "Банк обновлён. Задания из этой загрузки уже есть в банке");
-      ["student-bank", "practice-overview", "task-summary"].forEach(invalidate);
-    } catch (e) { setMessage((e as Error).message); }
-    finally { setBusy(false); }
-  };
+// Prepare the selected subject as soon as the student enters the app. Existing
+// tasks remain available while a short request schedules the refill job.
+export function StudentPracticeWarmup({ subject, userId }: { subject: SubjectCode; userId: string }) {
+  const client = useQueryClient();
+  const start = useQuery({
+    queryKey: ["practice-warmup", userId, subject],
+    queryFn: () => api.fetchStudentBank(subject),
+    staleTime: 10 * 60_000,
+    retry: false,
+  });
+  const initial = start.data;
+  const job = useQuery({
+    queryKey: ["practice-warmup-job", userId, initial?.id],
+    queryFn: () => api.studentBankSyncJob(initial!.id),
+    enabled: !!initial && ["queued", "running"].includes(initial.state),
+    refetchInterval: (q) => q.state.error || (q.state.data && !["queued", "running"].includes(q.state.data.state)) ? false : 2000,
+    retry: 1,
+  });
+  const state = job.data?.state ?? initial?.state;
   useEffect(() => {
-    if (autoWhenEmpty && attempted.current !== subject) { attempted.current = subject; void fetchBank(); }
-  }, [subject, autoWhenEmpty]);
-  return <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12 }}>
-    <Button disabled={busy} onClick={fetchBank}>{busy ? "Загружаем задания…" : "Подтянуть задания"}</Button>
-    {message && <span role="status" style={{ fontSize: 13, color: "var(--text-2)" }}>{message}</span>}
-  </div>;
+    if (state === "succeeded") void client.invalidateQueries({ queryKey: ["practice-overview"] });
+  }, [state, client]);
+  return null;
 }
 
-export function StudentBank() {
-  const { subject, go } = useApp();
-  const [number, setNumber] = useState("");
-  const [page, setPage] = useState(0);
-  useEffect(() => { setPage(0); setNumber(""); }, [subject]);
-  const tasks = useQuery({ queryKey: ["student-bank", subject, number, page], queryFn: () => api.tasks(`?subject=${subject}&status=active&limit=20&offset=${page * 20}${number ? `&number=${number}` : ""}`) });
-  return <div style={{ display: "grid", gap: "var(--gap)" }}>
-    <SubjectSwitch />
-    <Card>
-      <h2 style={{ marginTop: 0 }}>Банк заданий</h2>
-      <p style={{ color: "var(--text-2)" }}>Выбирай задания для самостоятельной подготовки. Банк общий с учителем и доступен по всем предметам.</p>
-      <StudentBankFetch key={subject} subject={subject} autoWhenEmpty={!number && page === 0 && tasks.isSuccess && tasks.data.length === 0} />
-      <label style={{ display: "block", marginTop: 16 }}>Номер задания <input aria-label="Номер задания" type="number" min={1} max={99} placeholder="Все" value={number} onChange={(e) => { setNumber(e.target.value); setPage(0); }} style={{ width: 90, marginLeft: 8 }} /></label>
-    </Card>
-    <Async q={tasks}>{(list) => list.length === 0 ? <Empty title="Заданий пока нет" hint="Подтяни задания или выбери другой номер." /> : <>
-      {list.map((t) => <Card key={t.id}>
-        <div style={{ display: "flex", gap: 8, marginBottom: 12 }}><Pill>№{t.number}</Pill>{t.grading_mode === "manual" && <Pill tone="neutral">Часть 2 · проверяет учитель</Pill>}</div>
-        <StatementView text={t.statement} media={t.media} />
-        <MediaBlock media={t.media} />
-        <Button style={{ marginTop: 12 }} onClick={() => { requestSolve({ subject, taskId: t.id, title: `Задание №${t.number}` }); go("solve"); }}>Решать</Button>
-      </Card>)}
-    </>}</Async>
-    <div style={{ display: "flex", gap: 10 }}>
-      <Button variant="ghost" disabled={page === 0 || tasks.isFetching} onClick={() => setPage((p) => p - 1)}>Назад</Button>
-      <Button variant="ghost" disabled={(tasks.data?.length ?? 0) < 20 || tasks.isFetching} onClick={() => setPage((p) => p + 1)}>Ещё задания</Button>
-    </div>
-  </div>;
+// Only a completely empty pool waits for the initial import. The solve screen
+// remains navigable throughout, and leaving it stops further polling.
+export async function preparePracticeBank(subject: SubjectCode, number: number | undefined, active: () => boolean, ready?: () => Promise<boolean>): Promise<void> {
+  let job = await api.fetchStudentBank(subject, number);
+  const deadline = Date.now() + 150_000;
+  while (active() && ["queued", "running"].includes(job.state) && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    if (!active()) return;
+    // Ingestion saves tasks incrementally. Start with the first usable batch
+    // instead of waiting for every remaining source attachment to download.
+    if (ready && await ready()) return;
+    job = await api.studentBankSyncJob(job.id);
+  }
+  if (!active()) return;
+  if (job.state === "failed" || job.state === "cancelled") throw new Error(job.error || "Источник пока недоступен. Попробуй тренировку позже.");
 }

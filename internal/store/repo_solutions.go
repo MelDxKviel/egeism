@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"egeism/internal/checker"
@@ -33,6 +34,13 @@ func submissionTask(ctx context.Context, q *sqlc.Queries, att sqlc.Attempt, task
 	if test.Title == "__practice__" && test.CreatedBy == att.StudentID {
 		if row.Status != "active" {
 			return domain.Task{}, invalid("Задание недоступно для тренировки")
+		}
+		task, err := toDomainTask(row)
+		if err != nil {
+			return domain.Task{}, err
+		}
+		if !task.Source.Current(time.Now()) {
+			return domain.Task{}, invalid("Актуальность задания не подтверждена. Выбери новую тренировку.")
 		}
 	} else {
 		items, err := q.ListTestItems(ctx, test.ID)

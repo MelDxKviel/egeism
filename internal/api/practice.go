@@ -67,6 +67,13 @@ func (s *Server) handlePracticeTasks(w http.ResponseWriter, r *http.Request) {
 		writeStoreErr(w, err)
 		return
 	}
+	if len(tasks) < limit {
+		n := 0
+		if number != nil {
+			n = *number
+		}
+		s.queuePracticeRefill(r.Context(), domain.SubjectCode(r.URL.Query().Get("subject")), n)
+	}
 	writeJSON(w, http.StatusOK, toTaskViews(tasks))
 }
 
@@ -113,6 +120,15 @@ func (s *Server) handlePracticeOverview(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		writeStoreErr(w, err)
 		return
+	}
+	for _, row := range numbers {
+		if row.BankActive-row.Mastered < 10 {
+			s.queuePracticeRefill(r.Context(), code, 0)
+			break
+		}
+	}
+	if len(numbers) == 0 {
+		s.queuePracticeRefill(r.Context(), code, 0)
 	}
 	writeJSON(w, http.StatusOK, practiceOverviewResp{Subject: code, Mistakes: mistakes, Numbers: numbers})
 }
@@ -178,6 +194,9 @@ func (s *Server) handleRecommendedTasks(w http.ResponseWriter, r *http.Request) 
 	fresh = interleaveNumbers(fresh, ceiling)
 
 	plan := recommendPlan(mistakes, weak, fresh, limit)
+	if len(plan) < limit {
+		s.queuePracticeRefill(r.Context(), domain.SubjectCode(r.URL.Query().Get("subject")), ceiling)
+	}
 	fromMistakes := map[uuid.UUID]bool{}
 	for _, t := range mistakes {
 		fromMistakes[t.ID] = true
@@ -245,8 +264,8 @@ func interleaveNumbers(tasks []domain.Task, ceiling int) []domain.Task {
 	}
 }
 
-// Student bank access shares the existing trusted fetcher/ingest, with a
-// database-backed per-subject cooldown across users and API instances.
+// Prewarming is automatic on login/subject selection; students do not manage
+// the bank. This backwards-compatible URL only queues a bounded background job.
 func (s *Server) handleStudentFetchBank(w http.ResponseWriter, r *http.Request) {
 	u, _ := userFrom(r.Context())
 	if u.Role != domain.RoleStudent {
@@ -264,7 +283,7 @@ func (s *Server) handleStudentFetchBank(w http.ResponseWriter, r *http.Request) 
 		writeErr(w, 400, "Некорректный номер задания")
 		return
 	}
-	sub, err := s.store.GetSubjectByCode(r.Context(), req.Subject)
+	_, err := s.store.GetSubjectByCode(r.Context(), req.Subject)
 	if err != nil {
 		writeStoreErr(w, err)
 		return
@@ -273,30 +292,12 @@ func (s *Server) handleStudentFetchBank(w http.ResponseWriter, r *http.Request) 
 		writeErr(w, 503, "Источник заданий не настроен")
 		return
 	}
-	claimed, err := s.store.ClaimPracticeFetch(r.Context(), sub.ID)
-	if err != nil {
-		writeStoreErr(w, err)
-		return
-	}
-	if !claimed {
-		w.Header().Set("Retry-After", "120")
-		writeErr(w, 429, "Банк недавно обновлялся. Попробуй через две минуты")
-		return
-	}
-	limit := 60
+	limit := 80
 	if req.Number > 0 {
 		limit = 15
 	}
-	res, mode, err := s.fetchAndIngest(r.Context(), req.Subject, limit, req.Number, domain.TaskActive)
-	if err != nil {
-		writeErr(w, 502, "Не удалось загрузить задания из источника. Попробуй позже")
-		return
-	}
-	if res.Inserted+res.Promoted == 0 && res.Skipped == 0 {
-		writeErr(w, 422, "Источник пока не вернул подходящих заданий")
-		return
-	}
-	writeJSON(w, 200, fetchResp{Fetched: res.Fetched, Inserted: res.Inserted, Skipped: res.Skipped, Promoted: res.Promoted, Invalid: res.Invalid, Source: mode})
+	job, err := s.enqueueBankSync(r.Context(), req.Subject, req.Number, limit, true, true)
+	s.writeBankSync(w, r, job, err)
 }
 
 type selfVariantResp struct {
@@ -347,8 +348,11 @@ func (s *Server) handleCreateSelfVariant(w http.ResponseWriter, r *http.Request)
 	for _, a := range avail {
 		active += a.Active
 	}
+	if needsBankRefill(avail, req.Subject) {
+		s.queuePracticeRefill(r.Context(), req.Subject, 0)
+	}
 	if active == 0 {
-		writeErr(w, http.StatusUnprocessableEntity, "в банке пока нет активных заданий — попроси учителя подтянуть их")
+		writeErr(w, http.StatusUnprocessableEntity, "Актуальные задания подготавливаются автоматически. Попробуй собрать пробник позже.")
 		return
 	}
 	// Title numbering counts ALL own пробники (monotonic), not just unsolved.
@@ -365,7 +369,7 @@ func (s *Server) handleCreateSelfVariant(w http.ResponseWriter, r *http.Request)
 	if gv.TaskCount == 0 {
 		// The bank emptied between the check and the draw; drop the husk.
 		_ = s.store.DeleteTest(r.Context(), gv.Test.ID)
-		writeErr(w, http.StatusUnprocessableEntity, "в банке пока нет активных заданий — попроси учителя подтянуть их")
+		writeErr(w, http.StatusUnprocessableEntity, "Актуальные задания подготавливаются автоматически. Попробуй собрать пробник позже.")
 		return
 	}
 	writeJSON(w, http.StatusCreated, selfVariantResp{Test: gv.Test, TaskCount: gv.TaskCount})

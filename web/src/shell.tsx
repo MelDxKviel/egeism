@@ -7,11 +7,11 @@ import { requestSolve, useAttemptReview } from "./student";
 import { requestTestView } from "./teacher";
 import { ResetLinkModal } from "./reset";
 import { Avatar } from "./avatar";
+import siteIcon from "./assets/favicon.svg";
 
 const STUDENT_NAV: { v: View; label: string; icon: IconName }[] = [
   { v: "dashboard", label: "Дашборд", icon: "dashboard" },
   { v: "train", label: "Тренировка", icon: "dumbbell" },
-  { v: "student-bank", label: "Банк", icon: "bank" },
   { v: "subject", label: "Предмет", icon: "target" },
   { v: "history", label: "История", icon: "history" },
   { v: "profile", label: "Профиль", icon: "user" },
@@ -45,7 +45,7 @@ export function Shell({ title, cta, children }: { title: string; cta?: ReactNode
             display: "flex", flexDirection: "column", padding: "22px 16px 18px",
           }}>
             <div style={{ display: "flex", alignItems: "center", gap: 11, padding: "0 6px 18px" }}>
-              <img src="/favicon.svg" width={34} height={34} alt="" style={{ flex: "none", borderRadius: 11 }} />
+              <img src={siteIcon} width={34} height={34} alt="" style={{ flex: "none", borderRadius: 11 }} />
               <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.15 }}>
                 <span style={{ fontWeight: 700, fontSize: 17, letterSpacing: "-0.02em" }}>ЕГЭизм</span>
                 <span className="mono" style={{ fontSize: 11, color: "var(--text-3)" }}>подготовка · ЕГЭ</span>

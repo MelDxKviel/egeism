@@ -23,6 +23,44 @@ components:
       type: object
       properties:
         error: { type: string }
+    BankSyncJob:
+      type: object
+      description: Durable background synchronization; only real source tasks are imported. An import date never substitutes for a task publication date.
+      properties:
+        id: { type: string, format: uuid }
+        subject: { type: string, enum: [rus, math, inf, soc] }
+        number: { type: integer }
+        limit: { type: integer }
+        active: { type: boolean }
+        kind: { type: string, enum: [fetch, repair] }
+        state: { type: string, enum: [queued, running, succeeded, failed, cancelled] }
+        created_at: { type: string, format: date-time }
+        started_at: { type: string, format: date-time, nullable: true }
+        finished_at: { type: string, format: date-time, nullable: true }
+        error: { type: string }
+        result:
+          type: object
+          properties:
+            fetched: { type: integer }
+            inserted: { type: integer }
+            skipped: { type: integer }
+            invalid: { type: integer }
+            held: { type: integer, description: Tasks held as drafts because source freshness is unverified or expired }
+            promoted: { type: integer }
+            source: { type: string }
+            scanned: { type: integer, description: Source conditions checked by a repair job }
+            updated: { type: integer, description: Conditions refreshed by a repair job }
+    TaskSource:
+      type: object
+      description: Publication evidence is separate from the last source verification. Freshness expires one calendar year after publication.
+      properties:
+        provider: { type: string }
+        extern_id: { type: string }
+        url: { type: string, format: uri }
+        published_at: { type: string, format: date-time, nullable: true }
+        verified_at: { type: string, format: date-time, nullable: true }
+        date_evidence_url: { type: string, format: uri }
+        date_evidence: { type: string }
     Subject:
       type: object
       properties:
@@ -692,8 +730,8 @@ paths:
 
   /api/practice/bank/fetch:
     post:
-      summary: Refill the active task bank from the configured source (student only)
-      description: Fetches up to 60 tasks, or 15 for a specified number. Shared subject cooldown is 120 seconds.
+      summary: Prepare practice tasks in the background (student only)
+      description: Returns immediately with a durable job. Subject deduplication and automatic refill cooldown prevent repeated source requests. Existing practice tasks remain available while replenishing.
       requestBody:
         required: true
         content:
@@ -705,9 +743,25 @@ paths:
                 subject: { type: string, enum: [math, rus, inf, soc] }
                 number: { type: integer, minimum: 1 }
       responses:
-        '200': { description: Ingest summary (fetched, inserted, skipped, promoted, invalid, source) }
-        '429': { description: Subject was refreshed recently }
+        '202':
+          description: Queued or existing background job
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BankSyncJob' }
         '503': { description: Fetcher unavailable }
+
+  /api/practice/bank/fetch/{jobID}:
+    get:
+      summary: Read background preparation status (student only)
+      parameters:
+        - { name: jobID, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Job status
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BankSyncJob' }
+        '404': { description: Job not found }
 
   /api/practice/recommended:
     get:
@@ -887,11 +941,13 @@ paths:
 
   /api/admin/tasks/fetch:
     post:
-      summary: Pull tasks from the source into the bank (teacher, button-driven)
+      summary: Queue background synchronization of the task bank (teacher)
       description: >
-        Calls the fetcher service (РЕШУ/sdamgia; mock by default) and runs the
-        result through ingest — media to MinIO, dedup, draft for curation unless
-        `active` is set. This is what the bank's "Подтянуть задания" button hits.
+        Returns immediately. Source fetch, media download and deduplication run
+        in a durable background job. Only real sources are used; there is no
+        mock fallback. Activation requires a verified source date no older than
+        one year; undated tasks remain drafts. Poll the returned job to observe
+        completion, including after page navigation or an API restart.
       requestBody:
         required: true
         content:
@@ -904,8 +960,58 @@ paths:
                 limit: { type: integer, default: 30 }
                 active: { type: boolean, default: false }
       responses:
-        '200': { description: "{ fetched, inserted, skipped, invalid, promoted, source }; promoted = dedup-hit drafts activated when `active` is set; source is 'real' (РЕШУ) or 'mock' (demo fallback)" }
-        '502': { description: source unavailable }
+        '202':
+          description: Queued or existing background job
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BankSyncJob' }
+        '503': { description: Fetcher unavailable }
+
+  /api/admin/tasks/fetch/{jobID}:
+    get:
+      summary: Read synchronization status (teacher, subject scoped)
+      parameters:
+        - { name: jobID, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Job status and import result
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BankSyncJob' }
+        '404': { description: Job not found }
+
+  /api/admin/tasks/fetch/{jobID}/cancel:
+    post:
+      summary: Cancel queued or running synchronization (teacher, subject scoped)
+      description: Already imported tasks are retained.
+      parameters:
+        - { name: jobID, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Job status
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BankSyncJob' }
+
+  /api/admin/tasks/refetch-formulas:
+    post:
+      summary: Queue repair of existing source conditions (teacher, subject scoped)
+      description: Preserves curated answers and existing assignments. Returns a repair job; poll or cancel via /api/admin/tasks/fetch/{jobID}.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [subject]
+              properties:
+                subject: { type: string, enum: [rus, math, inf, soc] }
+      responses:
+        '202':
+          description: Queued or existing repair job
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BankSyncJob' }
 
   /api/admin/tasks/import:
     post:

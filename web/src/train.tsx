@@ -1,4 +1,3 @@
-import { StudentBankFetch } from "./student-bank";
 import { useState } from "react";
 import {
   api, SelfVariant, usePracticeOverview, useSelfVariants, useInvalidate,
@@ -6,7 +5,7 @@ import {
 import { useApp } from "./state";
 import { Card, Label, Button, Async, Empty, accColor, SubjectSwitch } from "./ui";
 import { Section } from "./charts";
-import { requestSolve, useAttemptReview } from "./student";
+import { requestSolve, useAttemptReview, ResumeSessions } from "./student";
 import { pluralRu } from "./plural";
 
 // TrainingHub is the student's self-study home: the mistake queue, the smart
@@ -50,7 +49,7 @@ export function TrainingHub() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
       <SubjectSwitch />
-      <StudentBankFetch key={subject} subject={subject} autoWhenEmpty={overview.isSuccess && overview.data.numbers.every((n) => n.bank_active === 0)} />
+      <ResumeSessions />
 
       {/* The three cards flex-column with the CTA pinned to the bottom edge
           (marginTop:auto), so the buttons sit on one line across the row no
@@ -103,7 +102,7 @@ export function TrainingHub() {
         <span style={{ color: "var(--text-3)", fontSize: 12 }}>реши задание верно дважды — номер зачтётся</span>
       }>
         <Async q={overview}>{(o) => o.numbers.length === 0
-          ? <Empty art="telescope" title="Банк пока пуст" hint="Задания загружаются из источника. Можно обновить банк кнопкой выше." />
+          ? <Empty art="telescope" title="Готовим задания" hint="Задания появятся автоматически после проверки источника." />
           : (
             <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fill, minmax(min(150px, 100%), 1fr))" }}>
               {o.numbers.map((n) => {
@@ -112,8 +111,8 @@ export function TrainingHub() {
                 const done = !empty && n.mastered >= n.bank_active;
                 const progress = n.bank_active > 0 ? Math.min(100, Math.round((n.mastered / n.bank_active) * 100)) : 0;
                 return (
-                  <Card key={n.number} onClick={empty ? undefined : () => drill(n.number)}
-                    style={{ padding: 14, opacity: empty ? 0.55 : 1 }}>
+                  <Card key={n.number} onClick={() => drill(n.number)}
+                    style={{ padding: 14 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                       <span className="mono" style={{ fontWeight: 700, fontSize: 15 }}>№{n.number}</span>
                       {pct !== null
@@ -124,7 +123,7 @@ export function TrainingHub() {
                       <div style={{ width: `${progress}%`, height: "100%", borderRadius: 999, background: done ? "var(--ok)" : "var(--hm3)" }} />
                     </div>
                     <div className="mono" style={{ color: done ? "var(--ok)" : "var(--text-3)", fontSize: 11, marginTop: 6 }}>
-                      {empty ? "нет заданий в банке" : done ? "освоено ✓" : `освоено ${n.mastered} из ${n.bank_active}`}
+                      {empty ? "подготовим автоматически" : done ? "освоено ✓" : `освоено ${n.mastered} из ${n.bank_active}`}
                     </div>
                   </Card>
                 );

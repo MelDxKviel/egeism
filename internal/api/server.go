@@ -14,6 +14,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/google/uuid"
 
+	"egeism/internal/bank"
 	"egeism/internal/media"
 	"egeism/internal/store"
 )
@@ -30,15 +31,18 @@ type Server struct {
 	store       *store.Store
 	scheduler   AssignmentScheduler // optional; nil disables enqueue
 	jwtSecret   string
-	media       *media.Store // optional; nil disables media serving
-	fetcherURL  string       // optional; empty disables button-driven fetch
-	botUsername string       // optional; empty omits deep_link in link-code responses
+	media       *media.Store  // optional; nil disables media serving
+	fetcherURL  string        // optional; empty disables button-driven fetch
+	botUsername string        // optional; empty omits deep_link in link-code responses
+	bankSync    *bank.Service // optional background source synchronization
 }
 
 // NewServer builds a Server over the given store. scheduler and mediaStore may
 // be nil; fetcherURL and botUsername may be empty.
 func NewServer(st *store.Store, sched AssignmentScheduler, jwtSecret string, mediaStore *media.Store, fetcherURL, botUsername string) *Server {
-	return &Server{store: st, scheduler: sched, jwtSecret: jwtSecret, media: mediaStore, fetcherURL: fetcherURL, botUsername: botUsername}
+	s := &Server{store: st, scheduler: sched, jwtSecret: jwtSecret, media: mediaStore, fetcherURL: fetcherURL, botUsername: botUsername}
+	s.initBankSync()
+	return s
 }
 
 // Router wires all routes and returns an http.Handler.
@@ -47,8 +51,8 @@ func (s *Server) Router() http.Handler {
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Recoverer)
-	// Generous cap: content fetch/import legitimately take longer than typical
-	// reads. The fetcher enforces its own shorter deadline for unreachable sources.
+	// Media/file imports can take longer than reads. Source synchronization has
+	// its own background deadline and never holds a request open.
 	r.Use(middleware.Timeout(150 * time.Second))
 	r.Use(corsDev)
 
@@ -114,6 +118,7 @@ func (s *Server) Router() http.Handler {
 			// sessions and self-generated пробники.
 			r.Post("/practice", s.handleStartPractice)
 			r.Post("/practice/bank/fetch", s.handleStudentFetchBank)
+			r.Get("/practice/bank/fetch/{jobID}", s.handleBankSyncStatus)
 			r.Get("/practice/tasks", s.handlePracticeTasks)
 			r.Get("/practice/overview", s.handlePracticeOverview)
 			r.Get("/practice/mistakes", s.handleMistakeTasks)
@@ -155,6 +160,8 @@ func (s *Server) Router() http.Handler {
 			r.Delete("/admin/tasks", s.handleClearBank) // ?subject=<code>: wipe the bank
 			r.Post("/admin/tasks/import", s.handleImportTasks)
 			r.Post("/admin/tasks/fetch", s.handleFetchTasks)
+			r.Get("/admin/tasks/fetch/{jobID}", s.handleBankSyncStatus)
+			r.Post("/admin/tasks/fetch/{jobID}/cancel", s.handleCancelBankSync)
 			r.Post("/admin/tasks/refetch-formulas", s.handleRefetchFormulas)
 			r.Get("/admin/tasks/summary", s.handleTaskSummary) // per-номер bank availability
 			r.Patch("/admin/tasks/{taskID}/answer", s.handleUpdateTaskAnswer)

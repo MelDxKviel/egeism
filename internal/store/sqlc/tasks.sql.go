@@ -13,21 +13,23 @@ import (
 
 const activateDraftTaskBySource = `-- name: ActivateDraftTaskBySource :execrows
 UPDATE tasks SET status = 'active'
-WHERE source ->> 'provider'  = $1::text
-  AND source ->> 'extern_id' = $2::text
-  AND status = 'draft'
+WHERE subject_id = $1
+  AND source ->> 'provider'  = $2::text
+  AND source ->> 'extern_id' = $3::text
+  AND status = 'draft' AND task_source_current(source, now())
 `
 
 type ActivateDraftTaskBySourceParams struct {
-	Provider string `json:"provider"`
-	ExternID string `json:"extern_id"`
+	SubjectID uuid.UUID `json:"subject_id"`
+	Provider  string    `json:"provider"`
+	ExternID  string    `json:"extern_id"`
 }
 
 // Promote a dedup-hit DRAFT to active (the builder path ingests as active, so a
 // re-fetched task it needs must become usable). Drafts only — a task the
 // teacher rejected stays rejected.
 func (q *Queries) ActivateDraftTaskBySource(ctx context.Context, arg ActivateDraftTaskBySourceParams) (int64, error) {
-	result, err := q.db.Exec(ctx, activateDraftTaskBySource, arg.Provider, arg.ExternID)
+	result, err := q.db.Exec(ctx, activateDraftTaskBySource, arg.SubjectID, arg.Provider, arg.ExternID)
 	if err != nil {
 		return 0, err
 	}
@@ -44,7 +46,7 @@ JOIN LATERAL (
     ORDER BY a.answered_at DESC
     LIMIT 1
 ) last ON NOT last.is_correct
-WHERE t.subject_id = $2 AND t.status = 'active'
+WHERE t.subject_id = $2 AND t.status = 'active' AND task_source_current(t.source, now())
 `
 
 type CountMistakeTasksParams struct {
@@ -180,21 +182,56 @@ func (q *Queries) GetTask(ctx context.Context, id uuid.UUID) (Task, error) {
 	return i, err
 }
 
+const getTaskBySource = `-- name: GetTaskBySource :one
+SELECT id, subject_id, number, statement, media, answer_schema, source, status, created_at, part, grading_mode, max_points FROM tasks
+WHERE subject_id = $1
+  AND source ->> 'provider' = $2::text
+  AND source ->> 'extern_id' = $3::text LIMIT 1
+`
+
+type GetTaskBySourceParams struct {
+	SubjectID uuid.UUID `json:"subject_id"`
+	Provider  string    `json:"provider"`
+	ExternID  string    `json:"extern_id"`
+}
+
+func (q *Queries) GetTaskBySource(ctx context.Context, arg GetTaskBySourceParams) (Task, error) {
+	row := q.db.QueryRow(ctx, getTaskBySource, arg.SubjectID, arg.Provider, arg.ExternID)
+	var i Task
+	err := row.Scan(
+		&i.ID,
+		&i.SubjectID,
+		&i.Number,
+		&i.Statement,
+		&i.Media,
+		&i.AnswerSchema,
+		&i.Source,
+		&i.Status,
+		&i.CreatedAt,
+		&i.Part,
+		&i.GradingMode,
+		&i.MaxPoints,
+	)
+	return i, err
+}
+
 const listTasks = `-- name: ListTasks :many
 SELECT id, subject_id, number, statement, media, answer_schema, source, status, created_at, part, grading_mode, max_points FROM tasks
 WHERE ($3::uuid IS NULL OR subject_id = $3)
   AND ($4::int      IS NULL OR number = $4)
   AND ($5::text     IS NULL OR status = $5)
+  AND (NOT $6::boolean OR (status = 'active' AND task_source_current(source, now())))
 ORDER BY number, created_at DESC
 LIMIT $1 OFFSET $2
 `
 
 type ListTasksParams struct {
-	Limit     int32      `json:"limit"`
-	Offset    int32      `json:"offset"`
-	SubjectID *uuid.UUID `json:"subject_id"`
-	Number    *int32     `json:"number"`
-	Status    *string    `json:"status"`
+	Limit       int32      `json:"limit"`
+	Offset      int32      `json:"offset"`
+	SubjectID   *uuid.UUID `json:"subject_id"`
+	Number      *int32     `json:"number"`
+	Status      *string    `json:"status"`
+	CurrentOnly bool       `json:"current_only"`
 }
 
 func (q *Queries) ListTasks(ctx context.Context, arg ListTasksParams) ([]Task, error) {
@@ -204,6 +241,7 @@ func (q *Queries) ListTasks(ctx context.Context, arg ListTasksParams) ([]Task, e
 		arg.SubjectID,
 		arg.Number,
 		arg.Status,
+		arg.CurrentOnly,
 	)
 	if err != nil {
 		return nil, err
@@ -247,6 +285,7 @@ JOIN LATERAL (
     LIMIT 1
 ) last ON NOT last.is_correct
 WHERE t.subject_id = $2 AND t.status = 'active'
+  AND task_source_current(t.source, now())
   AND ($3::int IS NULL OR t.number <= $3)
 ORDER BY last.answered_at
 LIMIT $4
@@ -302,8 +341,8 @@ func (q *Queries) MistakeTasks(ctx context.Context, arg MistakeTasksParams) ([]T
 
 const practiceNumbers = `-- name: PracticeNumbers :many
 SELECT t.number,
-       COUNT(*) FILTER (WHERE t.status = 'active')::bigint AS bank_active,
-       COUNT(*) FILTER (WHERE t.status = 'active' AND st.correct_cnt >= $1::bigint)::bigint AS mastered,
+       COUNT(*) FILTER (WHERE t.status = 'active' AND task_source_current(t.source, now()))::bigint AS bank_active,
+       COUNT(*) FILTER (WHERE t.status = 'active' AND task_source_current(t.source, now()) AND st.correct_cnt >= $1::bigint)::bigint AS mastered,
        COALESCE(SUM(st.total_cnt), 0)::bigint   AS answers_total,
        COALESCE(SUM(st.correct_cnt), 0)::bigint AS answers_correct
 FROM tasks t
@@ -366,6 +405,7 @@ func (q *Queries) PracticeNumbers(ctx context.Context, arg PracticeNumbersParams
 const practiceTasks = `-- name: PracticeTasks :many
 SELECT t.id, t.subject_id, t.number, t.statement, t.media, t.answer_schema, t.source, t.status, t.created_at, t.part, t.grading_mode, t.max_points FROM tasks t
 WHERE t.subject_id = $1 AND t.status = 'active'
+  AND task_source_current(t.source, now())
   AND ($2::int IS NULL OR t.number = $2)
   AND (
     SELECT count(*) FROM answers a
@@ -428,7 +468,7 @@ func (q *Queries) PracticeTasks(ctx context.Context, arg PracticeTasksParams) ([
 
 const randomTasksForNumber = `-- name: RandomTasksForNumber :many
 SELECT id FROM tasks
-WHERE subject_id = $1 AND number = $2 AND status = 'active'
+WHERE subject_id = $1 AND number = $2 AND status = 'active' AND task_source_current(source, now())
 ORDER BY random()
 LIMIT $3
 `
@@ -463,7 +503,7 @@ func (q *Queries) RandomTasksForNumber(ctx context.Context, arg RandomTasksForNu
 const randomTasksOnePerNumber = `-- name: RandomTasksOnePerNumber :many
 SELECT DISTINCT ON (number) id, number
 FROM tasks
-WHERE subject_id = $1 AND status = 'active'
+WHERE subject_id = $1 AND status = 'active' AND task_source_current(source, now())
 ORDER BY number, random()
 `
 
@@ -494,7 +534,8 @@ func (q *Queries) RandomTasksOnePerNumber(ctx context.Context, subjectID uuid.UU
 }
 
 const setTaskStatus = `-- name: SetTaskStatus :one
-UPDATE tasks SET status = $2 WHERE id = $1 RETURNING id, subject_id, number, statement, media, answer_schema, source, status, created_at, part, grading_mode, max_points
+UPDATE tasks SET status = $2 WHERE id = $1
+  AND ($2 <> 'active' OR task_source_current(source, now())) RETURNING id, subject_id, number, statement, media, answer_schema, source, status, created_at, part, grading_mode, max_points
 `
 
 type SetTaskStatusParams struct {
@@ -524,7 +565,7 @@ func (q *Queries) SetTaskStatus(ctx context.Context, arg SetTaskStatusParams) (T
 
 const taskCountsByNumber = `-- name: TaskCountsByNumber :many
 SELECT number,
-       COUNT(*) FILTER (WHERE status = 'active')::bigint AS active,
+       COUNT(*) FILTER (WHERE status = 'active' AND task_source_current(source, now()))::bigint AS active,
        COUNT(*)::bigint AS total
 FROM tasks
 WHERE subject_id = $1
@@ -564,18 +605,20 @@ func (q *Queries) TaskCountsByNumber(ctx context.Context, subjectID uuid.UUID) (
 const taskExistsBySource = `-- name: TaskExistsBySource :one
 SELECT EXISTS (
     SELECT 1 FROM tasks
-    WHERE source ->> 'provider'  = $1::text
-      AND source ->> 'extern_id' = $2::text
+    WHERE subject_id = $1
+      AND source ->> 'provider'  = $2::text
+      AND source ->> 'extern_id' = $3::text
 )
 `
 
 type TaskExistsBySourceParams struct {
-	Provider string `json:"provider"`
-	ExternID string `json:"extern_id"`
+	SubjectID uuid.UUID `json:"subject_id"`
+	Provider  string    `json:"provider"`
+	ExternID  string    `json:"extern_id"`
 }
 
 func (q *Queries) TaskExistsBySource(ctx context.Context, arg TaskExistsBySourceParams) (bool, error) {
-	row := q.db.QueryRow(ctx, taskExistsBySource, arg.Provider, arg.ExternID)
+	row := q.db.QueryRow(ctx, taskExistsBySource, arg.SubjectID, arg.Provider, arg.ExternID)
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
@@ -640,4 +683,18 @@ func (q *Queries) UpdateTaskContent(ctx context.Context, arg UpdateTaskContentPa
 		&i.MaxPoints,
 	)
 	return i, err
+}
+
+const updateTaskSource = `-- name: UpdateTaskSource :exec
+UPDATE tasks SET source = $2 WHERE id = $1
+`
+
+type UpdateTaskSourceParams struct {
+	ID     uuid.UUID `json:"id"`
+	Source []byte    `json:"source"`
+}
+
+func (q *Queries) UpdateTaskSource(ctx context.Context, arg UpdateTaskSourceParams) error {
+	_, err := q.db.Exec(ctx, updateTaskSource, arg.ID, arg.Source)
+	return err
 }

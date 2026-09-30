@@ -7,6 +7,8 @@ import react from "@vitejs/plugin-react";
 // pure function, no DOM).
 export default defineConfig({
   plugins: [react()],
+  // Keep the site icon at a content-hashed URL, including when used by the UI.
+  build: { assetsInlineLimit: 0 },
   server: {
     port: 5173,
     proxy: {

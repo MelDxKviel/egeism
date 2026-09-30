@@ -4,9 +4,10 @@ a JSON array of normalized RawTask, which it then ingests (media → MinIO, dedu
 
 REAL SOURCES ONLY — there is deliberately no demo/mock generator. Fake tasks
 would pollute the bank (the teacher can't tell them from real, and the variant
-builder ingests as *active*). Sources per subject:
-- информатика → openfipi.py  (ФИПИ open bank mirror, real conditions + answers)
-- rus/math/soc → fetch.py     (РЕШУ ЕГЭ via sdamgia, FIPI-origin)
+builder ingests as *active*). New pulls use recent.py for all four subjects:
+dated official FIPI exam variants published by РЕШУ, with source evidence.
+openfipi.py and the legacy catalogue remain available for by-id repairs/CLI;
+their undated tasks are never passed off as current.
 
 On any failure/empty the fetcher returns [] so the API says "источник не вернул
 заданий" and the teacher retries — it NEVER substitutes made-up tasks. Stable
@@ -20,6 +21,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import fetch as F
 import openfipi as OF
+import recent as R
 
 # Bound network waits so an unreachable/slow source fails fast instead of hanging
 # the button. socket timeout helps for connects; the hard thread deadline below
@@ -50,7 +52,7 @@ def _with_deadline(fn, seconds):
     return box.get("ok", [])
 
 
-def real_tasks(subject: str, limit: int, min_conf: float, number: int = 0, ids=None):
+def real_tasks(subject: str, limit: int, min_conf: float, number: int = 0, ids=None, provider=None):
     delay = float(os.getenv("FETCH_DELAY", "0.5"))
     if ids:
         # Targeted re-fetch (upgrade path): pull exactly these ids so a task
@@ -58,22 +60,15 @@ def real_tasks(subject: str, limit: int, min_conf: float, number: int = 0, ids=N
         # the CURRENT parser. РЕШУ ids for rus/math/soc; openfipi task ids
         # (/task/<id>) for информатика — e.g. healing the mangled
         # colspan/rowspan distance-matrix tables of задание 1.
-        if subject == "inf":
+        if subject == "inf" and provider != "sdamgia":
             return list(OF.fetch_by_ids(ids, delay))
         return list(F.fetch_by_ids(subject, ids))
     # A wall-time budget just under the hard deadline: both sources then return
     # what they HAVE when time is up, instead of the deadline killing the pull.
     budget = max(10.0, FETCH_DEADLINE - 5)
-    if subject == "inf":
-        # информатика: pull REAL ФИПИ open-bank tasks WITH answers from openfipi
-        # (it filters by задание server-side, only lists tasks that have an
-        # answer, and spreads an all-numbers pull evenly across 1..27). РЕШУ/
-        # sdamgia is the source for the other subjects.
-        gen = OF.fetch(number, limit, delay, budget=budget)
-    else:
-        # number goes to the source: a drill pull draws ids from that задание's
-        # categories only. The number filter below stays as a safety net.
-        gen = F.fetch(subject, limit, delay, number=number, budget=budget)
+    # Catalogue tasks mix many years; openfipi exposes no original task date.
+    # Discover dated official exam variants. Go holds unverified rows as drafts.
+    gen = R.fetch(subject, number, limit, budget=budget)
     out = []
     for rt in gen:
         if rt.get("_confidence", 1.0) < min_conf:
@@ -124,7 +119,7 @@ class Handler(BaseHTTPRequestHandler):
         # Real sources only. On failure/empty return [] (the API then reports
         # "источник не вернул заданий") — NEVER substitute made-up tasks.
         try:
-            tasks = _with_deadline(lambda: real_tasks(subject, limit, min_conf, number, ids), FETCH_DEADLINE)
+            tasks = _with_deadline(lambda: real_tasks(subject, limit, min_conf, number, ids, body.get("provider")), FETCH_DEADLINE)
         except Exception as e:  # noqa: BLE001
             print(f"real fetch FAILED for {subject}: {e}", flush=True)
             tasks = []

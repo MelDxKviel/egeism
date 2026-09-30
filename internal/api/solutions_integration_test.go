@@ -90,7 +90,11 @@ func TestWrittenReviewLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	makeTask := func(n int) domain.Task {
-		task, err := s.store.CreateTask(ctx, domain.Task{SubjectID: sub.ID, Number: n, Statement: "Решите задание", AnswerSchema: domain.AnswerSchema{Type: domain.AnswerNumber, Correct: []string{"42"}}, Status: domain.TaskActive})
+		published, verified := time.Now().Add(-24*time.Hour), time.Now()
+		// Provenance fixture only; these synthetic tasks never leave the isolated test schema.
+		source := &domain.Source{Provider: "sdamgia", ExternID: uuid.NewString(), URL: "https://math-ege.sdamgia.ru/problem?id=1",
+			PublishedAt: &published, VerifiedAt: &verified, DateEvidenceURL: "https://math-ege.sdamgia.ru/problem?id=1", DateEvidence: "Test-only date fixture"}
+		task, err := s.store.CreateTask(ctx, domain.Task{SubjectID: sub.ID, Number: n, Statement: "Решите задание", AnswerSchema: domain.AnswerSchema{Type: domain.AnswerNumber, Correct: []string{"42"}}, Status: domain.TaskActive, Source: source})
 		if err != nil {
 			t.Fatal(err)
 		}
