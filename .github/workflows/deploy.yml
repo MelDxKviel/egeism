@@ -6,6 +6,11 @@ on:
     types: [completed]
     branches: [main]
   workflow_dispatch:
+    inputs:
+      diagnostics_only:
+        description: Read production pod, hook and event status without deploying
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -17,10 +22,36 @@ concurrency:
 
 jobs:
   images:
-    if: (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') || (github.event.workflow_run.event == 'push' && github.event.workflow_run.conclusion == 'success')
+    if: (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && !inputs.diagnostics_only) || (github.event.workflow_run.event == 'push' && github.event.workflow_run.conclusion == 'success')
     uses: ./.github/workflows/images.yml
     with:
       revision: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+  diagnostics:
+    if: github.event_name == 'workflow_dispatch' && inputs.diagnostics_only
+    name: Inspect production deployment hooks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          command_timeout: 3m
+          script: |
+            set -eu
+            sudo -n k3s kubectl -n egeism get deployments,pods,jobs
+            sudo -n k3s kubectl -n egeism get events --sort-by=.lastTimestamp | tail -60
+            for component in minio-init migrate; do
+              for pod in $(sudo -n k3s kubectl -n egeism get pods -l app.kubernetes.io/component=$component -o name); do
+                echo "Hook: $pod"
+                sudo -n k3s kubectl -n egeism logs "$pod" --all-containers --tail=60 --pod-running-timeout=10s || true
+              done
+            done
+            if [ "$(sudo -n k3s kubectl -n egeism exec statefulset/postgres -- psql -U egeism -d egeism -Atc "SELECT to_regclass('public.bank_sync_jobs') IS NOT NULL")" = t ]; then
+              sudo -n k3s kubectl -n egeism exec statefulset/postgres -- psql -U egeism -d egeism -c "SELECT subject, kind, state, result, error, created_at FROM bank_sync_jobs ORDER BY created_at DESC LIMIT 12"
+            fi
 
   deploy:
     needs: images
