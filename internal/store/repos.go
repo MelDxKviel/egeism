@@ -258,6 +258,9 @@ func (s *Store) CreateTask(ctx context.Context, t domain.Task) (domain.Task, err
 	if status == "" {
 		status = domain.TaskDraft
 	}
+	if status == domain.TaskActive && !t.Source.Current(time.Now()) {
+		return domain.Task{}, invalid("Для активации нужен подтверждённый источник ЕГЭ не старше года")
+	}
 	sub, err := s.q.GetSubject(ctx, t.SubjectID)
 	if err != nil {
 		return domain.Task{}, mapErr(err)
@@ -283,11 +286,12 @@ func (s *Store) CreateTask(ctx context.Context, t domain.Task) (domain.Task, err
 
 // TaskFilter narrows ListTasks; zero fields mean "no filter".
 type TaskFilter struct {
-	SubjectID *uuid.UUID
-	Number    *int
-	Status    *domain.TaskStatus
-	Limit     int
-	Offset    int
+	SubjectID   *uuid.UUID
+	Number      *int
+	Status      *domain.TaskStatus
+	Limit       int
+	Offset      int
+	CurrentOnly bool
 }
 
 func (s *Store) ListTasks(ctx context.Context, f TaskFilter) ([]domain.Task, error) {
@@ -306,11 +310,12 @@ func (s *Store) ListTasks(ctx context.Context, f TaskFilter) ([]domain.Task, err
 		status = &st
 	}
 	rows, err := s.q.ListTasks(ctx, sqlc.ListTasksParams{
-		Limit:     limit,
-		Offset:    int32(f.Offset),
-		SubjectID: f.SubjectID,
-		Number:    number,
-		Status:    status,
+		Limit:       limit,
+		Offset:      int32(f.Offset),
+		SubjectID:   f.SubjectID,
+		Number:      number,
+		Status:      status,
+		CurrentOnly: f.CurrentOnly,
 	})
 	if err != nil {
 		return nil, mapErr(err)
@@ -414,6 +419,15 @@ func (s *Store) PracticeNumbers(ctx context.Context, studentID, subjectID uuid.U
 }
 
 func (s *Store) SetTaskStatus(ctx context.Context, id uuid.UUID, status domain.TaskStatus) (domain.Task, error) {
+	if status == domain.TaskActive {
+		task, err := s.GetTask(ctx, id)
+		if err != nil {
+			return domain.Task{}, err
+		}
+		if !task.Source.Current(time.Now()) {
+			return domain.Task{}, invalid("Для активации нужен подтверждённый источник ЕГЭ не старше года")
+		}
+	}
 	row, err := s.q.SetTaskStatus(ctx, sqlc.SetTaskStatusParams{ID: id, Status: string(status)})
 	if err != nil {
 		return domain.Task{}, mapErr(err)
@@ -460,17 +474,47 @@ func (s *Store) UpdateTaskContent(ctx context.Context, id uuid.UUID, statement s
 }
 
 // TaskExistsBySource supports ingest dedup.
-func (s *Store) TaskExistsBySource(ctx context.Context, provider, externID string) (bool, error) {
+func (s *Store) TaskExistsBySource(ctx context.Context, subjectID uuid.UUID, provider, externID string) (bool, error) {
 	return s.q.TaskExistsBySource(ctx, sqlc.TaskExistsBySourceParams{
-		Provider: provider, ExternID: externID,
+		SubjectID: subjectID, Provider: provider, ExternID: externID,
 	})
+}
+
+// RefreshTaskSource records new source evidence without rejuvenating a task
+// that was already known to be older. Unknown dates never overwrite proof.
+func (s *Store) RefreshTaskSource(ctx context.Context, subjectID uuid.UUID, src domain.Source, number int) error {
+	row, err := s.q.GetTaskBySource(ctx, sqlc.GetTaskBySourceParams{SubjectID: subjectID, Provider: src.Provider, ExternID: src.ExternID})
+	if err != nil {
+		return mapErr(err)
+	}
+	task, err := toDomainTask(row)
+	if err != nil {
+		return err
+	}
+	if task.Number != number {
+		return invalid("Номер задания в банке не совпадает с номером исходного варианта; нужна проверка")
+	}
+	if old := task.Source; old != nil && old.PublishedAt != nil &&
+		(src.PublishedAt == nil || old.PublishedAt.Before(*src.PublishedAt)) {
+		src.PublishedAt = old.PublishedAt
+		src.DateEvidence = old.DateEvidence
+		src.DateEvidenceURL = old.DateEvidenceURL
+	}
+	if src.VerifiedAt == nil && task.Source != nil {
+		src.VerifiedAt = task.Source.VerifiedAt
+	}
+	blob, err := mustJSON(src)
+	if err != nil {
+		return err
+	}
+	return mapErr(s.q.UpdateTaskSource(ctx, sqlc.UpdateTaskSourceParams{ID: row.ID, Source: blob}))
 }
 
 // ActivateDraftTaskBySource promotes a dedup-hit draft to active (drafts only —
 // a task the teacher rejected stays rejected). Returns whether a row changed.
-func (s *Store) ActivateDraftTaskBySource(ctx context.Context, provider, externID string) (bool, error) {
+func (s *Store) ActivateDraftTaskBySource(ctx context.Context, subjectID uuid.UUID, provider, externID string) (bool, error) {
 	n, err := s.q.ActivateDraftTaskBySource(ctx, sqlc.ActivateDraftTaskBySourceParams{
-		Provider: provider, ExternID: externID,
+		SubjectID: subjectID, Provider: provider, ExternID: externID,
 	})
 	if err != nil {
 		return false, mapErr(err)

@@ -1,10 +1,12 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -262,38 +264,20 @@ func (s *Server) handleGenerateVariant(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Tests populate the base: fetch the tasks this variant needs from the
-	// source into the bank (as active), then assemble from them. Fetch errors
-	// are non-fatal — we assemble from whatever the bank already has.
+	// Assemble immediately from the current bank. Source replenishment belongs
+	// to the durable queue so neither variant creation nor a gateway waits on it.
 	source := "real"
+	refillCtx, stopRefill := context.WithTimeout(r.Context(), time.Second)
+	defer stopRefill()
 	switch req.Kind {
 	case domain.TestDrill:
-		n := req.Count * 3
-		if n < 20 {
-			n = 20
-		}
-		_, source, _ = s.fetchAndIngest(r.Context(), req.Subject, n, req.Number, domain.TaskActive)
+		s.queuePracticeRefill(refillCtx, req.Subject, req.Number)
 	case domain.TestComposed:
-		// Top up each requested номер concurrently, then assemble. Pull a little
-		// extra per number so repeat generations can draw fresh tasks.
-		numbers := make([]int, 0, len(slots))
-		per := 0
 		for _, sl := range slots {
-			numbers = append(numbers, sl.Number)
-			if sl.Count > per {
-				per = sl.Count
-			}
+			s.queuePracticeRefill(refillCtx, req.Subject, sl.Number)
 		}
-		per *= 2
-		if per < 10 {
-			per = 10
-		}
-		if per > 40 {
-			per = 40
-		}
-		_, _ = s.fetchNumbersAndIngest(r.Context(), req.Subject, numbers, per, domain.TaskActive)
 	default: // classic
-		_, source, _ = s.fetchAndIngest(r.Context(), req.Subject, 60, 0, domain.TaskActive)
+		s.queuePracticeRefill(refillCtx, req.Subject, 0)
 	}
 
 	// Distinct default names so variants are easy to tell apart (a teacher can
@@ -325,7 +309,8 @@ func (s *Server) handleGenerateVariant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if gv.TaskCount == 0 {
-		writeErr(w, http.StatusUnprocessableEntity, "источник не дал заданий — попробуй ещё раз или проверь логи fetcher")
+		_ = s.store.DeleteTest(r.Context(), gv.Test.ID)
+		writeErr(w, http.StatusUnprocessableEntity, "Актуальные задания подготавливаются в фоне. Повторите создание варианта позже.")
 		return
 	}
 	writeJSON(w, http.StatusCreated, generateVariantResp{Test: gv.Test, TaskCount: gv.TaskCount, Requested: requested, Source: source})

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import siteIcon from "./assets/favicon.svg";
 import { useApp } from "./state";
 import { api } from "./api";
 import { Button, Label, PasswordInput } from "./ui";
@@ -52,7 +53,7 @@ export function Login() {
       }}>
         {/* Centered mark + large title — the Apple sign-in composition. */}
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12, marginBottom: 26, textAlign: "center" }}>
-          <img src="/favicon.svg" width={52} height={52} alt="" style={{ borderRadius: 17 }} />
+          <img src={siteIcon} width={52} height={52} alt="" style={{ borderRadius: 17 }} />
           <div>
             <div style={{ fontWeight: 700, fontSize: 24, letterSpacing: "-0.02em" }}>ЕГЭизм</div>
             <div className="mono" style={{ fontSize: 11, color: "var(--text-3)", marginTop: 3 }}>подготовка · ЕГЭ</div>

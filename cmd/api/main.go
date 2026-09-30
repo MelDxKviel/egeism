@@ -58,9 +58,14 @@ func main() {
 		slog.Error("bootstrap admin", "err", err)
 	}
 
+	apiServer := api.NewServer(st, enq, cfg.JWTSecret, mediaStore, cfg.FetcherURL, cfg.TelegramBotUsername)
+	bankDone := make(chan struct{})
+	go func() { defer close(bankDone); apiServer.RunBankSync(ctx) }()
+	// Stop source workers before closing the database pool on shutdown.
+	defer func() { <-bankDone }()
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           api.NewServer(st, enq, cfg.JWTSecret, mediaStore, cfg.FetcherURL, cfg.TelegramBotUsername).Router(),
+		Handler:           apiServer.Router(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 

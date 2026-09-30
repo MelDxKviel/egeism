@@ -190,12 +190,12 @@ mix (`domain.TestComposed`). The composed builder (`ComposedBuilder` in
 range-fill bar («задания с N по M · по k каждого» → `Заполнить`) plus a per-номер
 grid of steppers tinted by **live bank availability**
 (`GET /api/admin/tasks/summary?subject=` → per-номер active/total counts, `useTaskSummary`):
-green «в банке» when the bank can fill the slot, amber when thin, grey «доберём»
+green «в банке» when the bank can fill the slot, amber when thin, grey «пока нет»
 when empty. The server (`normalizeSlots` in `internal/api/admin_read.go`) drops
 empty slots, sums duplicate номера preserving first-seen order (so the web must
-send `slots` **ascending**), and caps the total at 100 tasks; it tops up the
-bank per-номер concurrently (`fetchNumbersAndIngest`, bounded fan-out + single
-ingest) before drawing via `RandomTasksForNumber`. `GenerateVariantLike` clones
+send `slots` **ascending**), and caps the total at 100 tasks; it queues a
+background refill and immediately draws current tasks via `RandomTasksForNumber`.
+Source fetching never blocks generation. `GenerateVariantLike` clones
 composed structure for free, so `individual:true` class assignments already give
 every student their own «3×№1, 3×№2, 3×№3» вариант. The response's `requested`
 (aggregate) vs `task_count` lets the UI warn when a thin bank came up short.
@@ -271,6 +271,34 @@ logout→login on one browser never flashes another user's feed.
 
 ## Content ingest (§9) — hybrid FIPI + РЕШУ via a Python fetcher
 
+**Current bank policy (2026-09):** Student navigation has no bank tab or fetch
+button. The API replenishes low stock on startup and every 15 minutes, and
+practice reads schedule background top-ups. `POST /admin/tasks/fetch` and
+`POST /practice/bank/fetch` return **202 BankSyncJob** immediately; poll
+`GET <same-path>/{jobID}`. The durable PostgreSQL queue (`internal/bank`, migration
+00013) survives restarts, deduplicates requests, limits source concurrency and
+supports cancellation. Statement repair also queues a job (`kind: repair`,
+`POST /admin/tasks/refetch-formulas` with `{subject}`). No external source call
+belongs in a student read or variant-generation HTTP request.
+
+**Freshness is original source evidence, never import time.** New automatic
+imports discover dated official FIPI exam variants on РЕШУ ЕГЭ for all four
+subjects. A task's earlier citations override later variant membership.
+`domain.Source` stores `published_at`, `verified_at`, `date_evidence_url` and
+`date_evidence`; `Task.freshness` is current/expired/unverified. The rolling
+one-calendar-year limit is evaluated on reads, both in Go and in SQL via
+`task_source_current` (migration 00012). Undated, stale, future-dated or
+unsupported-source tasks cannot activate or enter new practice/generated
+variants. Existing assignments and answer history are preserved. The legacy
+catalog and openfipi adapters below remain for manual retrieval and repair;
+they do not certify freshness by themselves.
+
+**Skip/resume:** `web/src/solve-session.ts` stores unfinished sessions per user
+in localStorage, including drafts, skipped IDs and photo references. Skip never
+submits an answer. Navigation revisits skipped items before automatic finish;
+explicit early finish warns about omissions. Resume reconciles sent answers
+with the server. This is persistence in the same browser, not cross-device sync.
+
 Decision history: datasets were rejected (no images/files); FIPI open bank has
 media but **no answers**; РЕШУ (sdamgia) has answers + номер + FIPI-origin
 images. Chosen: a **hybrid**, and — per §9's "isolated adapter" rule — the
@@ -279,15 +307,15 @@ fragile, site-specific scraping lives in a small **Python fetcher**
 line, with media URLs + answers) which `cmd/ingest -source dataset` consumes; the
 Go side stays source-agnostic and tested. `classify_answer` infers the answer
 type with a confidence (subject-aware: "245" is a number in math/информатика but
-a digit code elsewhere, §7); low confidence → stays `draft` for curation. Nothing
-goes live without a human approving it in the bank.
+a digit code elsewhere, §7). Teacher imports default to `draft`; automatic
+activation additionally requires the current-source checks above.
 
-**Sources are per-subject** (`tools/fetch/server.py` dispatches on subject):
+**Legacy source adapters** (manual retrieval / repair):
 - **информатика → `openfipi.py`** — scrapes **openfipi.devinf.ru**, a community
   mirror of the ФИПИ **open bank** for информатика grouped by задание, that
   carries the real FIPI condition + images (some inlined as base64) + attached
-  `.zip` + a **curated answer** per task. This is the reliable one (real FIPI +
-  answer in one place); use it, not РЕШУ, for информатика. `requests` + `bs4`
+  `.zip` + a **curated answer** per task. It lacks reliable publication dates,
+  so it does not by itself qualify tasks for current practice. `requests` + `bs4`
   only (server-rendered; no Selenium). Filters `has_answer=y` and задание via the
   site's POST form (`type = number-1`), random order so repeat pulls grow the
   bank. Statements keep tables **legible** — a leaf table becomes `a | b | c`
@@ -314,20 +342,18 @@ goes live without a human approving it in the bank.
   battle-tested than openfipi; if it returns empty, check
   `docker compose logs fetcher`.
 
-**Button-driven (primary UX):** the fetcher runs as an HTTP service
+**Source transport:** the fetcher runs as an HTTP service
 (`tools/fetch/server.py`, the `fetcher` compose service) exposing `POST /fetch`.
-The bank's **"Подтянуть задания"** button hits `POST /api/admin/tasks/fetch`
-(teacher), which calls the fetcher and runs the result through the same ingest
+The bank's **"Синхронизировать"** button hits `POST /api/admin/tasks/fetch`
+(teacher), which queues a durable job to call the fetcher and run the same ingest
 (media → MinIO, dedup, draft). **REAL sources only — there is no mock/demo
 generator** (it was removed: fake tasks polluted the bank, the teacher couldn't
 tell them apart, and the variant builder ingests as *active* — an active-status
 pull also **promotes dedup-hit drafts to active** (`ActivateDraftTaskBySource`;
-rejected stays rejected), so a drill pool grows even when the source returns
-tasks the bank already holds as drafts). openfipi serves
-информатика (requests+bs4, always installed); РЕШУ/sdamgia serves the rest (the
-image installs the fork from git, best-effort). On failure or empty the fetcher
-returns `[]` (always `X-Fetch-Mode: real`) and the API answers "источник не
-вернул заданий" so the teacher retries — it NEVER substitutes made-up tasks. A
+rejected stays rejected), provided original-source freshness is verified.
+Current HTTP imports use dated official variants on РЕШУ for all subjects.
+On failure the background job records an error and the UI offers retry; it
+NEVER substitutes made-up tasks. A
 wall-time budget under `FETCH_DEADLINE` (compose sets 80s; API call timeout 90s)
 keeps a long pull from being hard-killed. Both sources **round-robin across
 задания** for even coverage (not a clustered random sample) and pull a random

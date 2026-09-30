@@ -476,6 +476,19 @@ func (s *Server) handleCreateAssignment(w http.ResponseWriter, r *http.Request) 
 	if !ok {
 		return
 	}
+	// Validate before any class fan-out. Existing assignments remain intact,
+	// but an old shared template must not bypass freshness in a new assignment.
+	tasks, err := s.store.ListTestTasks(r.Context(), test.ID)
+	if err != nil {
+		writeStoreErr(w, err)
+		return
+	}
+	for _, task := range tasks {
+		if task.Status != domain.TaskActive || !task.Source.Current(time.Now()) {
+			writeErr(w, http.StatusUnprocessableEntity, "В тесте есть задания без подтверждённой актуальности. Соберите новый вариант из текущего банка.")
+			return
+		}
+	}
 	// Resolve the target students: one enrolled student, or a class's members.
 	var students []domain.User
 	if req.StudentID != nil {

@@ -45,6 +45,7 @@ from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeout
 
 import requests
+from freshness import evidence
 from bs4 import (BeautifulSoup, CData, Comment, Declaration, Doctype,
                  NavigableString, ProcessingInstruction, Tag)
 
@@ -272,14 +273,17 @@ def _fetch_one(subject_code: str, base: str, session, pid, require_answer: bool 
     bulk `fetch` (discovery) and `fetch_by_ids` (targeted re-fetch/upgrade)."""
     url = f"{base}/problem?id={pid}"
     try:
-        r = session.get(url, timeout=25)
+        r = session.get(url + "&print=true", timeout=25)
         r.raise_for_status()
         parsed = _parse_problem(r.content, base)
         if not parsed:
             return None
         topic, statement, media, answer = parsed
-        return to_raw_task(subject_code, pid, url, topic, statement, media, answer,
-                           require_answer=require_answer)
+        raw = to_raw_task(subject_code, pid, url, topic, statement, media, answer,
+                          require_answer=require_answer)
+        if raw:
+            raw["source"].update(evidence(r.content, url + "&print=true"))
+        return raw
     except Exception as e:  # noqa: BLE001 — keep going on a bad problem
         print(f"skip {pid}: {e}", file=sys.stderr)
         return None

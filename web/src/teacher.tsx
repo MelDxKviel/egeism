@@ -4,7 +4,7 @@ import {
   api, SubjectCode, TestKind, VariantSlot, Task, TaskStatus, AnswerSchema, AttemptSummary, AttemptReviewItem,
   StudentSummary, User, AvatarConfig, uploadTasks, downloadTestPDF,
   useForecast, useHeatmap, useWeakSpots, useMastery, useMasterySeries, useAttempts, useAssignments,
-  useAdminTasks, useTests, useTestDetail, useTaskSummary, useInvalidate, useClasses, useClassDetail, useClassOverview, useStudents,
+  useAdminTasks, useTests, useTestDetail, useTaskSummary, useInvalidate, useClasses, useClassDetail, useClassOverview, useStudents, useBankSyncJob,
 } from "./api";
 import { useApp } from "./state";
 import { Card, Label, Pill, Button, Async, Empty, Loading, Modal, PasswordInput, Seg, SubjectPicker, accColor, SUBJECT_TITLES, testTitle, MediaBlock, StatementView, AttemptReviewGrid, useIsMobile } from "./ui";
@@ -16,11 +16,6 @@ import { ResetLinkModal } from "./reset";
 import { Avatar } from "./avatar";
 
 const SUBJECTS: SubjectCode[] = ["rus", "math", "inf", "soc"];
-// Which live source feeds a subject (per CLAUDE.md: openfipi serves информатика,
-// РЕШУ/sdamgia the rest). Shown in toasts so the teacher knows where tasks came from.
-const SOURCE_TITLE: Record<SubjectCode, string> = {
-  rus: "РЕШУ ЕГЭ", math: "РЕШУ ЕГЭ", soc: "РЕШУ ЕГЭ", inf: "открытый банк ФИПИ (openfipi)",
-};
 // min(300px, 100%) keeps the track from exceeding a narrow phone's content
 // width (a bare 300px minimum forced horizontal scroll on 320–360px screens).
 const grid = { display: "grid", gap: "var(--gap)", gridTemplateColumns: "repeat(auto-fit, minmax(min(300px, 100%), 1fr))" } as const;
@@ -932,7 +927,7 @@ function ComposedBuilder({ subject }: { subject: SubjectCode }) {
 
       {bankEmpty && (
         <div style={{ fontSize: 13, color: "var(--text-3)" }}>
-          Банк по «{SUBJECT_TITLES[subject]}» пуст — выбери номера, задания доберутся с источника ({SOURCE_TITLE[subject]}) при сборке.
+          В банке по предмету «{SUBJECT_TITLES[subject]}» пока нет актуальных заданий. Подготовка идёт в фоне; повтори сборку, когда они появятся.
         </div>
       )}
 
@@ -952,7 +947,7 @@ function ComposedBuilder({ subject }: { subject: SubjectCode }) {
             }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <span className="mono" style={{ fontWeight: 700, fontSize: 14, color: on ? "var(--accent-2)" : "var(--text)" }}>№{n}</span>
-                <span className="mono" style={{ fontSize: 11, color: availColor }}>{a > 0 ? `${a} в банке` : "нет — доберём"}</span>
+                <span className="mono" style={{ fontSize: 11, color: availColor }}>{a > 0 ? `${a} в банке` : "пока нет"}</span>
               </div>
               <NumStepper value={cnt} onChange={(v) => setCount(n, v)} />
             </div>
@@ -996,7 +991,7 @@ export function Builder() {
       const short = kind === "drill" && res.task_count < count
         ? ` (просили ${count} — активных заданий №${number} пока столько; попробуй собрать ещё раз)`
         : "";
-      showToast(`Вариант собран: ${res.task_count} задач${short} · задания с «${SOURCE_TITLE[subject]}» добавлены в банк`);
+      showToast(`Вариант собран: ${res.task_count} задач${short}`);
       invalidate("tests");
       invalidate("admin-tasks");
     } catch (e) { showToast(String((e as Error).message)); }
@@ -1037,8 +1032,8 @@ export function Builder() {
               {kind === "classic"
                 ? "По одному случайному заданию на каждый номер — вариант как на ЕГЭ."
                 : "N случайных заданий одного номера — прокачать слабое место."}
-              {" "}Сам подтянет нужные задания с источника ({SOURCE_TITLE[subject]}), сохранит их в банк
-              и соберёт вариант. Может занять несколько секунд.
+              {" "}Собирается из актуальных заданий, которые уже есть в банке.
+              Пополнение идёт в фоне; если заданий не хватит, повтори сборку позже.
             </div>
             <Button onClick={generate} disabled={busy}>{busy ? "Собираю…" : "Собрать вариант"}</Button>
           </>
@@ -1330,10 +1325,12 @@ export function Bank() {
   const { subject, setSubject, showToast } = useApp();
   const invalidate = useInvalidate();
   const [status, setStatus] = useState<TaskStatus | "">("");
-  const q = `?subject=${subject}${status ? `&status=${status}` : ""}&limit=200`;
+  const [freshness, setFreshness] = useState("");
+  const [number, setNumber] = useState("");
+  const q = `?subject=${subject}${status ? `&status=${status}` : ""}${number ? `&number=${Number(number)}` : ""}&limit=200`;
   const tasks = useAdminTasks(q);
 
-  const refresh = () => invalidate("admin-tasks");
+  const refresh = () => { invalidate("admin-tasks"); invalidate("task-summary"); invalidate("practice-overview"); };
   const setTaskStatus = async (id: string, s: TaskStatus) => {
     try { await api.setTaskStatus(id, s); showToast(s === "active" ? "Одобрено — в бою" : s === "rejected" ? "Отклонено" : "В черновики"); refresh(); }
     catch (e) { showToast(String((e as Error).message)); }
@@ -1349,27 +1346,35 @@ export function Bank() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
-      <SourcePanel subject={subject} onDone={refresh} />
       <SubjectTabs value={subject} onChange={setSubject} />
+      <SourcePanel key={subject} subject={subject} onDone={refresh} />
       <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
         <Seg>
           {(["", "draft", "active", "rejected"] as const).map((s) => (
-            <ChoiceTab key={s} active={status === s} onClick={() => setStatus(s)}>{s === "" ? "Все" : s}</ChoiceTab>
+            <ChoiceTab key={s} active={status === s} onClick={() => setStatus(s)}>{s === "" ? "Все" : s === "draft" ? "На проверке" : s === "active" ? "Одобренные" : "Отклонённые"}</ChoiceTab>
           ))}
         </Seg>
+        <select aria-label="Актуальность заданий" value={freshness} onChange={(e) => setFreshness(e.target.value)} style={{ width: "auto" }}>
+          <option value="">Любая актуальность</option>
+          <option value="current">Не старше года</option>
+          <option value="expired">Старше года</option>
+          <option value="unverified">Дата не подтверждена</option>
+        </select>
+        <input aria-label="Номер задания" type="number" min={1} max={99} placeholder="№" value={number} onChange={(e) => setNumber(e.target.value)} style={{ width: 76 }} />
         <button onClick={clearBank} title="Удалить все задания предмета (кроме решённых)"
           className="btn btn-danger" style={{ marginLeft: "auto", padding: "7px 14px", fontSize: 13 }}>
           <Icon name="trash" size={15} /> Очистить банк
         </button>
       </div>
-      <Async q={tasks}>{(rows) => rows.length === 0 ? <Empty title="Пусто" hint="Запусти ингест, чтобы наполнить банк." /> : (
+      <Async q={tasks}>{(allRows) => { const rows = allRows.filter((t) => (!freshness || (t.freshness || "unverified") === freshness) && (!number || t.number === Number(number))); return rows.length === 0 ? <Empty title="Заданий не найдено" hint={allRows.length === 200 ? "Нет совпадений среди загруженных 200 заданий. Уточни номер или измени фильтр актуальности." : "Измени фильтры или запусти синхронизацию источников."} /> : (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ color: "var(--text-3)", fontSize: 12 }}>Показано: {rows.length}{allRows.length === 200 ? " · фильтр актуальности применяется к загруженным 200 заданиям; уточни номер для поиска" : ""}. В новую практику попадают только одобренные задания с подтверждённой датой не старше года.</div>
           {rows.map((t) => <BankCard key={t.id} task={t} onStatus={setTaskStatus} onEditAnswer={async (schema) => {
             try { await api.setTaskAnswer(t.id, schema); showToast("Ответ обновлён"); refresh(); }
             catch (e) { showToast(String((e as Error).message)); }
           }} />)}
         </div>
-      )}</Async>
+      ); }}</Async>
     </div>
   );
 }
@@ -1386,23 +1391,33 @@ function SourcePanel({ subject, onDone }: { subject: SubjectCode; onDone: () => 
   const [active, setActive] = useState(false);
   const [busy, setBusy] = useState<"fetch" | "upload" | "refresh" | null>(null);
   const superTeacher = !user?.subject;
+  const jobKey = `egeism.bank-sync.${user?.id}.${subject}`;
+  const [jobId, setJobId] = useState<string | null>(() => { try { return localStorage.getItem(jobKey); } catch { return null; } });
+  const job = useBankSyncJob(user?.id ?? "", jobId);
+  const completed = useRef<string | null>(null);
+  const syncing = !!jobId && (!job.data || job.data.state === "queued" || job.data.state === "running") && !job.isError;
+  const rememberJob = (id: string) => { setJobId(id); try { localStorage.setItem(jobKey, id); } catch { /* storage unavailable */ } };
 
-  const summary = (r: { inserted: number; skipped: number; invalid: number }) => {
-    if (r.inserted > 0) return `Добавлено ${r.inserted} заданий${r.skipped ? ` (${r.skipped} уже были в банке)` : ""}`;
-    if (r.skipped > 0) return `Новых нет — все ${r.skipped} уже в банке`;
-    return "Источник не вернул заданий";
+  const summary = (r: { inserted: number; skipped: number; invalid: number; held?: number }) => {
+    const invalid = `${r.invalid ? ` · не прошли проверку: ${r.invalid}` : ""}${r.held ? ` · требуют проверки даты: ${r.held}` : ""}`;
+    if (r.inserted > 0) return `Добавлено ${r.inserted} заданий${r.skipped ? ` · уже в банке: ${r.skipped}` : ""}${invalid}`;
+    if (r.skipped > 0) return `Новых нет · уже в банке: ${r.skipped}${invalid}`;
+    return `Подходящих заданий не найдено${invalid}`;
   };
+
+  useEffect(() => {
+    const current = job.data;
+    if (!current || ["queued", "running"].includes(current.state) || completed.current === current.id) return;
+    completed.current = current.id;
+    onDone(); // Failed/cancelled jobs may still have saved a partial import.
+    if (current.state === "succeeded") showToast(current.kind === "repair" ? `Обновлено условий: ${current.result?.updated ?? 0}` : current.result ? summary(current.result) : "Синхронизация завершена");
+  }, [job.data, onDone, showToast]);
 
   const fetchNow = async () => {
     setBusy("fetch");
     try {
-      const r = await api.fetchTasks(subject, count, active);
-      const src = SOURCE_TITLE[subject];
-      const promoted = r.promoted ? `, ${r.promoted} черновиков активировано` : "";
-      if (r.inserted > 0) showToast(`Добавлено ${r.inserted} заданий с «${src}»${r.skipped ? ` (${r.skipped} уже были${promoted})` : ""}`);
-      else if (r.skipped > 0) showToast(`Новых нет — все ${r.skipped} уже в банке${promoted}`);
-      else showToast(`Источник (${src}) не вернул заданий`);
-      onDone();
+      const queued = await api.fetchTasks(subject, count, active);
+      rememberJob(queued.id);
     } catch (err) {
       showToast("Не удалось подтянуть: " + String((err as Error).message));
     } finally { setBusy(null); }
@@ -1416,10 +1431,8 @@ function SourcePanel({ subject, onDone }: { subject: SubjectCode; onDone: () => 
   const refreshStale = async () => {
     setBusy("refresh");
     try {
-      const r = await api.refetchFormulas();
-      if (r.updated > 0) showToast(`Обновлено условий: ${r.updated} (проверено ${r.scanned})`);
-      else showToast(r.scanned > 0 ? "Все условия уже в порядке" : "Нет РЕШУ-заданий для проверки");
-      onDone();
+      const queued = await api.refetchFormulas(subject);
+      rememberJob(queued.id);
     } catch (err) {
       showToast("Не удалось обновить: " + String((err as Error).message));
     } finally { setBusy(null); }
@@ -1443,10 +1456,10 @@ function SourcePanel({ subject, onDone }: { subject: SubjectCode; onDone: () => 
     <Card>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
         <div>
-          <div style={{ fontWeight: 700, fontSize: 15 }}>Подтянуть задания из источника</div>
+          <div style={{ fontWeight: 700, fontSize: 15 }}>Синхронизация банка</div>
           <div style={{ color: "var(--text-2)", fontSize: 13, marginTop: 4 }}>
-            Загрузит задания ({SUBJECT_TITLES[subject]}) с РЕШУ/ФИПИ прямо в банк.
-            Медиа уедет в хранилище, дубли отсеются, ответы можно поправить ниже.
+            Реальные задания ЕГЭ по предмету «{SUBJECT_TITLES[subject]}» с проверкой источника и даты.
+            Синхронизация идёт в фоне. Задания без подтверждённой даты остаются на проверке.
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
@@ -1456,14 +1469,31 @@ function SourcePanel({ subject, onDone }: { subject: SubjectCode; onDone: () => 
           </label>
           <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--text-2)" }}>
             <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} style={{ width: "auto" }} />
-            сразу активными
+            активировать актуальные
           </label>
-          <Button onClick={fetchNow} disabled={busy !== null}>{busy === "fetch" ? "Подтягиваю…" : "Подтянуть задания"}</Button>
+          <Button onClick={fetchNow} disabled={busy !== null || syncing}>{syncing ? "Синхронизация…" : busy === "fetch" ? "Запускаем…" : "Синхронизировать"}</Button>
         </div>
       </div>
+      {jobId && <div role="status" style={{ marginTop: 12, padding: 12, borderRadius: 12, background: "var(--surface-2)", fontSize: 13 }}>
+        {job.isError ? `Не удалось получить статус: ${(job.error as Error).message}`
+          : !job.data ? "Проверяем статус…"
+          : job.data.state === "queued" ? "В очереди. Можно закрыть эту страницу — синхронизация продолжится."
+          : job.data.state === "running" ? "Проверяем источники и сохраняем задания. Можно продолжать работу."
+          : job.data.state === "failed" ? job.data.error || "Синхронизация не завершилась. Повтори попытку."
+          : job.data.state === "cancelled" ? "Синхронизация отменена. Уже сохранённые задания доступны в банке."
+          : job.data.kind === "repair" ? `Проверено условий: ${job.data.result?.scanned ?? 0} · обновлено: ${job.data.result?.updated ?? 0}`
+          : job.data.result ? `${summary(job.data.result)}${job.data.result.promoted ? ` · активировано: ${job.data.result.promoted}` : ""}` : "Синхронизация завершена"}
+        {job.data?.result && ["failed", "cancelled"].includes(job.data.state) && <div style={{ marginTop: 4 }}>
+          {job.data.kind === "repair" ? `Сохранено исправлений: ${job.data.result.updated ?? 0}` : summary(job.data.result)}
+        </div>}
+        {syncing && <button className="link-btn" style={{ marginLeft: 12 }} onClick={async () => {
+          try { await api.cancelBankSyncJob(jobId); await job.refetch(); } catch (e) { showToast((e as Error).message); }
+        }}>Отменить</button>}
+        {job.isError && <button className="link-btn" style={{ marginLeft: 12 }} onClick={() => job.refetch()}>Проверить снова</button>}
+      </div>}
       <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
         <span title="Перечитывает условия у заданий с битым текстом: теория/справка вместо задания, формулы-блоки (РЕШУ), разъехавшиеся таблицы (ФИПИ/информатика). Ответы и статус сохранятся.">
-          <Button variant="soft" onClick={refreshStale} disabled={busy !== null} style={{ padding: "8px 14px", fontSize: 13 }}>
+          <Button variant="soft" onClick={refreshStale} disabled={busy !== null || syncing} style={{ padding: "8px 14px", fontSize: 13 }}>
             {busy === "refresh" ? "Обновляю…" : "Обновить условия у старых заданий"}
           </Button>
         </span>
@@ -1481,21 +1511,37 @@ function SourcePanel({ subject, onDone }: { subject: SubjectCode; onDone: () => 
   );
 }
 
+function sourceLink(value?: string): string | undefined {
+  try { const url = new URL(value ?? ""); return ["https:", "http:"].includes(url.protocol) ? url.href : undefined; } catch { return undefined; }
+}
+
 function BankCard({ task, onStatus, onEditAnswer }: { task: Task; onStatus: (id: string, s: TaskStatus) => void; onEditAnswer: (s: AnswerSchema) => void }) {
   const [editing, setEditing] = useState(false);
   const [val, setVal] = useState(task.answer_schema.correct.join(", "));
   // active = живое задание в бою → зелёный (успех); accent остаётся действиям.
   const tone = task.status === "active" ? "ok" : task.status === "rejected" ? "bad" : "warn";
+  const current = task.freshness === "current";
+  const url = sourceLink(task.source?.url);
+  const evidenceUrl = sourceLink(task.source?.date_evidence_url);
+  const date = (value: string) => new Date(value).toLocaleDateString("ru-RU", { timeZone: "UTC" });
   return (
     <Card>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginBottom: 10 }}>
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
           <Pill tone="neutral">№{task.number}</Pill>
           <Pill>{task.answer_kind}</Pill>
-          <Pill tone={tone as any}>{task.status}</Pill>
+          <Pill tone={tone as any}>{task.status === "active" ? "Одобрено" : task.status === "draft" ? "На проверке" : "Отклонено"}</Pill>
+          <Pill tone={current ? "ok" : "warn"}>{current ? "Не старше года" : task.freshness === "expired" ? "Старше года" : "Дата не подтверждена"}</Pill>
           {task.bot_solvable && <span title="бот решает" style={{ display: "inline-flex", color: "var(--text-3)" }}><Icon name="bot" size={16} /></span>}
           {(task.media?.length ?? 0) > 0 && <span title="есть медиа" style={{ display: "inline-flex", color: "var(--text-3)" }}><Icon name="image" size={16} /></span>}
         </div>
+      </div>
+      <div style={{ marginBottom: 12, color: "var(--text-2)", fontSize: 12, lineHeight: 1.6 }}>
+        {url ? <a href={url} target="_blank" rel="noopener noreferrer">{task.source?.provider || "Источник"}{task.source?.extern_id ? ` · ${task.source.extern_id}` : ""} ↗</a> : "Источник не подтверждён"}
+        {task.source?.published_at && <> · Дата источника: {date(task.source.published_at)}</>}
+        {task.source?.verified_at && <> · Проверено: {date(task.source.verified_at)}</>}
+        {task.source?.date_evidence && <div>{evidenceUrl ? <a href={evidenceUrl} target="_blank" rel="noopener noreferrer">{task.source.date_evidence}</a> : task.source.date_evidence}</div>}
+        {!current && <div style={{ color: "var(--warn)" }}>{task.freshness_reason || "Нужна подтверждённая дата задания в источнике."} Не используется в новой практике.</div>}
       </div>
       <StatementView text={task.statement} media={task.media} style={{ fontSize: 15, lineHeight: 1.45, marginBottom: 12 }} />
       <MediaBlock media={task.media} />
@@ -1514,7 +1560,7 @@ function BankCard({ task, onStatus, onEditAnswer }: { task: Task; onStatus: (id:
         )}
       </div>
       <div style={{ display: "flex", gap: 8 }}>
-        <Button variant="soft" style={{ padding: "6px 14px" }} onClick={() => onStatus(task.id, "active")}>Одобрить</Button>
+        <Button variant="soft" disabled={!current || task.status === "active"} style={{ padding: "6px 14px" }} onClick={() => onStatus(task.id, "active")}>Одобрить</Button>
         <Button variant="ghost" style={{ padding: "6px 14px" }} onClick={() => onStatus(task.id, "rejected")}>Отклонить</Button>
       </div>
     </Card>

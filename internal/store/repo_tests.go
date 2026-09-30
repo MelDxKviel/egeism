@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -248,6 +249,15 @@ func (s *Store) GenerateVariantLike(ctx context.Context, source domain.Test, cre
 			taskIDs = append(taskIDs, ids[0])
 			pool[it.Number] = ids[1:]
 		} else {
+			// Existing assignments retain their historical content, but a new
+			// clone cannot silently resurrect an expired/unverified template.
+			original, err := s.GetTask(ctx, it.TaskID)
+			if err != nil {
+				return GeneratedVariant{}, err
+			}
+			if original.Status != domain.TaskActive || !original.Source.Current(time.Now()) {
+				return GeneratedVariant{}, invalid("В исходном варианте есть задания без подтверждённой актуальности; обновите вариант")
+			}
 			taskIDs = append(taskIDs, it.TaskID)
 		}
 	}

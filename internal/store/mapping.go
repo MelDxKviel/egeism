@@ -3,6 +3,7 @@ package store
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"egeism/internal/domain"
 	"egeism/internal/store/sqlc"
@@ -28,6 +29,7 @@ func toDomainTask(t sqlc.Task) (domain.Task, error) {
 		}
 		src = &s
 	}
+	freshness, reason := src.Freshness(time.Now())
 	return domain.Task{
 		Part: int(t.Part), GradingMode: t.GradingMode, MaxPoints: int(t.MaxPoints),
 		ID:           t.ID,
@@ -39,6 +41,7 @@ func toDomainTask(t sqlc.Task) (domain.Task, error) {
 		Source:       src,
 		Status:       domain.TaskStatus(t.Status),
 		CreatedAt:    t.CreatedAt,
+		Freshness:    freshness, FreshnessReason: reason,
 	}, nil
 }
 

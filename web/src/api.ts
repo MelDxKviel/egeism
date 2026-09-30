@@ -61,7 +61,15 @@ export interface TaskView {
   id: string; subject_id: string; number: number; statement: string;
   media: Media[]; status: TaskStatus; answer_kind: AnswerKind; bot_solvable: boolean;
 }
-export interface Task extends TaskView { answer_schema: AnswerSchema; }
+export interface TaskSource {
+  provider?: string; url?: string; extern_id?: string;
+  published_at?: string; verified_at?: string;
+  date_evidence_url?: string; date_evidence?: string;
+}
+export interface Task extends TaskView {
+  answer_schema: AnswerSchema; source?: TaskSource;
+  freshness?: "current" | "expired" | "unverified"; freshness_reason?: string;
+}
 export interface Attempt {
   require_solution: boolean;
   id: string; test_id: string; assignment_id?: string;
@@ -188,7 +196,14 @@ async function req<T>(method: string, path: string, body?: unknown): Promise<T> 
   return res.json() as Promise<T>;
 }
 
-export interface ImportResult { fetched: number; inserted: number; skipped: number; invalid: number; promoted?: number; source?: string; }
+export interface ImportResult { fetched: number; inserted: number; skipped: number; invalid: number; held?: number; promoted?: number; source?: string; }
+export interface BankSyncJob {
+  id: string; subject: SubjectCode; number: number; limit: number; active: boolean;
+  kind: "fetch" | "repair";
+  state: "queued" | "running" | "succeeded" | "failed" | "cancelled";
+  created_at: string; started_at?: string; finished_at?: string;
+  result?: ImportResult & { updated?: number; scanned?: number }; error?: string;
+}
 
 export async function uploadSolutionPhoto(attemptId: string, taskId: string, file: File): Promise<SolutionPhoto> {
   const body = new FormData(); body.append("file", file);
@@ -309,7 +324,8 @@ export const api = {
   // number narrows the pool to one задание — the server-side drill.
   practiceTasks: (subject: SubjectCode, limit: number, number?: number) =>
     req<TaskView[]>("GET", `/api/practice/tasks?subject=${subject}&limit=${limit}${number ? `&number=${number}` : ""}`),
-  fetchStudentBank: (subject: SubjectCode, number?: number) => req<ImportResult>("POST", "/api/practice/bank/fetch", { subject, number: number ?? 0 }),
+  fetchStudentBank: (subject: SubjectCode, number?: number) => req<BankSyncJob>("POST", "/api/practice/bank/fetch", { subject, number: number ?? 0 }),
+  studentBankSyncJob: (id: string) => req<BankSyncJob>("GET", `/api/practice/bank/fetch/${id}`),
   practiceOverview: (subject: SubjectCode) =>
     req<PracticeOverview>("GET", `/api/practice/overview?subject=${subject}`),
   mistakeTasks: (subject: SubjectCode, limit: number) =>
@@ -354,7 +370,9 @@ export const api = {
 
   adminTasks: (q: string) => req<Task[]>("GET", `/api/admin/tasks${q}`),
   fetchTasks: (subject: SubjectCode, limit: number, active: boolean) =>
-    req<ImportResult>("POST", "/api/admin/tasks/fetch", { subject, limit, active }),
+    req<BankSyncJob>("POST", "/api/admin/tasks/fetch", { subject, limit, active }),
+  bankSyncJob: (id: string) => req<BankSyncJob>("GET", `/api/admin/tasks/fetch/${id}`),
+  cancelBankSyncJob: (id: string) => req<BankSyncJob>("POST", `/api/admin/tasks/fetch/${id}/cancel`),
   clearBank: (subject: SubjectCode) =>
     req<{ deleted: number; kept: number }>("DELETE", `/api/admin/tasks?subject=${subject}`),
   setTaskStatus: (id: string, status: TaskStatus) =>
@@ -368,8 +386,8 @@ export const api = {
     req<Test>("POST", "/api/admin/tests", { subject, kind, title }),
   deleteTest: (id: string) => req<void>("DELETE", `/api/admin/tests/${id}`),
   renameTest: (id: string, title: string) => req<Test>("PATCH", `/api/admin/tests/${id}`, { title }),
-  refetchFormulas: () =>
-    req<{ updated: number; scanned: number; by_subject: Record<string, number> }>("POST", "/api/admin/tasks/refetch-formulas"),
+  refetchFormulas: (subject: SubjectCode) =>
+    req<BankSyncJob>("POST", "/api/admin/tasks/refetch-formulas", { subject }),
   addItem: (testId: string, task_id: string, position: number) =>
     req("POST", `/api/admin/tests/${testId}/items`, { task_id, position }),
   taskSummary: (subject: SubjectCode) =>
@@ -401,6 +419,11 @@ export const api = {
 };
 
 // --- hooks ---
+export const useBankSyncJob = (userId: string, id: string | null) => useQuery({
+  queryKey: ["bank-sync", userId, id], queryFn: () => api.bankSyncJob(id!), enabled: !!id,
+  refetchInterval: (q) => !q.state.error && (!q.state.data || ["queued", "running"].includes(q.state.data.state)) ? 2000 : false,
+  retry: false,
+});
 export const useSubjects = () => useQuery({ queryKey: ["subjects"], queryFn: api.subjects });
 export const useStudents = (enabled: boolean, scope: "mine" | "all" = "mine") =>
   useQuery({ queryKey: ["students", scope], queryFn: () => api.students(scope), enabled });

@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"strings"
+	"time"
 
 	"egeism/internal/domain"
 	"egeism/internal/ingest"
@@ -63,10 +64,29 @@ func (s *Server) handleRefetchFormulas(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusServiceUnavailable, "источник заданий не настроен")
 		return
 	}
-	// A subject-scoped teacher repairs only their own subject's bank; the
-	// super-teacher sweeps all four.
+	var req struct {
+		Subject domain.SubjectCode `json:"subject"`
+	}
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	if !s.subjectInScope(w, teacher, req.Subject) {
+		return
+	}
+	if _, err := s.store.GetSubjectByCode(r.Context(), req.Subject); err != nil {
+		writeStoreErr(w, err)
+		return
+	}
+	job, err := s.store.EnqueueBankSync(r.Context(), req.Subject, 0, 200, false, 2*time.Minute, "repair")
+	if err == nil && s.bankSync != nil {
+		s.bankSync.Wake()
+	}
+	s.writeBankSync(w, r, job, err)
+}
+
+func (s *Server) refetchFormulas(ctx context.Context, subject domain.SubjectCode) (refetchResp, error) {
 	inScope := func(code domain.SubjectCode) bool {
-		return teacher.Subject == nil || *teacher.Subject == code
+		return subject == code
 	}
 	runner := ingest.NewRunner(s.store)
 	if s.media != nil {
@@ -74,14 +94,13 @@ func (s *Server) handleRefetchFormulas(w http.ResponseWriter, r *http.Request) {
 	}
 	resp := refetchResp{BySubject: map[string]int{}}
 	// РЕШУ/sdamgia subjects: re-fetch only tasks detected as stale.
-	for _, subj := range []domain.SubjectCode{domain.SubjectMath, domain.SubjectRus, domain.SubjectSoc} {
+	for _, subj := range []domain.SubjectCode{domain.SubjectMath, domain.SubjectRus, domain.SubjectSoc, domain.SubjectInf} {
 		if !inScope(subj) {
 			continue
 		}
-		byExtern, err := s.sdamgiaTasksNeedingUpgrade(r.Context(), subj)
+		byExtern, err := s.sdamgiaTasksNeedingUpgrade(ctx, subj)
 		if err != nil {
-			writeStoreErr(w, err)
-			return
+			return resp, err
 		}
 		resp.Scanned += len(byExtern)
 		if len(byExtern) == 0 {
@@ -92,10 +111,9 @@ func (s *Server) handleRefetchFormulas(w http.ResponseWriter, r *http.Request) {
 			ids = append(ids, id)
 		}
 		for _, chunk := range chunkStrings(ids, 40) {
-			raws, err := s.callFetcherByIDs(r.Context(), subj, chunk)
+			raws, err := s.callFetcherByIDs(ctx, subj, chunk, "sdamgia")
 			if err != nil {
-				writeErr(w, http.StatusBadGateway, "источник недоступен: "+err.Error())
-				return
+				return resp, err
 			}
 			for _, raw := range raws {
 				t, ok := byExtern[raw.Source.ExternID]
@@ -106,10 +124,9 @@ func (s *Server) handleRefetchFormulas(w http.ResponseWriter, r *http.Request) {
 				if !ok || raw.Statement == "" || raw.Statement == t.Statement {
 					continue
 				}
-				media := runner.MediaFor(r.Context(), raw.Media)
-				if _, err := s.store.UpdateTaskContent(r.Context(), t.ID, raw.Statement, media); err != nil {
-					writeStoreErr(w, err)
-					return
+				media := runner.MediaFor(ctx, raw.Media)
+				if _, err := s.store.UpdateTaskContent(ctx, t.ID, raw.Statement, media); err != nil {
+					return resp, err
 				}
 				resp.Updated++
 				resp.BySubject[string(subj)]++
@@ -118,12 +135,11 @@ func (s *Server) handleRefetchFormulas(w http.ResponseWriter, r *http.Request) {
 	}
 	// openfipi (информатика): re-parse everything, rewrite only real changes.
 	if inScope(domain.SubjectInf) {
-		if err := s.refetchOpenfipi(r.Context(), runner, &resp); err != nil {
-			writeErr(w, http.StatusBadGateway, "источник недоступен: "+err.Error())
-			return
+		if err := s.refetchOpenfipi(ctx, runner, &resp); err != nil {
+			return resp, err
 		}
 	}
-	writeJSON(w, http.StatusOK, resp)
+	return resp, nil
 }
 
 // refetchOpenfipi re-fetches every stored openfipi task by id and rewrites the

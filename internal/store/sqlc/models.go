@@ -47,6 +47,23 @@ type Attempt struct {
 	FinishedAt   *time.Time `json:"finished_at"`
 }
 
+type BankSyncJob struct {
+	ID         uuid.UUID  `json:"id"`
+	Subject    string     `json:"subject"`
+	Number     int32      `json:"number"`
+	TaskLimit  int32      `json:"task_limit"`
+	Active     bool       `json:"active"`
+	Kind       string     `json:"kind"`
+	State      string     `json:"state"`
+	CreatedAt  time.Time  `json:"created_at"`
+	StartedAt  *time.Time `json:"started_at"`
+	FinishedAt *time.Time `json:"finished_at"`
+	LeaseUntil *time.Time `json:"lease_until"`
+	Attempts   int32      `json:"attempts"`
+	Result     []byte     `json:"result"`
+	Error      string     `json:"error"`
+}
+
 type Class struct {
 	ID        uuid.UUID `json:"id"`
 	TeacherID uuid.UUID `json:"teacher_id"`

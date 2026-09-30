@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"sync"
 	"time"
 
 	"egeism/internal/domain"
@@ -20,10 +19,8 @@ type fetchTasksReq struct {
 	Active  bool               `json:"active"` // skip curation, ingest as active
 }
 
-// handleFetchTasks is the button-driven pull: the teacher picks a subject and
-// count in the bank UI, and the server pulls tasks from the source (via the
-// fetcher service, which wraps РЕШУ/sdamgia) and runs them through the same
-// ingest as everything else — media into MinIO, dedup, draft for curation.
+// handleFetchTasks queues a source pull and returns its durable progress record.
+// Downloading conditions/media and ingestion belong to the background worker.
 func (s *Server) handleFetchTasks(w http.ResponseWriter, r *http.Request) {
 	teacher, ok := s.requireTeacher(w, r)
 	if !ok {
@@ -52,28 +49,12 @@ func (s *Server) handleFetchTasks(w http.ResponseWriter, r *http.Request) {
 		req.Limit = 200
 	}
 
-	status := domain.TaskDraft
-	if req.Active {
-		status = domain.TaskActive
-	}
-	res, mode, err := s.fetchAndIngest(r.Context(), req.Subject, req.Limit, 0, status)
-	if err != nil {
-		writeErr(w, http.StatusBadGateway, "источник недоступен: "+err.Error())
-		return
-	}
-	if res.Fetched == 0 {
-		writeErr(w, http.StatusUnprocessableEntity, "источник не вернул заданий")
-		return
-	}
-	writeJSON(w, http.StatusOK, fetchResp{
-		Fetched: res.Fetched, Inserted: res.Inserted, Skipped: res.Skipped, Invalid: res.Invalid,
-		Promoted: res.Promoted, Source: mode,
-	})
+	job, err := s.enqueueBankSync(r.Context(), req.Subject, 0, req.Limit, req.Active, false)
+	s.writeBankSync(w, r, job, err)
 }
 
 // fetchAndIngest pulls tasks from the source (optionally for one number) and
-// runs them through ingest (media → MinIO, dedup). Shared by the bank's fetch
-// button and the test builder (which fetches the tasks it needs into the bank).
+// runs them through ingest (media → MinIO, dedup), within a background job.
 func (s *Server) fetchAndIngest(ctx context.Context, subject domain.SubjectCode, limit, number int, status domain.TaskStatus) (ingest.Result, string, error) {
 	if s.fetcherURL == "" {
 		return ingest.Result{}, "", fmt.Errorf("источник заданий не настроен")
@@ -87,8 +68,7 @@ func (s *Server) fetchAndIngest(ctx context.Context, subject domain.SubjectCode,
 }
 
 // ingestRaws runs already-fetched RawTasks through the shared ingest pipeline
-// (media → MinIO, dedup, status). Split out of fetchAndIngest so a multi-number
-// top-up can fetch concurrently but ingest once.
+// (media → MinIO, dedup, source eligibility, status).
 func (s *Server) ingestRaws(ctx context.Context, subject domain.SubjectCode, raws []ingest.RawTask, status domain.TaskStatus) (ingest.Result, error) {
 	runner := ingest.NewRunner(s.store)
 	if s.media != nil {
@@ -96,50 +76,6 @@ func (s *Server) ingestRaws(ctx context.Context, subject domain.SubjectCode, raw
 	}
 	runner.Status = status
 	return runner.Ingest(ctx, "fetch:"+string(subject), raws)
-}
-
-// fetchNumbersAndIngest tops up the bank for a composed variant: it fetches each
-// requested задание-номер CONCURRENTLY (the fetcher is a ThreadingHTTPServer)
-// under one shared wall-time budget, then ingests everything in a SINGLE pass
-// (concurrent ingest could race on dedup). Best-effort — numbers that fail or
-// time out just don't contribute; the variant assembles from whatever the bank
-// ends up with. perNumber bounds how many tasks to pull for each номер.
-func (s *Server) fetchNumbersAndIngest(ctx context.Context, subject domain.SubjectCode, numbers []int, perNumber int, status domain.TaskStatus) (ingest.Result, error) {
-	if s.fetcherURL == "" || len(numbers) == 0 {
-		return ingest.Result{}, nil
-	}
-	fetchCtx, cancel := context.WithTimeout(ctx, 75*time.Second)
-	defer cancel()
-	const workers = 4
-	sem := make(chan struct{}, workers)
-	var mu sync.Mutex
-	var all []ingest.RawTask
-	var wg sync.WaitGroup
-	for _, n := range numbers {
-		wg.Add(1)
-		go func(n int) {
-			defer wg.Done()
-			select {
-			case sem <- struct{}{}:
-			case <-fetchCtx.Done():
-				return
-			}
-			defer func() { <-sem }()
-			raws, _, err := s.callFetcher(fetchCtx, subject, perNumber, n)
-			if err != nil {
-				return
-			}
-			mu.Lock()
-			all = append(all, raws...)
-			mu.Unlock()
-		}(n)
-	}
-	wg.Wait()
-	if len(all) == 0 {
-		return ingest.Result{}, nil
-	}
-	// Ingest under the parent ctx, not the (possibly expired) fetch budget.
-	return s.ingestRaws(ctx, subject, all, status)
 }
 
 // fetchResp is the ingest result plus the fetch mode reported by the fetcher
@@ -150,13 +86,18 @@ type fetchResp struct {
 	Skipped  int    `json:"skipped"`
 	Invalid  int    `json:"invalid"`
 	Promoted int    `json:"promoted"` // dedup hits promoted draft → active
+	Held     int    `json:"held"`
 	Source   string `json:"source"`
 }
 
 // callFetcherByIDs asks the fetcher to re-fetch specific РЕШУ problem ids (the
 // upgrade path), returning refreshed RawTasks (statement + inline media).
-func (s *Server) callFetcherByIDs(ctx context.Context, subject domain.SubjectCode, ids []string) ([]ingest.RawTask, error) {
-	body, _ := json.Marshal(map[string]any{"subject": subject, "ids": ids})
+func (s *Server) callFetcherByIDs(ctx context.Context, subject domain.SubjectCode, ids []string, provider ...string) ([]ingest.RawTask, error) {
+	payload := map[string]any{"subject": subject, "ids": ids}
+	if len(provider) > 0 {
+		payload["provider"] = provider[0]
+	}
+	body, _ := json.Marshal(payload)
 	ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, s.fetcherURL+"/fetch", bytes.NewReader(body))

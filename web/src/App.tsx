@@ -4,7 +4,7 @@ import { Shell } from "./shell";
 import { Login } from "./Login";
 import { ResetPasswordPage } from "./reset";
 import { Dashboard, SubjectScreen, Solve, History } from "./student";
-import { StudentBank } from "./student-bank";
+import { StudentPracticeWarmup } from "./student-bank";
 import { TrainingHub } from "./train";
 import { TeacherDashboard, ClassPage, StudentStatsPage, Builder, Assign, Bank, TestDetailPage } from "./teacher";
 import { AdminStats, AdminUsers } from "./admin";
@@ -13,7 +13,7 @@ import { Loading } from "./ui";
 import { ErrorBoundary } from "./error";
 
 const TITLES: Record<string, string> = {
-  "student-bank": "Банк заданий", dashboard: "Дашборд", train: "Тренировка", subject: "Предмет", solve: "Решение", results: "Итоги", history: "История",
+  dashboard: "Дашборд", train: "Тренировка", subject: "Предмет", solve: "Решение", results: "Итоги", history: "История",
   "t-dashboard": "Ученики и классы", "t-class": "Класс", "t-student": "Ученик",
   "t-builder": "Конструктор тестов",
   "t-test": "Просмотр теста", "t-assign": "Назначение", "t-bank": "Банк задач",
@@ -50,7 +50,6 @@ export default function App() {
   let screen: React.ReactNode;
   switch (view) {
     case "dashboard": screen = <Dashboard />; break;
-    case "student-bank": screen = <StudentBank />; break;
     case "train": screen = <TrainingHub />; break;
     case "subject": screen = <SubjectScreen />; break;
     case "solve": case "results": screen = <Solve />; break;
@@ -70,6 +69,7 @@ export default function App() {
 
   return (
     <Shell title={TITLES[view] || "ЕГЭизм"}>
+      {user.role === "student" && <StudentPracticeWarmup key={`${user.id}:${subject}`} subject={subject} userId={user.id} />}
       {/* A render crash in one screen shows a recoverable card instead of
           blanking the whole app; the Shell (nav) stays alive so the user can
           switch away, and the boundary auto-resets when view/subject change. */}

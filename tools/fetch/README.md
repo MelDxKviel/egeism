@@ -5,14 +5,42 @@ The app is source-agnostic: `internal/ingest` reads a **normalized JSONL** (one
 site-specific scraping lives here in Python, so swapping/extending the source
 never touches the Go app (plan §9).
 
-## Sources (per subject)
+## Current bank policy (September 2026)
+
+HTTP `POST /fetch` uses `recent.py` for all four subjects. It discovers links to
+dated actual **ФИПИ exam variants** on each РЕШУ `/methodist` page, verifies the
+task's membership, retrieves its condition and answer, and preserves images.
+The provider stays `sdamgia`: this is a third-party publication of a real exam,
+not a claimed official ФИПИ API. Task numbers come from the actual variant's
+positions, which can differ from РЕШУ's topic taxonomy.
+
+`source.published_at` records the original source/exam date, with
+`date_evidence_url` and `date_evidence`. `verified_at` is the separate fetch/check
+time. The earliest explicit citation wins: a task reused in a 2026 variant but
+also cited in 2021 stays dated 2021. A citation with only a year or no verifiable
+date remains unverified. Import time, copyright year and HTTP Last-Modified are
+never evidence of task age. Go enforces a rolling one-year window for active
+ingest, manual activation, random variants and practice queries; old rows remain
+available for review and existing assignments/history. Missing proof is reported
+as `held` and keeps a task in draft. Old imports receive no invented backfill.
+
+The live adapter was checked on 2026-09-30: math 19 candidates (12 current;
+older/undated repeats held), rus 26 current, inf 27 current, soc 16 current.
+These are observations, not hardcoded IDs or guaranteed future counts. If the
+source changes or has no verified recent tasks, the fetch returns no candidates;
+the bank never creates substitutes. Low-water background jobs deduplicate draws.
+
+Run offline regressions: `python -m pytest tools/fetch -q`.
+
+## Legacy adapters (manual CLI and repairs)
 
 - **информатика → `openfipi.py`** (openfipi.devinf.ru). This is the reliable one:
   a community mirror of the ФИПИ **open bank** for информатика, grouped by
   задание, that carries the FIPI condition + images (some inlined as base64) +
   the attached-files `.zip` + a **curated answer** per task. Real ФИПИ + answer
-  in one place — no РЕШУ needed for информатика. `server.py` routes `subject=inf`
-  here. Deps: `requests` + `beautifulsoup4` only (server-rendered HTML, no
+  in one place. Its original publication dates are not exposed, so these tasks
+  stay unverified. By-id repair for `subject=inf` routes here unless
+  `provider=sdamgia` is passed. Deps: `requests` + `beautifulsoup4` only (server-rendered HTML, no
   Selenium). Answers are crowdsourced → curate before going live (they ingest as
   `draft` like everything else).
 - **rus / math / soc → `fetch.py`** (РЕШУ ЕГЭ via `sdamgia`, below).
