@@ -17,6 +17,13 @@ jobs initialize private photo storage and apply migrations **before** new pods
 start. Failed rollouts restore the previous Helm release; additive database
 migrations are not reversed automatically.
 
+Storage initialization uses `init-storage` in the same SHA-tagged GHCR image
+as database migrations; the production hook does not pull `minio/mc`. It keeps
+task media downloadable and solution photos private. Both hooks have deadlines.
+On failure, Deploy prints pod/job status, events and hook logs without dumping
+credentials. The manual `diagnostics_only` input reads this state without a
+rollout.
+
 The job verifies all five application Deployment image tags and checks the
 public `/health`, `/version.json` and `/api/config` endpoints. The latter two
 must report the exact deployed SHA. It then stops the obsolete Compose stack

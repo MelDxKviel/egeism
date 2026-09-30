@@ -49,6 +49,9 @@ jobs:
                 sudo -n k3s kubectl -n egeism logs "$pod" --all-containers --tail=60 --pod-running-timeout=10s || true
               done
             done
+            if [ "$(sudo -n k3s kubectl -n egeism exec statefulset/postgres -- psql -U egeism -d egeism -Atc "SELECT to_regclass('public.bank_sync_jobs') IS NOT NULL")" = t ]; then
+              sudo -n k3s kubectl -n egeism exec statefulset/postgres -- psql -U egeism -d egeism -c "SELECT subject, kind, state, result, error, created_at FROM bank_sync_jobs ORDER BY created_at DESC LIMIT 12"
+            fi
 
   deploy:
     needs: images

@@ -31,8 +31,18 @@ k3s kubectl -n "$namespace" exec statefulset/postgres -- \
 
 # Reuse the ACTUAL production values (TLS, storage, secret references, bots).
 # Pre-upgrade hooks must complete before any new application pod is created.
-"$helm" upgrade "$release" "$chart" -n "$namespace" --reuse-values \
-  --set-string global.imageTag="$revision" --atomic --wait-for-jobs --timeout 8m
+if ! "$helm" upgrade "$release" "$chart" -n "$namespace" --reuse-values \
+  --set-string global.imageTag="$revision" --atomic --wait-for-jobs --timeout 8m; then
+  # Atomic rollback preserves failed hooks. Show their state without dumping
+  # Secret/ConfigMap values so image pulls and startup errors are actionable.
+  k3s kubectl -n "$namespace" get pods,jobs || true
+  k3s kubectl -n "$namespace" get events --sort-by=.lastTimestamp | tail -60 || true
+  for component in minio-init migrate; do
+    job="$component-${revision:0:8}"
+    k3s kubectl -n "$namespace" logs "job/$job" --all-containers --tail=60 --pod-running-timeout=10s || true
+  done
+  exit 1
+fi
 
 for component in api web fetcher worker bot; do
   k3s kubectl -n "$namespace" rollout status "deployment/$component" --timeout=180s
